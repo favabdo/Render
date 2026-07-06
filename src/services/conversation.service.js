@@ -26,14 +26,18 @@ async function sendReply(conversation, text, sender) {
 // بالحالة النهائية (sent/failed) أول ما توصل — عشان الكنترولر يقدر يبعت
 // حدثين منفصلين على الـ socket: واحد فوري ("بيتبعت")، وواحد لما فعلاً يتبعت/يفشل
 async function sendReplyLive(conversation, text, sender, onFinalized) {
-  const savedMessage = await whatsappService.createOutgoingMessage(
-    conversation.contact_number,
-    text,
-    conversation.id,
-    conversation.inbox_id,
-    sender
-  );
-  await conversationRepo.touchConversation(conversation.id);
+  // بنسجل الرسالة وبنحدّث آخر وقت للمحادثة في نفس الوقت (مش الواحدة بعد التانية)
+  // — الاتنين مش معتمدين على نتيجة بعض، والفرق ده بيوفر رحلة كاملة (round trip) للداتابيز
+  const [savedMessage] = await Promise.all([
+    whatsappService.createOutgoingMessage(
+      conversation.contact_number,
+      text,
+      conversation.id,
+      conversation.inbox_id,
+      sender
+    ),
+    conversationRepo.touchConversation(conversation.id),
+  ]);
 
   // مش بنعمل await هنا عمدًا — الكنترولر لازم يرجع للإيجنت فورًا من غير ما يستنى ميتا
   whatsappService

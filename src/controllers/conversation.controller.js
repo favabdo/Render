@@ -149,11 +149,14 @@ async function reply(req, res) {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'لازم تبعت text' });
 
-  const conversation = await conversationRepo.getConversationById(req.params.id);
+  // بنجيب المحادثة وبيانات الإيجنت في نفس الوقت (مش الواحدة بعد التانية)
+  // لأن الاتنين مستقلين عن بعض تمامًا، وده بيوفر رحلة كاملة (round trip) للداتابيز
+  const [conversation, sender] = await Promise.all([
+    conversationRepo.getConversationById(req.params.id),
+    userRepo.findUserById(req.user.userId),
+  ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
-  // بنجيب بيانات الإيجنت لحظة الإرسال عشان نسجل اسمه الحالي (لو غيّره بعدين، الرسايل القديمة تفضل زي ما هي)
-  const sender = await userRepo.findUserById(req.user.userId);
   const senderInfo = sender ? { id: sender.id, name: userRepo.resolveDisplayName(sender) } : null;
 
   const io = req.app.get('io');
