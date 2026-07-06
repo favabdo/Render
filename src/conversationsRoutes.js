@@ -107,17 +107,22 @@ router.post('/api/conversations/:id/reply', async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'لازم تبعت text' });
 
-    const conversation = await getConversationById(req.params.id);
+    // بنجيب بيانات المحادثة وبيانات الإيجنت في نفس الوقت (مش الواحدة بعد التانية)
+    // لأن الاتنين مستقلين عن بعض تمامًا، وده بيوفر رحلة كاملة (round trip) للداتابيز
+    const [conversation, sender] = await Promise.all([
+      getConversationById(req.params.id),
+      findUserById(req.user.userId),
+    ]);
     if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
-
-    // بنجيب بيانات الإيجنت لحظة الإرسال عشان نسجل اسمه الحالي (لو غيّره بعدين، الرسايل القديمة تفضل زي ما هي)
-    const sender = await findUserById(req.user.userId);
     const senderInfo = sender ? { id: sender.id, name: resolveDisplayName(sender) } : null;
 
-    const message = await sendTextMessage(conversation.contact_number, text, conversation.id, conversation.inbox_id, senderInfo);
-    // كان ناقص: من غير السطر ده، تاريخ آخر رسالة (last_message_at) مكنش بيتحدث
-    // لما الإيجنت يرد، فالمحادثة مكنتش بتطلع فوق القايمة ولا وقتها بيتحدث في الواجهة
-    await touchConversation(conversation.id);
+    // بعت الرسالة الفعلية لواتساب، وفي نفس اللحظة حدّث last_message_at
+    // (مش لازم نستنى واحد لحد ما التاني يخلص، الاتنين مش معتمدين على نتيجة بعض)
+    const [message] = await Promise.all([
+      sendTextMessage(conversation.contact_number, text, conversation.id, conversation.inbox_id, senderInfo),
+      touchConversation(conversation.id),
+    ]);
+
     const io = req.app.get('io');
     if (io) io.emit('new_message', { conversationId: conversation.id, message });
 
