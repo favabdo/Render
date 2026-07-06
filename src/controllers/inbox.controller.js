@@ -118,12 +118,14 @@ async function updateInboxStatus(req, res) {
   }
   const inbox = await inboxRepo.updateInboxStatus(req.params.id, status);
   if (!inbox) return res.status(404).json({ error: 'الـ Inbox مش موجود' });
+  whatsappService.invalidateCredentialsCache(req.params.id);
   res.json({ ok: true, inbox });
 }
 
 async function deleteInbox(req, res) {
   const deleted = await inboxRepo.deleteInbox(req.params.id);
   if (!deleted) return res.status(404).json({ error: 'الـ Inbox مش موجود' });
+  whatsappService.invalidateCredentialsCache(req.params.id);
   res.json({ ok: true });
 }
 

@@ -9,14 +9,36 @@ const { normalizeDigits } = require('../utils/helpers');
 
 const GRAPH_API_VERSION = 'v20.0';
 
+// كاش بسيط في الذاكرة لبيانات اعتماد كل Inbox — التوكن ورقم الهاتف بتاعين الـ Inbox
+// بيتغيروا نادرًا جدًا (بس وقت الإضافة نفسها تقريبًا)، فمفيش داعي نعمل رحلة كاملة
+// للداتابيز في كل رسالة رد بس عشان نجيب نفس القيمة اللي مش هتتغير. الكاش ده بينتهي
+// لوحده بعد دقيقة (TTL) عشان لو حصل تعديل فعلي (مثلاً استبدال التوكن) ينعكس بسرعة معقولة.
+const CREDENTIALS_CACHE_TTL_MS = 60 * 1000;
+const credentialsCache = new Map(); // inboxId -> { value, expiresAt }
+
+// بيتنادى من inbox.controller.js لما حد يعدّل/يمسح Inbox، عشان الكاش ميفضلش
+// شايل بيانات قديمة لحد ما الـ TTL ينتهي لوحده
+function invalidateCredentialsCache(inboxId) {
+  if (inboxId) credentialsCache.delete(String(inboxId));
+  else credentialsCache.clear();
+}
+
 // بيرجع الـ credentials المناسبة للرد: لو المحادثة مربوطة بـ Inbox مضاف من الإعدادات
 // بنستخدم رقمه وتوكنه هو، ولو مفيش (محادثات قديمة قبل ما نضيف الـ Inboxes) بنرجع
 // لمتغيرات الـ .env القديمة عشان الاستمرارية من غير أي كسر
 async function resolveCredentials(inboxId) {
   if (inboxId) {
+    const cacheKey = String(inboxId);
+    const cached = credentialsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const inbox = await inboxRepo.getInboxById(inboxId);
     if (inbox && inbox.phone_number_id && inbox.access_token) {
-      return { phoneNumberId: inbox.phone_number_id, accessToken: inbox.access_token };
+      const value = { phoneNumberId: inbox.phone_number_id, accessToken: inbox.access_token };
+      credentialsCache.set(cacheKey, { value, expiresAt: Date.now() + CREDENTIALS_CACHE_TTL_MS });
+      return value;
     }
   }
   return {
@@ -158,4 +180,5 @@ module.exports = {
   createOutgoingMessage,
   deliverOutgoingMessage,
   verifyWhatsappCredentials,
+  invalidateCredentialsCache,
 };
