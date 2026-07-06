@@ -25,36 +25,36 @@ async function getConversationMessages(req, res) {
 // لو مفيش (زي زرار "Assign to Me") بنعينها للإيجنت اللي عامل لوجين دلوقتي
 async function assign(req, res) {
   const { agentId } = req.body || {};
-  let targetAgentId = req.user.userId;
   const isSelfAssign = !agentId || String(agentId) === String(req.user.userId);
+  const targetAgentId = agentId || req.user.userId;
 
-  if (agentId) {
-    const agent = await userRepo.findUserById(agentId);
-    if (!agent) return res.status(404).json({ error: 'الموظف ده مش موجود' });
-    targetAgentId = agentId;
+  // بنجيب بيانات اليوزر اللي بعت الطلب وبيانات الإيجنت المستهدف في نفس الوقت (مش
+  // الواحد بعد التاني)، وكمان لو self-assign مبنجيبش نفس اليوزر مرتين — قبل كده كان
+  // بيتقرا 3 مرات في أسوأ حالة (once للتأكد إنه موجود، once كـ actingUser، once كـ targetUser)
+  const [actingUser, targetUser] = await Promise.all([
+    userRepo.findUserById(req.user.userId),
+    isSelfAssign ? Promise.resolve(null) : userRepo.findUserById(targetAgentId),
+  ]);
+
+  if (!isSelfAssign && !targetUser) {
+    return res.status(404).json({ error: 'الموظف ده مش موجود' });
   }
 
-  // بنجيب اسم الإيجنت اللي عامل الفعل (اللي بعت الـ request) واسم الإيجنت المستهدف
-  // (لو مختلف) عشان نكتب رسالة النظام المناسبة قبل ما نعمل الـ assign
-  const actingUser = await userRepo.findUserById(req.user.userId);
   const actingName = actingUser ? userRepo.resolveDisplayName(actingUser) : 'إيجنت';
-
-  let targetName = actingName;
-  if (!isSelfAssign) {
-    const targetUser = await userRepo.findUserById(targetAgentId);
-    targetName = targetUser ? userRepo.resolveDisplayName(targetUser) : 'إيجنت';
-  }
-
-  await conversationRepo.assignConversation(req.params.id, targetAgentId);
+  const targetName = isSelfAssign ? actingName : userRepo.resolveDisplayName(targetUser);
 
   const systemText = isSelfAssign
     ? `${actingName} self-assigned this conversation`
     : `Assigned to ${targetName} by ${actingName}`;
-  const systemMessage = await conversationRepo.addSystemMessage(req.params.id, systemText);
-  // من غيرها، رسايل النظام كانت مش بتحدّث last_message_at، فلو الـ socket event
-  // ضاع لأي سبب (اتقطع الاتصال لحظتها مثلاً)، الـ polling الاحتياطي في الفرونت
-  // كان عمره ما هيلاحظ إن فيه حاجة جديدة غير بريفريش يدوي كامل للصفحة
-  await conversationRepo.touchConversation(req.params.id);
+
+  // التلات عمليات دول (تعيين المحادثة، تسجيل رسالة النظام، تحديث آخر وقت) مش معتمدين
+  // على نتيجة بعض خالص، فبدل ما ننفذهم واحد ورا التاني (3 رحلات كاملة للداتابيز)
+  // بنشغلهم سوا في نفس اللحظة (رحلة واحدة بس فعليًا، أطول واحد فيهم هو اللي بيحدد الوقت)
+  const [, systemMessage] = await Promise.all([
+    conversationRepo.assignConversation(req.params.id, targetAgentId),
+    conversationRepo.addSystemMessage(req.params.id, systemText),
+    conversationRepo.touchConversation(req.params.id),
+  ]);
 
   const conversation = await conversationRepo.getConversationById(req.params.id);
   const io = req.app.get('io');
@@ -68,18 +68,20 @@ async function assign(req, res) {
 // إغلاق المحادثة فعليًا في الداتابيز (Resolve حقيقي مش شكلي)
 async function resolve(req, res) {
   const { category, notes } = req.body || {};
-  const conversation = await conversationRepo.getConversationById(req.params.id);
+  const [conversation, actingUser] = await Promise.all([
+    conversationRepo.getConversationById(req.params.id),
+    userRepo.findUserById(req.user.userId),
+  ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
-  await conversationRepo.resolveConversation(req.params.id, { category, notes, resolvedBy: req.user.userId });
-
-  const actingUser = await userRepo.findUserById(req.user.userId);
   const actingName = actingUser ? userRepo.resolveDisplayName(actingUser) : 'إيجنت';
-  const systemMessage = await conversationRepo.addSystemMessage(
-    req.params.id,
-    `Conversation was marked resolved by ${actingName}`
-  );
-  await conversationRepo.touchConversation(req.params.id);
+
+  // التلات عمليات دول مش معتمدين على نتيجة بعض، فبنشغلهم سوا بدل الواحد بعد التاني
+  const [, systemMessage] = await Promise.all([
+    conversationRepo.resolveConversation(req.params.id, { category, notes, resolvedBy: req.user.userId }),
+    conversationRepo.addSystemMessage(req.params.id, `Conversation was marked resolved by ${actingName}`),
+    conversationRepo.touchConversation(req.params.id),
+  ]);
 
   const updated = await conversationRepo.getConversationById(req.params.id);
 
@@ -94,18 +96,20 @@ async function resolve(req, res) {
 
 // لو حبيت ترجّع محادثة اتقفلت تفتح تاني (مثلاً العميل رجع يكلم)
 async function reopen(req, res) {
-  const conversation = await conversationRepo.getConversationById(req.params.id);
+  const [conversation, actingUser] = await Promise.all([
+    conversationRepo.getConversationById(req.params.id),
+    userRepo.findUserById(req.user.userId),
+  ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
-  await conversationRepo.reopenConversation(req.params.id);
-
-  const actingUser = await userRepo.findUserById(req.user.userId);
   const actingName = actingUser ? userRepo.resolveDisplayName(actingUser) : 'إيجنت';
-  const systemMessage = await conversationRepo.addSystemMessage(
-    req.params.id,
-    `Conversation was reopened by ${actingName}`
-  );
-  await conversationRepo.touchConversation(req.params.id);
+
+  // نفس الفكرة: التلات عمليات مش معتمدين على بعض، فبنشغلهم سوا
+  const [, systemMessage] = await Promise.all([
+    conversationRepo.reopenConversation(req.params.id),
+    conversationRepo.addSystemMessage(req.params.id, `Conversation was reopened by ${actingName}`),
+    conversationRepo.touchConversation(req.params.id),
+  ]);
 
   const updated = await conversationRepo.getConversationById(req.params.id);
 
@@ -125,10 +129,12 @@ async function addNote(req, res) {
     return res.status(400).json({ error: 'لازم تكتب نص الملاحظة' });
   }
 
-  const conversation = await conversationRepo.getConversationById(req.params.id);
+  const [conversation, sender] = await Promise.all([
+    conversationRepo.getConversationById(req.params.id),
+    userRepo.findUserById(req.user.userId),
+  ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
-  const sender = await userRepo.findUserById(req.user.userId);
   const senderName = sender ? userRepo.resolveDisplayName(sender) : null;
 
   const note = await conversationRepo.addPrivateNote(req.params.id, {
