@@ -581,6 +581,19 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     50%{transform:scale(1.15);opacity:.55}
     100%{transform:scale(1);opacity:1}
 }
+
+/* ===== Quick Replies card (الردود المحفوظة) — النص بياخد عرض الكارت كامل
+   بدل ما يتضغط جنب الهاندل/الأيقونة/الأزرار ويبقى كلمة في كل سطر */
+.qr-item{background:var(--bg);border-radius:12px;border:1.5px solid var(--border);padding:14px 16px;transition:border-color .2s}
+.qr-item:hover{border-color:var(--primary-light)}
+.qr-item-header{display:flex;align-items:center;gap:10px}
+.qr-drag-handle{cursor:grab;color:var(--text-secondary);flex-shrink:0;touch-action:none;display:flex;align-items:center}
+.qr-icon-box{width:32px;height:32px;border-radius:8px;background:rgba(108,92,231,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.qr-label-badge{display:inline-block;background:rgba(108,92,231,0.12);color:var(--primary);font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;flex-shrink:0;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qr-actions{display:flex;gap:4px;flex-shrink:0;margin-inline-start:auto}
+.qr-item-text{font-size:13px;color:var(--text);line-height:1.7;margin-top:10px;white-space:normal;word-break:normal;overflow-wrap:break-word}
+.qr-edit-box{margin-top:10px}
+
 </style>
 </head>
 <body>
@@ -884,7 +897,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">اسم الزرار (Label)</label>
                 <input id="qr-new-label" type="text" placeholder="مثال: Greeting" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;outline:none;margin-bottom:10px" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'">
                 <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">نص الرد</label>
-                <textarea id="qr-new-text" rows="2" placeholder="اكتب الرد السريع هنا..." style="width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;resize:none;outline:none;transition:border-color .2s" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+                <textarea id="qr-new-text" rows="6" placeholder="اكتب الرد السريع هنا..." style="width:100%;min-height:130px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;outline:none;transition:border-color .2s" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
                 <div style="display:flex;gap:8px;margin-top:10px">
                     <button class="page-btn" style="padding:8px 16px;font-size:12px" onclick="addQuickReply()">
                         <i data-lucide="check" style="width:14px;height:14px"></i> حفظ
@@ -3530,30 +3543,32 @@ function renderQuickReplies() {
         return;
     }
     list.innerHTML = savedReplies.map((r, i) => `
-        <div id="qr-item-${r.id}" data-drag-id="${r.id}" draggable="true" style="background:var(--bg);border-radius:12px;border:1.5px solid var(--border);padding:14px 16px;display:flex;align-items:flex-start;gap:10px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--border)'">
-            <div title="اسحب لترتيب الردود" style="cursor:grab;color:var(--text-secondary);flex-shrink:0;margin-top:6px;touch-action:none">
-                <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
+        <div id="qr-item-${r.id}" data-drag-id="${r.id}" draggable="true" class="qr-item">
+            <div class="qr-item-header">
+                <div title="اسحب لترتيب الردود" class="qr-drag-handle">
+                    <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
+                </div>
+                <div class="qr-icon-box">
+                    <i data-lucide="message-square" style="width:15px;height:15px;color:var(--primary)"></i>
+                </div>
+                <div class="qr-label-badge">${r.label}</div>
+                <div class="qr-actions">
+                    <button onclick="editQR(${r.id})" title="تعديل" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(108,92,231,0.1)';this.style.color='var(--primary)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)'"><i data-lucide="edit-2" style="width:14px;height:14px"></i></button>
+                    <button onclick="deleteQR(${r.id})" title="حذف" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.color='var(--danger)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)'"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+                </div>
             </div>
-            <div style="width:32px;height:32px;border-radius:8px;background:rgba(108,92,231,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
-                <i data-lucide="message-square" style="width:15px;height:15px;color:var(--primary)"></i>
+            <div id="qr-view-${r.id}">
+                <div class="qr-item-text">${r.text}</div>
             </div>
-            <div style="flex:1;min-width:0" id="qr-view-${r.id}">
-                <div style="display:inline-block;background:rgba(108,92,231,0.12);color:var(--primary);font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;margin-bottom:6px">${r.label}</div>
-                <div style="font-size:13px;color:var(--text);line-height:1.5">${r.text}</div>
-            </div>
-            <div id="qr-edit-${r.id}" style="display:none;flex:1;min-width:0">
+            <div id="qr-edit-${r.id}" class="qr-edit-box" style="display:none">
                 <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">اسم الزرار (Label)</label>
                 <input type="text" id="qr-edit-label-${r.id}" value="${r.label}" style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid var(--primary);font-size:13px;font-family:inherit;outline:none;margin-bottom:8px">
                 <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">نص الرد</label>
-                <textarea rows="2" id="qr-edit-text-${r.id}" style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid var(--primary);font-size:13px;font-family:inherit;resize:none;outline:none">${r.text}</textarea>
+                <textarea rows="6" id="qr-edit-text-${r.id}" style="width:100%;min-height:130px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--primary);font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;outline:none">${r.text}</textarea>
                 <div style="display:flex;gap:6px;margin-top:8px">
                     <button onclick="saveEditQR(${r.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px"><i data-lucide="check" style="width:12px;height:12px"></i> حفظ</button>
                     <button onclick="cancelEditQR(${r.id})" style="padding:6px 14px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">إلغاء</button>
                 </div>
-            </div>
-            <div style="display:flex;gap:4px;flex-shrink:0">
-                <button onclick="editQR(${r.id})" title="تعديل" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(108,92,231,0.1)';this.style.color='var(--primary)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)'"><i data-lucide="edit-2" style="width:14px;height:14px"></i></button>
-                <button onclick="deleteQR(${r.id})" title="حذف" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.color='var(--danger)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)'"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
             </div>
         </div>
     `).join('');
