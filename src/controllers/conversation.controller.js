@@ -24,6 +24,7 @@ async function getConversationMessages(req, res) {
 // لو جالك agentId في الـ body بنعين المحادثة للموظف ده (اختيار من قايمة الـ Agents)،
 // لو مفيش (زي زرار "Assign to Me") بنعينها للإيجنت اللي عامل لوجين دلوقتي
 async function assign(req, res) {
+  const t0 = Date.now();
   const { agentId } = req.body || {};
   const isSelfAssign = !agentId || String(agentId) === String(req.user.userId);
   const targetAgentId = agentId || req.user.userId;
@@ -35,6 +36,7 @@ async function assign(req, res) {
     userRepo.findUserById(req.user.userId),
     isSelfAssign ? Promise.resolve(null) : userRepo.findUserById(targetAgentId),
   ]);
+  const t1 = Date.now();
 
   if (!isSelfAssign && !targetUser) {
     return res.status(404).json({ error: 'الموظف ده مش موجود' });
@@ -55,8 +57,15 @@ async function assign(req, res) {
     conversationRepo.addSystemMessage(req.params.id, systemText),
     conversationRepo.touchConversation(req.params.id),
   ]);
+  const t2 = Date.now();
 
   const conversation = await conversationRepo.getConversationById(req.params.id);
+  const t3 = Date.now();
+
+  logger.info(
+    `⏱️ [assign] users=${t1 - t0}ms writes=${t2 - t1}ms finalFetch=${t3 - t2}ms total=${t3 - t0}ms`
+  );
+
   const io = req.app.get('io');
   if (io) {
     io.emit('conversation_updated', conversation);
