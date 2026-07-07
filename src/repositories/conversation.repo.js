@@ -154,6 +154,8 @@ async function assignConversation(conversationId, agentId) {
 }
 
 // بتقفل المحادثة فعليًا في الداتابيز (مش شكليًا في الواجهة بس) وبتسجل مين حلها وإمتى وتحت أي تصنيف
+// وكمان بتسجل locked_at — ده اللي بيقفل المحادثة نهائيًا (مش status بس)، فحتى لو حصل
+// Reopen بعد كده مفيش أي إجراء (رد/تعيين/ملاحظة/Resolve تاني) هيتقبل عليها تاني أبدًا
 async function resolveConversation(conversationId, { category = null, notes = null, resolvedBy = null } = {}) {
   const pool = await getPool();
   await pool
@@ -168,12 +170,17 @@ async function resolveConversation(conversationId, { category = null, notes = nu
           resolve_category = @category,
           resolve_notes = @notes,
           resolved_by = @resolvedBy,
-          resolved_at = SYSUTCDATETIME()
+          resolved_at = SYSUTCDATETIME(),
+          locked_at = COALESCE(locked_at, SYSUTCDATETIME())
       WHERE id = @id
     `);
 }
 
-// لو حبيت ترجّع محادثة اتقفلت تكون شغالة تاني (مثلاً العميل رجع يكلم تاني)
+// مهم: الـ Reopen ده شكلي بس — غرضه الوحيد إن المحادثة تظهر تاني في قسم "المفتوحة"
+// في لوحة التحكم. هو بيغيّر status بس ومبيلمسش locked_at خالص، فالمحادثة تفضل مقفولة
+// نهائيًا وأي محاولة رد/تعيين/ملاحظة/Resolve عليها هتترفض طول ما locked_at مش NULL،
+// مهما اتعمل عليها Reopen كام مرة. لو حبيت تفتح محادثة فعليًا تاني لازم تبقى محادثة
+// جديدة (بتتعمل تلقائيًا لما العميل يبعت رسالة تانية، مش عن طريق الزرار ده)
 async function reopenConversation(conversationId) {
   const pool = await getPool();
   await pool
@@ -181,7 +188,7 @@ async function reopenConversation(conversationId) {
     .input('id', sql.BigInt, conversationId)
     .query(`
       UPDATE [dbo].[NileChat_Conversations_byA]
-      SET status = 'open', resolve_category = NULL, resolve_notes = NULL, resolved_by = NULL, resolved_at = NULL
+      SET status = 'open'
       WHERE id = @id
     `);
 }

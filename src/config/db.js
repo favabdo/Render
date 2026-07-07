@@ -242,6 +242,23 @@ async function ensureConversationsHaveResolveColumns() {
   }
 }
 
+// بمجرد ما المحادثة تتقفل (Resolve) بنسجل وقت القفل هنا وده اللي بيقفل المحادثة فعليًا
+// للأبد — عمل Reopen بعد كده بيغيّر الـ status بس (عشان تظهر في قسم المفتوحة) لكن الوقت
+// ده مبيتمسحش خالص، فأي محاولة رد/تعيين/ملاحظة/إعادة قفل على المحادثة دي هتتمنع طول ما
+// العمود ده مش NULL — بغض النظر عن الـ status الحالي
+async function ensureConversationsHaveLockColumn() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Conversations_byA') AND name = 'locked_at'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Conversations_byA] ADD locked_at DATETIME2 NULL;
+    END
+  `);
+}
+
 async function ensureMessagesHaveConversationColumn() {
   const pool = await getPool();
   await pool.request().query(`
@@ -339,6 +356,29 @@ async function ensureConversationsHaveContactColumn() {
   `);
 }
 
+// أجهزة الدعم الفني (AnyDesk) الخاصة بكل عميل — قسم "Devices" في لوحة العميل، بقى
+// بيتخزن فعليًا في الداتابيز بدل ما يكون في الذاكرة بس (كان بيتمسح أول ما تعمل refresh)
+async function ensureDevicesTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Devices_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Devices_byA] (
+        id         BIGINT IDENTITY(1,1) PRIMARY KEY,
+        contact_id BIGINT NOT NULL,
+        name       NVARCHAR(200) NOT NULL,
+        anydesk    NVARCHAR(150) NULL,
+        password   NVARCHAR(200) NULL,
+        created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        updated_at DATETIME2 NULL
+      );
+      CREATE INDEX IX_NileChat_Devices_byA_contact_id
+        ON [dbo].[NileChat_Devices_byA](contact_id);
+    END
+  `);
+  logger.info('✅ جدول Devices جاهز.');
+}
+
 // الردود المحفوظة (Quick Replies / Canned Responses) — نصوص جاهزة الإيجنت بيدرجها بضغطة واحدة
 async function ensureCannedResponsesTableExists() {
   const pool = await getPool();
@@ -389,10 +429,12 @@ async function ensureSchema() {
   await ensureInboxAgentsTableExists();
   await ensureConversationsHaveInboxColumn();
   await ensureConversationsHaveResolveColumns();
+  await ensureConversationsHaveLockColumn();
   await ensureContactsTableExists();
   await ensureContactPhonesTableExists();
   await ensureContactPhonesHaveLabelColumn();
   await ensureConversationsHaveContactColumn();
+  await ensureDevicesTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
 }
@@ -411,10 +453,12 @@ module.exports = {
   ensureInboxAgentsTableExists,
   ensureConversationsHaveInboxColumn,
   ensureConversationsHaveResolveColumns,
+  ensureConversationsHaveLockColumn,
   ensureContactsTableExists,
   ensureContactPhonesTableExists,
   ensureContactPhonesHaveLabelColumn,
   ensureConversationsHaveContactColumn,
+  ensureDevicesTableExists,
   ensureCannedResponsesTableExists,
   ensureResolveCategoriesTableExists,
   ensureSchema,

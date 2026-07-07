@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth.routes');
 const conversationsRoutes = require('./routes/conversations.routes');
 const inboxesRoutes = require('./routes/inboxes.routes');
 const contactsRoutes = require('./routes/contacts.routes');
+const devicesRoutes = require('./routes/devices.routes');
 const cannedResponsesRoutes = require('./routes/cannedResponses.routes');
 const resolveCategoriesRoutes = require('./routes/resolveCategories.routes');
 
@@ -61,6 +62,9 @@ app.use('/', inboxesRoutes);
 
 // إدارة الكونتاكتس الحقيقيين (العملاء)
 app.use('/', contactsRoutes);
+
+// أجهزة الدعم الفني (AnyDesk) الخاصة بكل عميل
+app.use('/', devicesRoutes);
 
 // الردود المحفوظة (Quick Replies / Canned Responses) وتصنيفات الـ Resolve
 app.use('/', cannedResponsesRoutes);

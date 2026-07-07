@@ -9,6 +9,15 @@ const logger = require('../utils/logger');
 
 // ===== المحادثات =====
 
+// المحادثة المقفولة (اتعمللها Resolve) مقفولة نهائيًا — أي إجراء عليها (رد/تعيين/
+// ملاحظة/Resolve تاني) ممنوع للأبد بغض النظر عن الـ status الحالي، حتى لو حصل عليها
+// Reopen قبل كده (الـ Reopen شكلي بس، غرضه إظهارها في قسم المفتوحة مش إعادة تفعيلها)
+function isConversationLocked(conversation) {
+  return Boolean(conversation && conversation.locked_at);
+}
+
+const LOCKED_ERROR = 'المحادثة دي مقفولة نهائيًا (اتعمللها Resolve قبل كده) — مينفعش يتعمل عليها أي إجراء تاني';
+
 async function listConversations(req, res) {
   const conversations = await conversationRepo.listConversations();
   res.json(conversations);
@@ -27,6 +36,13 @@ async function assign(req, res) {
   const { agentId } = req.body || {};
   const isSelfAssign = !agentId || String(agentId) === String(req.user.userId);
   const targetAgentId = agentId || req.user.userId;
+
+  // بنجيب المحادثة الأول عشان نتأكد إنها مش مقفولة نهائيًا قبل أي حاجة تانية
+  const conversation = await conversationRepo.getConversationById(req.params.id);
+  if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
+  if (isConversationLocked(conversation)) {
+    return res.status(409).json({ error: LOCKED_ERROR });
+  }
 
   // بنجيب بيانات اليوزر اللي بعت الطلب وبيانات الإيجنت المستهدف في نفس الوقت (مش
   // الواحد بعد التاني)، وكمان لو self-assign مبنجيبش نفس اليوزر مرتين — قبل كده كان
@@ -86,6 +102,9 @@ async function resolve(req, res) {
     userRepo.findUserById(req.user.userId),
   ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
+  if (isConversationLocked(conversation)) {
+    return res.status(409).json({ error: LOCKED_ERROR });
+  }
 
   const actingName = actingUser ? userRepo.resolveDisplayName(actingUser) : 'إيجنت';
 
@@ -148,6 +167,9 @@ async function addNote(req, res) {
     userRepo.findUserById(req.user.userId),
   ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
+  if (isConversationLocked(conversation)) {
+    return res.status(409).json({ error: LOCKED_ERROR });
+  }
 
   const senderName = sender ? userRepo.resolveDisplayName(sender) : null;
   const io = req.app.get('io');
@@ -185,10 +207,11 @@ async function reply(req, res) {
   ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
-  // ممنوع تبعت رسالة لمحادثة مقفولة (Resolved) — لازم تعمل Reopen الأول
-  // عشان نضمن إن الرد بيوصل بس للمحادثات المفتوحة فعليًا، حتى لو حصل Reopen قبل كده وقفلها تاني
-  if (conversation.status === 'closed') {
-    return res.status(409).json({ error: 'المحادثة دي متقفلة (Resolved) — لازم تعمل Reopen الأول عشان تقدر تبعت رسالة' });
+  // ممنوع تبعت رسالة لمحادثة مقفولة (Resolved) نهائيًا — الـ Reopen شكلي بس (بيغيّر
+  // مكان ظهورها في القايمة) ومش بيلغي القفل، فالتحقق ده على locked_at نفسه مش على الـ
+  // status، عشان حتى لو حصل Reopen يفضل الرد ممنوع تمامًا
+  if (isConversationLocked(conversation)) {
+    return res.status(409).json({ error: LOCKED_ERROR });
   }
 
   const senderInfo = sender ? { id: sender.id, name: userRepo.resolveDisplayName(sender) } : null;

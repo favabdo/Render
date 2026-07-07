@@ -153,6 +153,18 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .resolve-notes-label{font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
 .resolve-notes{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;resize:none;outline:none;transition:border-color .2s;height:72px}
 .resolve-notes:focus{border-color:var(--primary)}
+
+/* هيدر قسم في صفحات الإعدادات (أيقونة + عنوان/وصف + زرار على الشمال) — كان بيتكتب
+   inline بنفس الشكل في أكتر من مكان (Quick Replies / Problem Category) من غير ما يبقى
+   قابل للـ wrap، فعلى الموبايل الزرار كان بياخد مساحته كاملة ويضغط عمود العنوان/الوصف
+   جنبه لغاية ما بيتكسر لأسطر ضيقة أوي وتبقى شكلها مقطعة */
+.settings-section-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.settings-section-header-info{display:flex;align-items:center;gap:10px;flex:1 1 220px;min-width:0}
+.settings-section-header-info>div:last-child{min-width:0}
+.settings-section-header .page-btn{flex-shrink:0;white-space:nowrap}
+@media (max-width:860px){
+    .settings-section-header .page-btn{width:100%;justify-content:center}
+}
 .resolve-modal-actions{display:flex;gap:10px;margin-top:18px}
 .resolve-cancel-btn{flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
 .resolve-cancel-btn:hover{border-color:var(--danger);color:var(--danger)}
@@ -836,8 +848,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
         <!-- QUICK REPLIES SECTION -->
         <div class="settings-section" style="margin-bottom:24px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-                <div style="display:flex;align-items:center;gap:10px">
+            <div class="settings-section-header">
+                <div class="settings-section-header-info">
                     <div style="width:36px;height:36px;border-radius:10px;background:rgba(108,92,231,0.1);display:flex;align-items:center;justify-content:center">
                         <i data-lucide="zap" style="width:18px;height:18px;color:var(--primary)"></i>
                     </div>
@@ -872,8 +884,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
         <!-- PROBLEM CATEGORY SECTION -->
         <div class="settings-section">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-                <div style="display:flex;align-items:center;gap:10px">
+            <div class="settings-section-header">
+                <div class="settings-section-header-info">
                     <div style="width:36px;height:36px;border-radius:10px;background:rgba(16,185,129,0.1);display:flex;align-items:center;justify-content:center">
                         <i data-lucide="tag" style="width:18px;height:18px;color:var(--success)"></i>
                     </div>
@@ -3251,72 +3263,139 @@ async function confirmMergeContact(contactId) {
         showToast('تم دمج الرقم مع الكونتاكت بنجاح', 'success');
         c.contactId = data.conversation.contact_id;
         await loadContactDetails(c);
+        renderDevices(c);
     } catch (err) {
         console.error('[API] confirmMergeContact error:', err);
         showToast(err.message || 'فشل الدمج', 'error');
     }
 }
 
-/* ===== الأجهزة ===== */
-function renderDevices(c) {
-    devices = c.devices;
+/* ===== الأجهزة =====
+   بتتخزن فعليًا في الداتابيز لكل عميل (كونتاكت) — مش في الذاكرة بس زي الأول، فمبتتمسحش
+   أول ما تعمل refresh، وبتفضل نفسها لو فتحت أي محادثة تانية لنفس العميل ده */
+function renderDevicesEmptyState(message) {
+    document.getElementById('device-list').innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">${message}</div>`;
+    document.getElementById('add-device-btn').style.display = 'none';
+    document.getElementById('add-device-form').classList.remove('show');
+}
+async function renderDevices(c) {
+    if (!c || !c.contactId) {
+        devices = [];
+        renderDevicesEmptyState('اربط المحادثة بعميل الأول عشان تقدر تضيف أجهزة');
+        return;
+    }
+    document.getElementById('add-device-btn').style.display = '';
+    document.getElementById('device-list').innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">جاري التحميل...</div>';
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/devices`);
+        if (!res.ok) throw new Error('فشل تحميل الأجهزة');
+        devices = await res.json();
+        // لو المستخدم بدّل المحادثة وهو لسه بيستنى الرد، متكتبش فوق أجهزة محادثة تانية
+        if (selectedChatId !== c.id) return;
+        drawDevices();
+    } catch (err) {
+        console.error('[API] renderDevices error:', err);
+        if (selectedChatId === c.id) renderDevicesEmptyState('تعذر تحميل الأجهزة');
+    }
+}
+function drawDevices() {
     document.getElementById('device-list').innerHTML = devices.length === 0
         ? '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">No devices</div>'
-        : devices.map((d, i) => `
+        : devices.map((d) => `
         <div class="device-card">
-            <div id="device-view-${i}">
+            <div id="device-view-${d.id}">
                 <div class="device-name"><i data-lucide="monitor" style="width:16px;height:16px"></i>${d.name}</div>
-                <div class="device-detail"><i data-lucide="hash" style="width:14px;height:14px"></i>AnyDesk: <strong style="color:var(--text)">${d.anydesk}</strong></div>
-                <div class="device-detail"><i data-lucide="lock" style="width:14px;height:14px"></i>Password: <span class="device-pw">${d.pw}</span></div>
+                <div class="device-detail"><i data-lucide="hash" style="width:14px;height:14px"></i>AnyDesk: <strong style="color:var(--text)">${d.anydesk || '-'}</strong></div>
+                <div class="device-detail"><i data-lucide="lock" style="width:14px;height:14px"></i>Password: <span class="device-pw">${d.password || '-'}</span></div>
             </div>
-            <div id="device-edit-${i}" style="display:none">
-                <input type="text" class="device-edit-input" id="device-edit-name-${i}" placeholder="Device name" value="${d.name}">
-                <input type="text" class="device-edit-input" id="device-edit-anydesk-${i}" placeholder="AnyDesk number" value="${d.anydesk}">
-                <input type="text" class="device-edit-input" id="device-edit-pw-${i}" placeholder="Password" value="${d.pw}">
+            <div id="device-edit-${d.id}" style="display:none">
+                <input type="text" class="device-edit-input" id="device-edit-name-${d.id}" placeholder="Device name" value="${d.name}">
+                <input type="text" class="device-edit-input" id="device-edit-anydesk-${d.id}" placeholder="AnyDesk number" value="${d.anydesk || ''}">
+                <input type="text" class="device-edit-input" id="device-edit-pw-${d.id}" placeholder="Password" value="${d.password || ''}">
             </div>
-            <div class="device-card-actions" id="device-actions-${i}">
-                <button class="info-item-del" onclick="editDevice(${i})" title="تعديل"><i data-lucide="edit-2" style="width:14px;height:14px"></i></button>
-                <button class="info-item-del" onclick="removeDevice(${i})" title="حذف"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+            <div class="device-card-actions" id="device-actions-${d.id}">
+                <button class="info-item-del" onclick="editDevice(${d.id})" title="تعديل"><i data-lucide="edit-2" style="width:14px;height:14px"></i></button>
+                <button class="info-item-del" onclick="removeDevice(${d.id})" title="حذف"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
             </div>
         </div>
     `).join('');
     lucide.createIcons();
 }
-function editDevice(idx) {
-    document.getElementById(`device-view-${idx}`).style.display = 'none';
-    document.getElementById(`device-edit-${idx}`).style.display = 'block';
-    document.getElementById(`device-actions-${idx}`).innerHTML = `
-        <button class="info-item-del" onclick="saveEditDevice(${idx})" title="حفظ" style="color:var(--success)"><i data-lucide="check" style="width:14px;height:14px"></i></button>
-        <button class="info-item-del" onclick="cancelEditDevice(${idx})" title="إلغاء"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+function editDevice(deviceId) {
+    document.getElementById(`device-view-${deviceId}`).style.display = 'none';
+    document.getElementById(`device-edit-${deviceId}`).style.display = 'block';
+    document.getElementById(`device-actions-${deviceId}`).innerHTML = `
+        <button class="info-item-del" onclick="saveEditDevice(${deviceId})" title="حفظ" style="color:var(--success)"><i data-lucide="check" style="width:14px;height:14px"></i></button>
+        <button class="info-item-del" onclick="cancelEditDevice()" title="إلغاء"><i data-lucide="x" style="width:14px;height:14px"></i></button>
     `;
     lucide.createIcons();
 }
-function cancelEditDevice(idx) {
-    const c = conversations.find(x => x.id === selectedChatId);
-    if (c) renderDevices(c);
+function cancelEditDevice() {
+    drawDevices();
 }
-function saveEditDevice(idx) {
-    const name = document.getElementById(`device-edit-name-${idx}`).value.trim();
-    const anydesk = document.getElementById(`device-edit-anydesk-${idx}`).value.trim();
-    const pw = document.getElementById(`device-edit-pw-${idx}`).value.trim();
+async function saveEditDevice(deviceId) {
+    const name = document.getElementById(`device-edit-name-${deviceId}`).value.trim();
+    const anydesk = document.getElementById(`device-edit-anydesk-${deviceId}`).value.trim();
+    const pw = document.getElementById(`device-edit-pw-${deviceId}`).value.trim();
     if (!name || !anydesk || !pw) return showToast('من فضلك اكتب كل بيانات الجهاز', 'error');
     const c = conversations.find(x => x.id === selectedChatId);
-    if (c) { c.devices[idx].name = name; c.devices[idx].anydesk = anydesk; c.devices[idx].pw = pw; }
-    renderDevices(c);
-    showToast('تم تعديل بيانات الجهاز', 'success');
+    if (!c || !c.contactId) return;
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/devices/${deviceId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name, anydesk, pw }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل الجهاز');
+        const idx = devices.findIndex(d => String(d.id) === String(deviceId));
+        if (idx !== -1) devices[idx] = data.device;
+        drawDevices();
+        showToast('تم تعديل بيانات الجهاز', 'success');
+    } catch (err) {
+        console.error('[API] saveEditDevice error:', err);
+        showToast(err.message || 'فشل تعديل الجهاز', 'error');
+    }
 }
 function showAddDevice() { document.getElementById('add-device-btn').style.display = 'none'; document.getElementById('add-device-form').classList.add('show'); document.getElementById('new-device-name').focus(); }
 function hideAddDevice() { document.getElementById('add-device-btn').style.display = ''; document.getElementById('add-device-form').classList.remove('show'); document.getElementById('new-device-name').value = ''; document.getElementById('new-device-anydesk').value = ''; document.getElementById('new-device-pw').value = ''; }
-function addDevice() {
+async function addDevice() {
     const name = document.getElementById('new-device-name').value.trim();
     const anydesk = document.getElementById('new-device-anydesk').value.trim();
     const pw = document.getElementById('new-device-pw').value.trim();
     if (!name || !anydesk || !pw) return showToast('Please fill all device fields', 'error');
     const c = conversations.find(x => x.id === selectedChatId);
-    if (c) c.devices.push({name, anydesk, pw});
-    renderDevices(c); hideAddDevice(); showToast('Device added successfully', 'success');
+    if (!c || !c.contactId) return showToast('اربط المحادثة بعميل الأول', 'error');
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/devices`, {
+            method: 'POST',
+            body: JSON.stringify({ name, anydesk, pw }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الجهاز');
+        devices.push(data.device);
+        drawDevices();
+        hideAddDevice();
+        showToast('Device added successfully', 'success');
+    } catch (err) {
+        console.error('[API] addDevice error:', err);
+        showToast(err.message || 'فشل إضافة الجهاز', 'error');
+    }
 }
-function removeDevice(idx) { const c = conversations.find(x => x.id === selectedChatId); if (c) c.devices.splice(idx, 1); renderDevices(c); showToast('Device removed', 'info'); }
+async function removeDevice(deviceId) {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c || !c.contactId) return;
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/devices/${deviceId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حذف الجهاز');
+        devices = devices.filter(d => String(d.id) !== String(deviceId));
+        drawDevices();
+        showToast('Device removed', 'info');
+    } catch (err) {
+        console.error('[API] removeDevice error:', err);
+        showToast(err.message || 'فشل حذف الجهاز', 'error');
+    }
+}
 
 /* ===== صفحات أخرى ===== */
 async function loadContactsPage() {
