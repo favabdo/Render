@@ -407,7 +407,7 @@ async function ensureCannedResponsesTableExists() {
   // أي صف لسه مالوش ترتيب (قديم من قبل الفيتشر ده) بناخد رقمه من ترتيب الإنشاء —
   // ده في batch تالت لوحده عشان يتأكد إن العمود بقى موجود فعليًا وقت التنفيذ
   await pool.request().query(`
-    UPDATE t SET t.sort_order = t.rn
+    UPDATE t SET t.sort_order = src.rn
     FROM (
       SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
       FROM [dbo].[NileChat_CannedResponses_byA]
@@ -443,7 +443,7 @@ async function ensureResolveCategoriesTableExists() {
   `);
 
   await pool.request().query(`
-    UPDATE t SET t.sort_order = t.rn
+    UPDATE t SET t.sort_order = src.rn
     FROM (
       SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
       FROM [dbo].[NileChat_ResolveCategories_byA]
