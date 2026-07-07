@@ -394,12 +394,19 @@ async function ensureCannedResponsesTableExists() {
         created_at   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
       );
     END
+  `);
 
-    -- عمود ترتيب السحب (drag & drop) — بيتضاف لو الجدول أصلاً كان موجود من قبل من غيره
+  // بنعمل ALTER في batch منفصل عن أي حاجة بتستخدم العمود ده — لو حطيناهم في نفس
+  // الـ batch، SQL Server بيعمل compile للـ batch كله قبل التنفيذ فبيديني
+  // "Invalid column name" لأنه لسه مايعرفش إن العمود اتضاف
+  await pool.request().query(`
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_CannedResponses_byA') AND name = 'sort_order')
       ALTER TABLE [dbo].[NileChat_CannedResponses_byA] ADD sort_order INT NULL;
+  `);
 
-    -- أي صف لسه مالوش ترتيب (قديم من قبل الفيتشر ده) بناخد رقمه من ترتيب الإنشاء
+  // أي صف لسه مالوش ترتيب (قديم من قبل الفيتشر ده) بناخد رقمه من ترتيب الإنشاء —
+  // ده في batch تالت لوحده عشان يتأكد إن العمود بقى موجود فعليًا وقت التنفيذ
+  await pool.request().query(`
     UPDATE t SET t.sort_order = t.rn
     FROM (
       SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
@@ -428,10 +435,14 @@ async function ensureResolveCategoriesTableExists() {
         created_at  DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
       );
     END
+  `);
 
+  await pool.request().query(`
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_ResolveCategories_byA') AND name = 'sort_order')
       ALTER TABLE [dbo].[NileChat_ResolveCategories_byA] ADD sort_order INT NULL;
+  `);
 
+  await pool.request().query(`
     UPDATE t SET t.sort_order = t.rn
     FROM (
       SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
