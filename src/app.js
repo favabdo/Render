@@ -12,6 +12,8 @@ const authRoutes = require('./routes/auth.routes');
 const conversationsRoutes = require('./routes/conversations.routes');
 const inboxesRoutes = require('./routes/inboxes.routes');
 const contactsRoutes = require('./routes/contacts.routes');
+const cannedResponsesRoutes = require('./routes/cannedResponses.routes');
+const resolveCategoriesRoutes = require('./routes/resolveCategories.routes');
 
 const app = express();
 
@@ -59,6 +61,10 @@ app.use('/', inboxesRoutes);
 
 // إدارة الكونتاكتس الحقيقيين (العملاء)
 app.use('/', contactsRoutes);
+
+// الردود المحفوظة (Quick Replies / Canned Responses) وتصنيفات الـ Resolve
+app.use('/', cannedResponsesRoutes);
+app.use('/', resolveCategoriesRoutes);
 
 // أي Error يوصل هنا (عن طريق asyncHandler أو next(err)) بيتحول لرد JSON موحد
 app.use(errorHandler);

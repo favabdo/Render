@@ -339,6 +339,44 @@ async function ensureConversationsHaveContactColumn() {
   `);
 }
 
+// الردود المحفوظة (Quick Replies / Canned Responses) — نصوص جاهزة الإيجنت بيدرجها بضغطة واحدة
+async function ensureCannedResponsesTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_CannedResponses_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_CannedResponses_byA] (
+        id           BIGINT IDENTITY(1,1) PRIMARY KEY,
+        label        NVARCHAR(200) NOT NULL,
+        message_text NVARCHAR(MAX) NOT NULL,
+        created_by   BIGINT NULL,
+        created_at   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+    END
+  `);
+  logger.info('✅ جدول Canned Responses جاهز.');
+}
+
+// تصنيفات المشاكل اللي بتظهر وقت عمل Resolve للمحادثة
+async function ensureResolveCategoriesTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_ResolveCategories_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_ResolveCategories_byA] (
+        id          BIGINT IDENTITY(1,1) PRIMARY KEY,
+        name        NVARCHAR(150) NOT NULL,
+        icon        NVARCHAR(20)  NULL,
+        description NVARCHAR(300) NULL,
+        color       NVARCHAR(50)  NULL,
+        created_by  BIGINT NULL,
+        created_at  DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+    END
+  `);
+  logger.info('✅ جدول Resolve Categories جاهز.');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -355,6 +393,8 @@ async function ensureSchema() {
   await ensureContactPhonesTableExists();
   await ensureContactPhonesHaveLabelColumn();
   await ensureConversationsHaveContactColumn();
+  await ensureCannedResponsesTableExists();
+  await ensureResolveCategoriesTableExists();
 }
 
 module.exports = {
@@ -375,6 +415,8 @@ module.exports = {
   ensureContactPhonesTableExists,
   ensureContactPhonesHaveLabelColumn,
   ensureConversationsHaveContactColumn,
+  ensureCannedResponsesTableExists,
+  ensureResolveCategoriesTableExists,
   ensureSchema,
   TABLE_NAME,
 };

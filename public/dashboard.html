@@ -187,6 +187,11 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .chat-item-agent.unassigned{opacity:.6;font-style:italic}
 .chat-input-area.note-mode{background:#fffbea;border-top:1px solid #e0c46c}
 .chat-input-area.note-mode #msg-input{background:transparent}
+.chat-input-area.resolved-locked{opacity:.6}
+.chat-input-area.resolved-locked #msg-input{cursor:not-allowed}
+.resolved-banner{display:none;align-items:center;gap:8px;padding:8px 20px;background:rgba(100,116,139,0.08);color:var(--text-secondary);font-size:12.5px;font-weight:600;border-top:1px solid var(--border)}
+.resolved-banner.show{display:flex}
+.resolved-banner button{margin-inline-start:auto;border:1.5px solid var(--primary);background:transparent;color:var(--primary);border-radius:8px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
 .note-toggle-bar{padding:8px 20px 0;background:var(--surface)}
 .note-toggle-btn{width:fit-content;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-secondary);font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap}
 .note-toggle-btn:hover{border-color:#e0c46c;color:#8a6d1a}
@@ -656,6 +661,11 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <button class="note-toggle-btn" id="note-mode-btn" title="Private note (agents only, not sent to customer)" onclick="toggleNoteMode()">
                     <i data-lucide="lock" style="width:13px;height:13px"></i> Private Note
                 </button>
+            </div>
+            <div class="resolved-banner" id="resolved-banner">
+                <i data-lucide="lock" style="width:14px;height:14px"></i>
+                <span>المحادثة دي متقفلة (Resolved) — لازم تعمل Reopen عشان تقدر تبعت رسالة</span>
+                <button onclick="reopenConversation(selectedChatId)">Reopen</button>
             </div>
             <div class="chat-input-area" id="chat-input-area">
                 <div class="input-actions">
@@ -1806,7 +1816,10 @@ function initSocket() {
                 c.assignedTo = updatedConv.assigned_agent_name || c.assignedTo;
                 renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
                 updateSidebarBadge();
-                if (selectedChatId === c.id) updateAssignUI(c);
+                if (selectedChatId === c.id) {
+                    updateAssignUI(c);
+                    applyConversationStatusUI(c);
+                }
             } else {
                 loadConversationsFromAPI();
             }
@@ -1819,20 +1832,51 @@ function initSocket() {
 }
 
 /* ===== دي كانت بيانات وهمية للتجربة، اتشالت خالص =====
-   لحد ما نعمل الـ endpoints دي في السيرفر ونجيب بيانات حقيقية من الـ SQL Server:
-   - agents            -> GET /api/agents        (لسه مفيش route)
-   - savedReplies      -> GET /api/quick-replies (لسه مفيش route)
-   - problemCategories -> GET /api/categories    (لسه مفيش route)
-   - chartData         -> GET /api/reports/weekly(لسه مفيش route)
-   - activityData      -> GET /api/activity      (لسه مفيش route)
-   contactsData بقت حقيقية فعليًا من GET /api/contacts (شوف loadContactsPage)
-   لحد ما الباقي يتعمل، الأراريهات فاضية والصفحات هتفضل شكلها فاضي (مفيش بيانات وهمية تتعرض). */
+   - agents            -> حقيقية فعليًا من GET /api/inboxes-available-agents (شوف loadAgentsFromAPI)
+   - savedReplies      -> حقيقية فعليًا من GET /api/canned-responses (شوف loadCannedResponsesFromAPI)
+   - problemCategories -> حقيقية فعليًا من GET /api/resolve-categories (شوف loadResolveCategoriesFromAPI)
+   - contactsData      -> حقيقية فعليًا من GET /api/contacts (شوف loadContactsPage)
+   لسه مفيش endpoints للتقارير دي، فهتفضل فاضية لحد ما تتعمل:
+   - chartData         -> GET /api/reports/weekly (لسه مفيش route)
+   - activityData      -> GET /api/activity (لسه مفيش route) */
 let agents = []; // هتتعبى فعليًا من /api/inboxes-available-agents جوه loadAgentsFromAPI()
-const savedReplies = [];
-const problemCategories = [];
+let savedReplies = []; // هتتعبى فعليًا من /api/canned-responses جوه loadCannedResponsesFromAPI()
+let problemCategories = []; // هتتعبى فعليًا من /api/resolve-categories جوه loadResolveCategoriesFromAPI()
 let contactsData = []; // هتتعبى فعليًا من /api/contacts جوه loadContactsPage()
 const chartData = [];
 const activityData = [];
+
+// بيحول شكل الرد الجاي من السيرفر (label, message_text) لنفس الشكل اللي الواجهة مستخدمة بيه من زمان (label, text)
+function mapCannedResponse(r) {
+    return { id: r.id, label: r.label, text: r.message_text };
+}
+async function loadCannedResponsesFromAPI() {
+    try {
+        const res = await apiFetch('/api/canned-responses');
+        if (!res.ok) throw new Error('Failed to fetch canned responses');
+        const rows = await res.json();
+        savedReplies = rows.map(mapCannedResponse);
+        renderQuickReplies();
+    } catch (err) {
+        console.error('[API] loadCannedResponsesFromAPI error:', err);
+    }
+}
+
+// بيحول شكل التصنيف الجاي من السيرفر (name, description) لنفس الشكل القديم (name, desc)
+function mapResolveCategory(c) {
+    return { id: c.id, name: c.name, icon: c.icon || '📋', desc: c.description || '', color: c.color || 'rgba(108,92,231,0.1)' };
+}
+async function loadResolveCategoriesFromAPI() {
+    try {
+        const res = await apiFetch('/api/resolve-categories');
+        if (!res.ok) throw new Error('Failed to fetch resolve categories');
+        const rows = await res.json();
+        problemCategories = rows.map(mapResolveCategory);
+        renderCategories();
+    } catch (err) {
+        console.error('[API] loadResolveCategoriesFromAPI error:', err);
+    }
+}
 
 // نفس قايمة الموظفين المستخدمة في ويزارد الـ Inboxes — بنجيبها هنا كمان عشان
 // قايمة "Assign to Agent" في لوحة العميل تبقى حقيقية بدل ما تفضل فاضية
@@ -2379,24 +2423,7 @@ function selectChat(id) {
         document.getElementById('ch-status').textContent = c.status === 'open' ? 'Online' : c.status === 'pending' ? 'Pending' : 'Resolved';
         document.getElementById('ch-status').style.color = c.status === 'open' ? 'var(--success)' : c.status === 'pending' ? 'var(--warning)' : 'var(--text-secondary)';
 
-        // تحديث زرار Resolve حسب حالة المحادثة
-        // ملحوظة مهمة: مكتبة lucide بتستبدل عنصر <i data-lucide="..."> بعنصر <svg> فعلي
-        // أول ما تتنادى lucide.createIcons() (بيحصل ده من أول تحميل الصفحة في init()).
-        // يعني querySelector('i') بترجع null بعد كده وتكسر باقي الفنكشن بصمت —
-        // ده هو السبب الحقيقي إن محتوى المحادثة مكنش بيظهر. الحل: نستهدف svg أو i مع بعض.
-        const resolveBtn = document.getElementById('resolve-btn');
-        const resolveIcon = resolveBtn.querySelector('svg, i');
-        if (c.status === 'resolved') {
-            resolveBtn.classList.add('resolved-state');
-            resolveBtn.onclick = null;
-            document.getElementById('resolve-btn-text').textContent = 'Resolved';
-            if (resolveIcon) resolveIcon.setAttribute('data-lucide', 'check-circle-2');
-        } else {
-            resolveBtn.classList.remove('resolved-state');
-            resolveBtn.onclick = openResolveModal;
-            document.getElementById('resolve-btn-text').textContent = 'Resolve';
-            if (resolveIcon) resolveIcon.setAttribute('data-lucide', 'check-circle');
-        }
+        applyConversationStatusUI(c);
 
         renderMessages(c);
         if (!c._messagesLoaded) loadMessagesForConversation(c);
@@ -2710,6 +2737,14 @@ async function sendMessage() {
 
     if (noteMode) {
         await sendNoteText(c, text);
+        return;
+    }
+
+    // ممنوع نبعت رسالة لمحادثة اتعملها resolve — لازم Reopen الأول (نفس القاعدة اللي
+    // الباك إند بيفرضها في /reply، بس هنا بنمنع حتى المحاولة من الواجهة من الأساس)
+    if (c.rawStatus === 'closed') {
+        input.value = text;
+        showToast('المحادثة دي متقفلة (Resolved) — اعمل Reopen الأول عشان تقدر تبعت رسالة', 'error');
         return;
     }
 
@@ -3378,16 +3413,26 @@ function hideAddQuickReply() {
     document.getElementById('qr-new-label').value = '';
     document.getElementById('qr-new-text').value = '';
 }
-function addQuickReply() {
+async function addQuickReply() {
     const label = document.getElementById('qr-new-label').value.trim();
     const text = document.getElementById('qr-new-text').value.trim();
     if (!label) return showToast('اكتب اسم الزرار (Label) أولاً', 'error');
     if (!text) return showToast('اكتب نص الرد أولاً', 'error');
-    const newId = savedReplies.length > 0 ? Math.max(...savedReplies.map(r=>r.id)) + 1 : 1;
-    savedReplies.push({id: newId, label, text});
-    hideAddQuickReply();
-    renderQuickReplies();
-    showToast('تم إضافة الرد السريع', 'success');
+    try {
+        const res = await apiFetch('/api/canned-responses', {
+            method: 'POST',
+            body: JSON.stringify({ label, text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الرد السريع');
+        savedReplies.push(mapCannedResponse(data));
+        hideAddQuickReply();
+        renderQuickReplies();
+        showToast('تم إضافة الرد السريع', 'success');
+    } catch (err) {
+        console.error('[API] addQuickReply error:', err);
+        showToast(err.message || 'فشل إضافة الرد السريع', 'error');
+    }
 }
 function editQR(id) {
     document.getElementById(`qr-view-${id}`).style.display = 'none';
@@ -3398,22 +3443,43 @@ function cancelEditQR(id) {
     document.getElementById(`qr-view-${id}`).style.display = 'block';
     document.getElementById(`qr-edit-${id}`).style.display = 'none';
 }
-function saveEditQR(id) {
+async function saveEditQR(id) {
     const newLabel = document.getElementById(`qr-edit-label-${id}`).value.trim();
     const newText = document.getElementById(`qr-edit-text-${id}`).value.trim();
     if (!newLabel) return showToast('اسم الزرار فارغ', 'error');
     if (!newText) return showToast('النص فارغ', 'error');
-    const r = savedReplies.find(x => x.id === id);
-    if (r) { r.label = newLabel; r.text = newText; }
-    renderQuickReplies();
-    showToast('تم تعديل الرد', 'success');
+    try {
+        const res = await apiFetch(`/api/canned-responses/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ label: newLabel, text: newText }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل الرد');
+        const r = savedReplies.find(x => x.id === id);
+        if (r) { r.label = data.label; r.text = data.message_text; }
+        renderQuickReplies();
+        showToast('تم تعديل الرد', 'success');
+    } catch (err) {
+        console.error('[API] saveEditQR error:', err);
+        showToast(err.message || 'فشل تعديل الرد', 'error');
+    }
 }
-function deleteQR(id) {
+async function deleteQR(id) {
     const idx = savedReplies.findIndex(x => x.id === id);
     if (idx === -1) return;
-    savedReplies.splice(idx, 1);
-    renderQuickReplies();
-    showToast('تم حذف الرد', 'info');
+    try {
+        const res = await apiFetch(`/api/canned-responses/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error((data && data.error) || 'فشل حذف الرد');
+        }
+        savedReplies.splice(idx, 1);
+        renderQuickReplies();
+        showToast('تم حذف الرد', 'info');
+    } catch (err) {
+        console.error('[API] deleteQR error:', err);
+        showToast(err.message || 'فشل حذف الرد', 'error');
+    }
 }
 
 /* ===== Problem Categories Management ===== */
@@ -3463,16 +3529,26 @@ function hideAddCategory() {
     document.getElementById('add-cat-form').style.display = 'none';
     ['cat-new-name','cat-new-icon','cat-new-desc'].forEach(id => document.getElementById(id).value = '');
 }
-function addCategory() {
+async function addCategory() {
     const name = document.getElementById('cat-new-name').value.trim();
     const icon = document.getElementById('cat-new-icon').value.trim() || '📋';
     const desc = document.getElementById('cat-new-desc').value.trim();
     if (!name) return showToast('اكتب اسم التصنيف أولاً', 'error');
-    const newId = problemCategories.length > 0 ? Math.max(...problemCategories.map(c=>c.id)) + 1 : 1;
-    problemCategories.push({id:newId, name, icon, desc, color:'rgba(108,92,231,0.1)'});
-    hideAddCategory();
-    renderCategories();
-    showToast('تم إضافة التصنيف', 'success');
+    try {
+        const res = await apiFetch('/api/resolve-categories', {
+            method: 'POST',
+            body: JSON.stringify({ name, icon, description: desc, color: 'rgba(108,92,231,0.1)' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة التصنيف');
+        problemCategories.push(mapResolveCategory(data));
+        hideAddCategory();
+        renderCategories();
+        showToast('تم إضافة التصنيف', 'success');
+    } catch (err) {
+        console.error('[API] addCategory error:', err);
+        showToast(err.message || 'فشل إضافة التصنيف', 'error');
+    }
 }
 function editCat(id) {
     document.getElementById(`cat-view-${id}`).style.display = 'none';
@@ -3483,22 +3559,43 @@ function cancelEditCat(id) {
     document.getElementById(`cat-view-${id}`).style.display = 'block';
     document.getElementById(`cat-edit-${id}`).style.display = 'none';
 }
-function saveEditCat(id) {
+async function saveEditCat(id) {
     const name = document.getElementById(`cat-edit-name-${id}`).value.trim();
     const icon = document.getElementById(`cat-edit-icon-${id}`).value.trim() || '📋';
     const desc = document.getElementById(`cat-edit-desc-${id}`).value.trim();
     if (!name) return showToast('الاسم مطلوب', 'error');
-    const c = problemCategories.find(x => x.id === id);
-    if (c) { c.name = name; c.icon = icon; c.desc = desc; }
-    renderCategories();
-    showToast('تم تعديل التصنيف', 'success');
+    try {
+        const c = problemCategories.find(x => x.id === id);
+        const res = await apiFetch(`/api/resolve-categories/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, icon, description: desc, color: (c && c.color) || 'rgba(108,92,231,0.1)' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل التصنيف');
+        if (c) { c.name = data.name; c.icon = data.icon || '📋'; c.desc = data.description || ''; c.color = data.color || c.color; }
+        renderCategories();
+        showToast('تم تعديل التصنيف', 'success');
+    } catch (err) {
+        console.error('[API] saveEditCat error:', err);
+        showToast(err.message || 'فشل تعديل التصنيف', 'error');
+    }
 }
-function deleteCat(id) {
+async function deleteCat(id) {
     const idx = problemCategories.findIndex(x => x.id === id);
     if (idx === -1) return;
-    problemCategories.splice(idx, 1);
-    renderCategories();
-    showToast('تم حذف التصنيف', 'info');
+    try {
+        const res = await apiFetch(`/api/resolve-categories/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error((data && data.error) || 'فشل حذف التصنيف');
+        }
+        problemCategories.splice(idx, 1);
+        renderCategories();
+        showToast('تم حذف التصنيف', 'info');
+    } catch (err) {
+        console.error('[API] deleteCat error:', err);
+        showToast(err.message || 'فشل حذف التصنيف', 'error');
+    }
 }
 
 function syncResolveCategories() {
@@ -3590,8 +3687,6 @@ function init() {
     renderChatList('open', '');
     renderProfileSection();
     renderContacts();
-    renderQuickReplies();
-    renderCategories();
     renderChart();
     renderActivity();
 
@@ -3600,6 +3695,8 @@ function init() {
     // مش لازم ده يمنع تحميل المحادثات الحقيقية)
     loadConversationsFromAPI();
     loadAgentsFromAPI();
+    loadCannedResponsesFromAPI();
+    loadResolveCategoriesFromAPI();
     refreshCurrentUser();
     initSocket();
     // الـ polling الدوري (كل 3 ثواني) اتشال عشان كان بيعمل حمل زيادة على السيرفر والجت.
@@ -4214,6 +4311,79 @@ async function iwDeleteInbox(id) {
 
 <script>
 let selectedResolveCategory = null;
+
+// بتتحكم في شكل زرار Resolve/Reopen وحالة منطقة الكتابة حسب حالة المحادثة —
+// بتتنادى من selectChat() (أول ما تفتح شات) وكمان من socket 'conversation_updated'
+// (لو إيجنت تاني عمل resolve/reopen للمحادثة اللي إحنا فاتحينها بالظبط دلوقتي)
+function applyConversationStatusUI(c) {
+    const resolveBtn = document.getElementById('resolve-btn');
+    if (!resolveBtn) return;
+    const resolveIcon = resolveBtn.querySelector('svg, i');
+    const msgInput = document.getElementById('msg-input');
+    const chatInputArea = document.getElementById('chat-input-area');
+    const resolvedBanner = document.getElementById('resolved-banner');
+    const sendBtn = document.querySelector('.send-btn');
+
+    if (c.status === 'resolved') {
+        // زرار الهيدر بيتحول لـ Reopen بدل ما يفضل معطّل زي الأول
+        resolveBtn.classList.add('resolved-state');
+        resolveBtn.onclick = () => reopenConversation(c.id);
+        resolveBtn.title = 'Reopen Conversation';
+        document.getElementById('resolve-btn-text').textContent = 'Reopen';
+        if (resolveIcon) resolveIcon.setAttribute('data-lucide', 'rotate-ccw');
+
+        // ممنوع الرد على محادثة مقفولة لحد ما تتعمل Reopen
+        if (msgInput) {
+            msgInput.disabled = true;
+            msgInput.placeholder = 'المحادثة مقفولة — اعمل Reopen عشان تقدر ترد';
+        }
+        if (sendBtn) sendBtn.disabled = true;
+        if (chatInputArea) chatInputArea.classList.add('resolved-locked');
+        if (resolvedBanner) resolvedBanner.classList.add('show');
+    } else {
+        resolveBtn.classList.remove('resolved-state');
+        resolveBtn.onclick = openResolveModal;
+        resolveBtn.title = 'Resolve Conversation';
+        document.getElementById('resolve-btn-text').textContent = 'Resolve';
+        if (resolveIcon) resolveIcon.setAttribute('data-lucide', 'check-circle');
+
+        if (msgInput) {
+            msgInput.disabled = false;
+            msgInput.placeholder = 'Type a message...';
+        }
+        if (sendBtn) sendBtn.disabled = false;
+        if (chatInputArea) chatInputArea.classList.remove('resolved-locked');
+        if (resolvedBanner) resolvedBanner.classList.remove('show');
+    }
+    try { lucide.createIcons(); } catch (_) { /* مفيش دعوة، مش لازم توقف باقي التحديث */ }
+}
+
+// بتفتح تاني محادثة كانت اتعملها resolve — بتتسجل كـ رسالة نظام في الشات (زي الـ assign بالظبط)
+// وبتتبعت لايف لكل الإيجنتس الفاتحين نفس المحادثة عن طريق نفس حدث الـ socket (conversation_updated)
+async function reopenConversation(id) {
+    if (!id) return;
+    const c = conversations.find(x => x.id === id);
+    if (!c) return;
+
+    try {
+        const res = await apiFetch(`/api/conversations/${id}/reopen`, { method: 'POST' });
+        let data = null;
+        try { data = await res.json(); } catch (_) { /* ممكن الرد يكون فاضي */ }
+        if (!res.ok) throw new Error((data && data.error) || 'فشل عمل Reopen');
+
+        c.status = 'open';
+        c.rawStatus = 'open';
+        c.resolveCategory = null;
+        c.resolveNotes = null;
+
+        if (selectedChatId === c.id) applyConversationStatusUI(c);
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+        showToast('تم فتح المحادثة تاني (Reopened)', 'success');
+    } catch (err) {
+        console.error('[API] reopenConversation error:', err);
+        showToast(err.message || 'فشل عمل Reopen — حاول تاني', 'error');
+    }
+}
 
 function openResolveModal() {
     const c = conversations.find(x => x.id === selectedChatId);

@@ -185,6 +185,12 @@ async function reply(req, res) {
   ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
+  // ممنوع تبعت رسالة لمحادثة مقفولة (Resolved) — لازم تعمل Reopen الأول
+  // عشان نضمن إن الرد بيوصل بس للمحادثات المفتوحة فعليًا، حتى لو حصل Reopen قبل كده وقفلها تاني
+  if (conversation.status === 'closed') {
+    return res.status(409).json({ error: 'المحادثة دي متقفلة (Resolved) — لازم تعمل Reopen الأول عشان تقدر تبعت رسالة' });
+  }
+
   const senderInfo = sender ? { id: sender.id, name: userRepo.resolveDisplayName(sender) } : null;
 
   const io = req.app.get('io');
