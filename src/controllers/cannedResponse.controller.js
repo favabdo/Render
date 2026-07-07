@@ -37,4 +37,14 @@ async function remove(req, res) {
   res.json({ ok: true });
 }
 
-module.exports = { list, create, update, remove };
+// بيستقبل { orderedIds: [3,1,2,...] } بالترتيب الجديد بعد السحب في الواجهة
+async function reorder(req, res) {
+  const { orderedIds } = req.body || {};
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return res.status(400).json({ error: 'لازم تبعت orderedIds كمصفوفة' });
+  }
+  await repo.reorderCannedResponses(orderedIds);
+  res.json({ ok: true });
+}
+
+module.exports = { list, create, update, remove, reorder };

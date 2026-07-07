@@ -37,20 +37,27 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
 ::-webkit-scrollbar-thumb:hover{background:var(--text-secondary)}
 
-#sidebar{width:64px;min-width:64px;background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding:16px 0;z-index:50;border-left:1px solid rgba(255,255,255,0.05)}
-.sidebar-logo{width:40px;height:40px;border-radius:12px;object-fit:contain;margin-bottom:32px;flex-shrink:0}
-.sidebar-nav{display:flex;flex-direction:column;gap:4px;flex:1;width:100%;padding:0 10px}
-.sidebar-btn{width:44px;height:44px;border-radius:12px;border:none;background:transparent;color:var(--sidebar-text);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative}
-.sidebar-btn:hover{background:rgba(255,255,255,0.06);color:#fff}
-.sidebar-btn.active{background:var(--sidebar-active);color:#fff;box-shadow:0 4px 15px rgba(108,92,231,0.4)}
-.sidebar-btn .badge{position:absolute;top:4px;right:4px;width:18px;height:18px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--sidebar-bg)}
-.sidebar-bottom{display:flex;flex-direction:column;gap:4px;padding:0 10px;align-items:center}
-.sidebar-avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:border-color .2s}
+#sidebar{width:76px;min-width:76px;margin:12px 0 12px 12px;border-radius:28px;background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding:20px 0;z-index:50}
+.sidebar-logo{width:40px;height:40px;border-radius:14px;object-fit:contain;margin-bottom:28px;flex-shrink:0}
+.sidebar-nav{display:flex;flex-direction:column;gap:10px;flex:1;width:100%;padding:0 15px;align-items:center}
+.sidebar-btn{width:46px;height:46px;border-radius:18px;border:none;background:rgba(255,255,255,0.05);color:var(--sidebar-text);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative}
+.sidebar-btn:hover{background:rgba(255,255,255,0.1);color:#fff;transform:translateY(-1px)}
+.sidebar-btn.active{background:var(--sidebar-active);color:#fff;border-radius:20px;box-shadow:0 0 0 4px rgba(108,92,231,0.18),0 6px 16px rgba(108,92,231,0.4)}
+.sidebar-btn .badge{position:absolute;top:2px;right:2px;width:18px;height:18px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--sidebar-bg)}
+.sidebar-bottom{display:flex;flex-direction:column;gap:10px;padding:0 15px;align-items:center}
+.sidebar-avatar{width:38px;height:38px;border-radius:50%;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:border-color .2s}
 .sidebar-avatar:hover{border-color:var(--primary)}
 .sidebar-avatar img{width:100%;height:100%;object-fit:cover}
+@media (max-width:860px){
+    #sidebar{width:68px;min-width:68px;margin:8px 0 8px 8px;border-radius:24px;padding:16px 0}
+    .sidebar-nav,.sidebar-bottom{padding:0 11px}
+    .sidebar-btn{width:42px;height:42px;border-radius:16px}
+}
 
 .page{display:none;flex:1;overflow:hidden}
 .page.active{display:flex}
+[data-drag-id]{cursor:default}
+[data-drag-id].dragging-now{opacity:.35}
 
 #chat-list-panel{width:340px;min-width:340px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column}
 .mobile-back-btn{display:none;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:none;background:transparent;color:var(--text);cursor:pointer;flex-shrink:0}
@@ -163,7 +170,15 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .settings-section-header-info>div:last-child{min-width:0}
 .settings-section-header .page-btn{flex-shrink:0;white-space:nowrap}
 @media (max-width:860px){
+    .settings-section-header{flex-direction:column;align-items:stretch}
+    .settings-section-header-info{flex-basis:auto;width:100%}
     .settings-section-header .page-btn{width:100%;justify-content:center}
+}
+@media (max-width:480px){
+    .page-content{padding:16px}
+    .settings-section{padding:16px}
+    #cat-list{grid-template-columns:1fr!important}
+    .settings-card-grid{grid-template-columns:1fr!important}
 }
 .resolve-modal-actions{display:flex;gap:10px;margin-top:18px}
 .resolve-cancel-btn{flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
@@ -1836,6 +1851,16 @@ function initSocket() {
                 loadConversationsFromAPI();
             }
         });
+
+        /* السيرفر بيبعتها لما أي إيجنت يتعمله deactivate أو حذف نهائي (شوف
+           auth.controller.js -> updateUserAccount / deleteUserAccount). بنستقبلها
+           كل الإيجنتس المتصلين، وكل واحد بيتأكد لو هو نفسه المقصود؛ لو آه، الجلسة
+           بتتقفل فورًا ويرجع لصفحة الدخول من غير ما يعمل أي حاجة أو يضغط أي زرار */
+        socket.on('agent_status_changed', ({ userId } = {}) => {
+            if (!AUTH_USER || String(userId) !== String(AUTH_USER.id)) return;
+            showToast('تم إيقاف حسابك أو حذفه، هيتم تسجيل خروجك الآن', 'error');
+            setTimeout(logout, 1200);
+        });
     } catch (err) {
         console.error('[Socket.io] فشل تفعيل الـ realtime، الداشبورد هيفضل شغال من غيره:', err);
         socket = null;
@@ -3436,6 +3461,64 @@ function openConversationForContact(contactId) {
     setTimeout(() => selectChat(conv.id), 100);
 }
 
+/* ===== سحب وترتيب عناصر القوائم (Drag & Drop) — بيتستخدم في Quick Replies و Problem Category =====
+   بيشتغل بالـ native HTML5 drag & drop، وبيحسب الترتيب الجديد من ترتيب العناصر
+   في الـ DOM فعليًا بعد ما المستخدم يسيب الماوس، وبعدين يبعته للسيرفر يتحفظ */
+function getDragAfterElement(container, x, y) {
+    const els = [...container.querySelectorAll(':scope > [data-drag-id]')];
+    let closest = { distance: Infinity, element: null, after: false };
+    for (const el of els) {
+        if (el.classList.contains('dragging-now')) continue;
+        const box = el.getBoundingClientRect();
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+        const distance = Math.hypot(x - cx, y - cy);
+        if (distance < closest.distance) {
+            closest = { distance, element: el, after: (y > cy) || (y === cy && x > cx) };
+        }
+    }
+    if (!closest.element) return null;
+    return closest.after ? closest.element.nextElementSibling : closest.element;
+}
+
+function initDragReorder(listEl, getArray, reorderApiPath) {
+    if (!listEl || listEl.dataset.dragReady) return; // مرة واحدة بس لكل container
+    listEl.dataset.dragReady = '1';
+    let dragEl = null;
+
+    listEl.addEventListener('dragstart', (e) => {
+        const item = e.target.closest('[data-drag-id]');
+        if (!item) return;
+        dragEl = item;
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => item.classList.add('dragging-now'), 0);
+    });
+
+    listEl.addEventListener('dragover', (e) => {
+        if (!dragEl) return;
+        e.preventDefault();
+        const afterEl = getDragAfterElement(listEl, e.clientX, e.clientY);
+        if (afterEl == null) listEl.appendChild(dragEl);
+        else if (afterEl !== dragEl) listEl.insertBefore(dragEl, afterEl);
+    });
+
+    listEl.addEventListener('dragend', async (e) => {
+        const item = e.target.closest('[data-drag-id]') || dragEl;
+        if (item) item.classList.remove('dragging-now');
+        dragEl = null;
+
+        const orderedIds = Array.from(listEl.querySelectorAll(':scope > [data-drag-id]')).map(el => el.dataset.dragId);
+        const arr = getArray();
+        arr.sort((a, b) => orderedIds.indexOf(String(a.id)) - orderedIds.indexOf(String(b.id)));
+        try {
+            await apiFetch(reorderApiPath, { method: 'PATCH', body: JSON.stringify({ orderedIds }) });
+        } catch (err) {
+            console.error('[API] reorder error:', err);
+            showToast('فشل حفظ الترتيب الجديد', 'error');
+        }
+    });
+}
+
 /* ===== Quick Replies Management ===== */
 let qrEditId = null;
 
@@ -3447,7 +3530,10 @@ function renderQuickReplies() {
         return;
     }
     list.innerHTML = savedReplies.map((r, i) => `
-        <div id="qr-item-${r.id}" style="background:var(--bg);border-radius:12px;border:1.5px solid var(--border);padding:14px 16px;display:flex;align-items:flex-start;gap:12px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div id="qr-item-${r.id}" data-drag-id="${r.id}" draggable="true" style="background:var(--bg);border-radius:12px;border:1.5px solid var(--border);padding:14px 16px;display:flex;align-items:flex-start;gap:10px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div title="اسحب لترتيب الردود" style="cursor:grab;color:var(--text-secondary);flex-shrink:0;margin-top:6px;touch-action:none">
+                <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
+            </div>
             <div style="width:32px;height:32px;border-radius:8px;background:rgba(108,92,231,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
                 <i data-lucide="message-square" style="width:15px;height:15px;color:var(--primary)"></i>
             </div>
@@ -3474,6 +3560,7 @@ function renderQuickReplies() {
     // Update the quick bar in chat
     renderQuickBar();
     lucide.createIcons();
+    initDragReorder(list, () => savedReplies, '/api/canned-responses/reorder');
 }
 
 function renderQuickBar() {
@@ -3570,10 +3657,15 @@ function renderCategories() {
         return;
     }
     list.innerHTML = problemCategories.map(c => `
-        <div id="cat-card-${c.id}" style="background:var(--bg);border-radius:14px;border:1.5px solid var(--border);padding:16px;transition:all .2s" onmouseover="this.style.borderColor='var(--primary-light)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
+        <div id="cat-card-${c.id}" data-drag-id="${c.id}" draggable="true" style="background:var(--bg);border-radius:14px;border:1.5px solid var(--border);padding:16px;transition:all .2s" onmouseover="this.style.borderColor='var(--primary-light)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
             <div id="cat-view-${c.id}">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                    <div style="width:40px;height:40px;border-radius:10px;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:20px">${c.icon}</div>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0">
+                        <div title="اسحب لترتيب التصنيفات" style="cursor:grab;color:var(--text-secondary);flex-shrink:0;touch-action:none">
+                            <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
+                        </div>
+                        <div style="width:40px;height:40px;border-radius:10px;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${c.icon}</div>
+                    </div>
                     <div style="display:flex;gap:4px">
                         <button onclick="editCat(${c.id})" title="تعديل" style="width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(108,92,231,0.1)';this.style.color='var(--primary)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)'"><i data-lucide="edit-2" style="width:14px;height:14px"></i></button>
                         <button onclick="deleteCat(${c.id})" title="حذف" style="width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.color='var(--danger)'" onmouseout="this.style.background='transparent';this.style.color='var(--text-secondary)'"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
@@ -3598,6 +3690,7 @@ function renderCategories() {
     // Sync resolve modal categories
     syncResolveCategories();
     lucide.createIcons();
+    initDragReorder(list, () => problemCategories, '/api/resolve-categories/reorder');
 }
 
 function showAddCategory() {

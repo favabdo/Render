@@ -1,6 +1,31 @@
 // middlewares/auth.js
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
+const userRepo = require('../repositories/user.repo');
+
+// بنعمل كاش صغير جدًا (بضع ثواني) لحالة كل يوزر عشان مانضربش الداتابيز في كل
+// request، لكن برضه نضمن إن أي إيجنت اتعمله deactivate أو حذف يتقفل بسرعة
+// (خلال ثواني قليلة) حتى لو مبعتش أي حدث realtime وصله (شوف socket/socket.js
+// لقفل فوري وقت فتح الداشبورد فعليًا).
+const STATUS_CACHE_TTL_MS = 5000;
+const statusCache = new Map(); // userId -> { status, expiresAt }
+
+async function getUserStatus(userId) {
+  const cached = statusCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.status;
+
+  const user = await userRepo.findUserById(userId);
+  const status = user ? user.status : null; // null يعني اليوزر اتمسح خالص
+  statusCache.set(userId, { status, expiresAt: Date.now() + STATUS_CACHE_TTL_MS });
+  return status;
+}
+
+// أي إيجنت يتعمله deactivate أو delete بننادي على الدالة دي عشان نمسح الكاش بتاعه
+// فورًا، فأول request جاي منه (أو من apiFetch العادي في الداشبورد) يترفض على طول
+function invalidateUserStatusCache(userId) {
+  statusCache.delete(String(userId));
+  statusCache.delete(Number(userId));
+}
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
@@ -10,13 +35,22 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'لازم تسجل دخول' });
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET);
-    req.user = payload;
-    next();
+    payload = jwt.verify(token, env.JWT_SECRET);
   } catch (err) {
     return res.status(401).json({ error: 'الجلسة منتهية، سجل دخول تاني' });
   }
+
+  getUserStatus(payload.userId)
+    .then((status) => {
+      if (status !== 'active') {
+        return res.status(401).json({ error: 'الحساب موقوف أو محذوف، سجل دخول تاني' });
+      }
+      req.user = payload;
+      next();
+    })
+    .catch(next);
 }
 
-module.exports = { requireAuth };
+module.exports = { requireAuth, invalidateUserStatusCache };

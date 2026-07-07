@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const env = require('../config/env');
 const userRepo = require('../repositories/user.repo');
 const mailer = require('../services/mailer.service');
+const { invalidateUserStatusCache } = require('../middlewares/auth');
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // الدعوة صالحة لمدة 7 أيام
 
@@ -209,6 +210,16 @@ async function updateUserAccount(req, res) {
   const { role, status, password, display_name } = req.body;
   const user = await userRepo.updateUser(req.params.id, { role, status, password, display_name });
   if (!user) return res.status(404).json({ error: 'اليوزر مش موجود' });
+
+  // لو الإيجنت ده اتعمله deactivate (أو أي حالة غير active)، نمسح الكاش بتاعه عشان
+  // أي API request جاي منه يترفض فورًا (requireAuth)، وكمان نبعتله realtime event
+  // يقفل الداشبورد عنده على طول لو فاتحه دلوقتي من غير ما يعمل أي حاجة (شوف socket.js)
+  if (status !== undefined && status !== 'active') {
+    invalidateUserStatusCache(user.id);
+    const io = req.app.get('io');
+    if (io) io.emit('agent_status_changed', { userId: user.id, status: user.status, reason: 'deactivated' });
+  }
+
   res.json({ ok: true, user });
 }
 
@@ -240,6 +251,12 @@ async function deleteUserAccount(req, res) {
   if (!deleted) {
     return res.status(404).json({ error: 'الإيجنت مش موجود أو تم مسحه بالفعل' });
   }
+
+  // زي الـ deactivate بالظبط: نمسح الكاش ونبعت realtime event عشان لو الإيجنت
+  // المحذوف فاتح الداشبورد دلوقتي يتقفل عنده فورًا من غير ما يعمل أي حاجة
+  invalidateUserStatusCache(deleted.id);
+  const io = req.app.get('io');
+  if (io) io.emit('agent_status_changed', { userId: deleted.id, status: 'deleted', reason: 'deleted' });
 
   res.json({ ok: true });
 }

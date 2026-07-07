@@ -8,6 +8,7 @@ router.use(requireAuth);
 
 router.get('/api/resolve-categories', asyncHandler(resolveCategoryController.list));
 router.post('/api/resolve-categories', asyncHandler(resolveCategoryController.create));
+router.patch('/api/resolve-categories/reorder', asyncHandler(resolveCategoryController.reorder));
 router.put('/api/resolve-categories/:id', asyncHandler(resolveCategoryController.update));
 router.delete('/api/resolve-categories/:id', asyncHandler(resolveCategoryController.remove));
 

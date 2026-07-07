@@ -390,9 +390,23 @@ async function ensureCannedResponsesTableExists() {
         label        NVARCHAR(200) NOT NULL,
         message_text NVARCHAR(MAX) NOT NULL,
         created_by   BIGINT NULL,
+        sort_order   INT NULL,
         created_at   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
       );
     END
+
+    -- عمود ترتيب السحب (drag & drop) — بيتضاف لو الجدول أصلاً كان موجود من قبل من غيره
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_CannedResponses_byA') AND name = 'sort_order')
+      ALTER TABLE [dbo].[NileChat_CannedResponses_byA] ADD sort_order INT NULL;
+
+    -- أي صف لسه مالوش ترتيب (قديم من قبل الفيتشر ده) بناخد رقمه من ترتيب الإنشاء
+    UPDATE t SET t.sort_order = t.rn
+    FROM (
+      SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
+      FROM [dbo].[NileChat_CannedResponses_byA]
+      WHERE sort_order IS NULL
+    ) AS src
+    JOIN [dbo].[NileChat_CannedResponses_byA] t ON t.id = src.id
   `);
   logger.info('✅ جدول Canned Responses جاهز.');
 }
@@ -410,9 +424,21 @@ async function ensureResolveCategoriesTableExists() {
         description NVARCHAR(300) NULL,
         color       NVARCHAR(50)  NULL,
         created_by  BIGINT NULL,
+        sort_order  INT NULL,
         created_at  DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
       );
     END
+
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_ResolveCategories_byA') AND name = 'sort_order')
+      ALTER TABLE [dbo].[NileChat_ResolveCategories_byA] ADD sort_order INT NULL;
+
+    UPDATE t SET t.sort_order = t.rn
+    FROM (
+      SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS rn
+      FROM [dbo].[NileChat_ResolveCategories_byA]
+      WHERE sort_order IS NULL
+    ) AS src
+    JOIN [dbo].[NileChat_ResolveCategories_byA] t ON t.id = src.id
   `);
   logger.info('✅ جدول Resolve Categories جاهز.');
 }
