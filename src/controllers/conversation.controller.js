@@ -128,6 +128,7 @@ async function addNote(req, res) {
   if (!text || !text.trim()) {
     return res.status(400).json({ error: 'لازم تكتب نص الملاحظة' });
   }
+  const trimmedText = text.trim();
 
   const [conversation, sender] = await Promise.all([
     conversationRepo.getConversationById(req.params.id),
@@ -136,19 +137,27 @@ async function addNote(req, res) {
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
   const senderName = sender ? userRepo.resolveDisplayName(sender) : null;
-
-  const note = await conversationRepo.addPrivateNote(req.params.id, {
-    text: text.trim(),
-    senderId: req.user.userId,
-    senderName,
-  });
-
-  // بنبعتها لايف لكل الإيجنتس الفاتحين المحادثة دي عن طريق socket منفصل (new_note)
-  // عشان محدش يخلطها بـ 'new_message' (اللي مرتبط بمنطق العميل/واتساب)
   const io = req.app.get('io');
-  if (io) io.emit('new_note', { conversationId: conversation.id, note });
 
-  res.json({ ok: true, note });
+  // بنرجع للإيجنت فورًا من غير ما نستنى تسجيل الملاحظة في الداتابيز خالص — الواجهة
+  // أصلاً بتضيفها optimistically في الشات لحظة الضغط على إرسال (قبل حتى ما الريكوست
+  // يوصل هنا)، وبتستنى تأكيدها الحقيقي عن طريق حدث الـ socket 'new_note' مش من رد
+  // الـ HTTP ده. التسجيل الفعلي بيحصل دلوقتي في الخلفية على طول.
+  res.json({ ok: true });
+
+  conversationRepo
+    .addPrivateNote(req.params.id, { text: trimmedText, senderId: req.user.userId, senderName })
+    .then((note) => {
+      // بنبعتها لايف لكل الإيجنتس الفاتحين المحادثة دي عن طريق socket منفصل (new_note)
+      // عشان محدش يخلطها بـ 'new_message' (اللي مرتبط بمنطق العميل/واتساب)
+      if (io) io.emit('new_note', { conversationId: conversation.id, note });
+    })
+    .catch((err) => {
+      // حالة نادرة جدًا (مشكلة اتصال لحظية بالداتابيز) — بما إننا رجّعنا "ok" فعلاً،
+      // لازم نبلّغ الواجهة بشكل صريح إن الملاحظة دي معملتش عشان الإيجنت يبعتها تاني
+      logger.error('❌ فشل تسجيل ملاحظة خاصة:', err.message);
+      if (io) io.emit('note_failed', { conversationId: conversation.id, text: trimmedText });
+    });
 }
 
 async function reply(req, res) {
@@ -167,16 +176,22 @@ async function reply(req, res) {
 
   const io = req.app.get('io');
 
-  // بترجع فورًا من غير ما تستنى ميتا خالص — عشان الرسالة تبان لايف عند كل
-  // الإيجنتس فورًا (مش بس اللي بعتها)، من غير أي انتظار لرد واتساب الفعلي.
-  // ملحوظة: فكرة "تيك واحد / تيكين" اتشالت خالص بناءً على طلب صاحب المشروع —
-  // الرسالة بتتسجل وتتحدّث حالتها (sent/failed) في الداتابيز في الخلفية بس من
-  // غير ما نبعت أي حدث socket تاني عليها (مفيش حاجة في الواجهة بتعرضها أصلًا)
-  const message = await conversationService.sendReplyLive(conversation, text, senderInfo, () => {});
+  // بترجع فورًا من غير ما تستنى تسجيل الرسالة في الداتابيز ولا رد واتساب خالص —
+  // الواجهة أصلاً بتضيف الرسالة optimistically لحظة الضغط على إرسال، وبتستنى
+  // تأكيدها الحقيقي عن طريق حدث الـ socket 'new_message' مش من رد الـ HTTP ده.
+  // لو التسجيل فشل فعليًا في الخلفية (حالة نادرة)، بنبعت 'message_failed' عشان
+  // الواجهة توضح للإيجنت إنها معملتش وتحتاج تتبعت تاني.
+  res.json({ ok: true });
 
-  if (io) io.emit('new_message', { conversationId: conversation.id, message });
-
-  res.json({ ok: true, message });
+  conversationService
+    .sendReplyLive(conversation, text, senderInfo, () => {})
+    .then((message) => {
+      if (io) io.emit('new_message', { conversationId: conversation.id, message });
+    })
+    .catch((err) => {
+      logger.error('❌ فشل تسجيل/إرسال الرد:', err.message);
+      if (io) io.emit('message_failed', { conversationId: conversation.id, text });
+    });
 }
 
 // ===== WhatsApp Webhook =====

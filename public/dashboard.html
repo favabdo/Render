@@ -1702,6 +1702,20 @@ function initSocket() {
             if (selectedChatId === c.id) renderMessages(c);
         });
 
+        /* السيرفر بيبعتها في الحالة النادرة إن تسجيل الملاحظة فشل فعليًا في الخلفية
+           بعد ما رجّعنا رد فوري للإيجنت (شوف conversation.controller.js -> addNote) */
+        socket.on('note_failed', ({ conversationId, text }) => {
+            const c = conversations.find(x => String(x.id) === String(conversationId));
+            if (!c) return;
+            const pending = c.messages.find(m => m.isNote && m._pending && m.text === text);
+            if (pending) {
+                delete pending._pending;
+                pending.failed = true;
+                if (selectedChatId === c.id) renderMessages(c);
+            }
+            showToast('فشل حفظ الملاحظة، حاول تاني', 'error');
+        });
+
         /* السيرفر بيبعت: { conversationId, message } (شوف conversationsRoutes.js -> /reply و webhookRoutes.js) */
         socket.on('new_message', (payload) => {
             const { conversationId, message } = payload;
@@ -1757,6 +1771,20 @@ function initSocket() {
                 loadConversationsFromAPI();
                 showToast('رسالة جديدة من عميل', 'info');
             }
+        });
+
+        /* السيرفر بيبعتها في الحالة النادرة إن تسجيل/إرسال الرد فشل فعليًا في الخلفية
+           بعد ما رجّعنا رد فوري للإيجنت (شوف conversation.controller.js -> reply) */
+        socket.on('message_failed', ({ conversationId, text }) => {
+            const c = conversations.find(x => String(x.id) === String(conversationId));
+            if (!c) return;
+            const pending = c.messages.find(m => m._pending && m.text === text);
+            if (pending) {
+                delete pending._pending;
+                pending.failed = true;
+                if (selectedChatId === c.id) renderMessages(c);
+            }
+            showToast('فشل إرسال الرسالة، حاول تاني', 'error');
         });
 
         /* مؤشر "بيكتب دلوقتي" — بيوصل من إيجنت تاني فاتح نفس المحادثة */
@@ -2657,8 +2685,8 @@ async function sendNoteText(c, text) {
         let data = null;
         try { data = await res.json(); } catch (_) { /* ممكن الرد يكون فاضي */ }
         if (!res.ok) throw new Error((data && data.error) || `فشل إضافة الملاحظة (HTTP ${res.status})`);
-        const lastMsg = c.messages[c.messages.length - 1];
-        if (lastMsg && lastMsg._pending) delete lastMsg._pending;
+        // الملاحظة وصلت للسيرفر — التأكيد الفعلي (شيل الـ pending) بيحصل عن طريق
+        // حدث 'new_note' لما تتسجل فعليًا (أو 'note_failed' لو التسجيل فشل في الخلفية)
     } catch (err) {
         console.error('[API] sendNoteText error:', err);
         showToast(err.message || 'فشل إضافة الملاحظة', 'error');
