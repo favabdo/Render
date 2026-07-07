@@ -24,7 +24,6 @@ async function getConversationMessages(req, res) {
 // لو جالك agentId في الـ body بنعين المحادثة للموظف ده (اختيار من قايمة الـ Agents)،
 // لو مفيش (زي زرار "Assign to Me") بنعينها للإيجنت اللي عامل لوجين دلوقتي
 async function assign(req, res) {
-  const t0 = Date.now();
   const { agentId } = req.body || {};
   const isSelfAssign = !agentId || String(agentId) === String(req.user.userId);
   const targetAgentId = agentId || req.user.userId;
@@ -36,7 +35,6 @@ async function assign(req, res) {
     userRepo.findUserById(req.user.userId),
     isSelfAssign ? Promise.resolve(null) : userRepo.findUserById(targetAgentId),
   ]);
-  const t1 = Date.now();
 
   if (!isSelfAssign && !targetUser) {
     return res.status(404).json({ error: 'الموظف ده مش موجود' });
@@ -57,21 +55,27 @@ async function assign(req, res) {
     conversationRepo.addSystemMessage(req.params.id, systemText),
     conversationRepo.touchConversation(req.params.id),
   ]);
-  const t2 = Date.now();
 
-  const conversation = await conversationRepo.getConversationById(req.params.id);
-  const t3 = Date.now();
-
-  logger.info(
-    `⏱️ [assign] users=${t1 - t0}ms writes=${t2 - t1}ms finalFetch=${t3 - t2}ms total=${t3 - t0}ms`
-  );
+  // بنرجع للإيجنت فورًا من غير ما نستنى نقرا المحادثة تاني من الداتابيز — إحنا أصلاً
+  // عارفين القيمتين الوحيدتين اللي الواجهة محتاجاهم من الرد ده (assigned_agent_name
+  // و status) لأننا إحنا اللي كتبناهم بإيدينا في نفس الاستعلام اللي فوق، فمفيش أي
+  // داعي نتأكد منهم بقراءة تانية. القراءة الكاملة (بالـ joins) بتحصل تحت في الخلفية
+  // بس عشان نبعت تحديث لباقي الإيجنتس الفاتحين نفس المحادثة عن طريق الـ socket.
+  res.json({
+    ok: true,
+    conversation: { id: req.params.id, assigned_agent_id: targetAgentId, assigned_agent_name: targetName, status: 'assigned' },
+  });
 
   const io = req.app.get('io');
-  if (io) {
-    io.emit('conversation_updated', conversation);
-    io.emit('new_message', { conversationId: conversation.id, message: systemMessage });
-  }
-  res.json({ ok: true, conversation });
+  conversationRepo
+    .getConversationById(req.params.id)
+    .then((conversation) => {
+      if (io && conversation) {
+        io.emit('conversation_updated', conversation);
+        io.emit('new_message', { conversationId: conversation.id, message: systemMessage });
+      }
+    })
+    .catch((err) => logger.error('❌ فشل تحديث المحادثة بعد الأسين (broadcast خلفي):', err.message));
 }
 
 // إغلاق المحادثة فعليًا في الداتابيز (Resolve حقيقي مش شكلي)
