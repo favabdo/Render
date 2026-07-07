@@ -589,10 +589,16 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .qr-item-header{display:flex;align-items:center;gap:10px}
 .qr-drag-handle{cursor:grab;color:var(--text-secondary);flex-shrink:0;touch-action:none;display:flex;align-items:center}
 .qr-icon-box{width:32px;height:32px;border-radius:8px;background:rgba(108,92,231,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.qr-label-badge{display:inline-block;background:rgba(108,92,231,0.12);color:var(--primary);font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;flex-shrink:0;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qr-label-badge{display:inline-block;background:rgba(108,92,231,0.12);color:var(--primary);font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qr-actions{display:flex;gap:4px;flex-shrink:0;margin-inline-start:auto}
 .qr-item-text{font-size:13px;color:var(--text);line-height:1.7;margin-top:10px;white-space:normal;word-break:normal;overflow-wrap:break-word}
 .qr-edit-box{margin-top:10px}
+@media (max-width:860px){
+    /* في الموبايل بس: أيقونة السحب بتاخد سطر كامل لوحدها فوق، والباقي (الأيقونة/الاسم/الأزرار)
+       بيبقى تحتها في سطر تاني — عشان مس النص أو الأزرار ميتعارضش مع مسكة السحب */
+    .qr-item-header{flex-wrap:wrap;row-gap:8px}
+    .qr-drag-handle{flex-basis:100%;order:-1;padding:2px 0 6px;border-bottom:1px dashed var(--border)}
+}
 
 </style>
 </head>
@@ -3499,6 +3505,17 @@ function initDragReorder(listEl, getArray, reorderApiPath) {
     listEl.dataset.dragReady = '1';
     let dragEl = null;
 
+    // draggable بيتفعّل بس وقت ما اللمس/الضغط بيبدأ من على أيقونة السحب [data-drag-handle]
+    // نفسها — مش من أي مكان في الكارت. كده لمس النص بيفضل بيحدد/يسكرول عادي، والسحب
+    // مش بيتفعّل غصب عن المستخدم.
+    const armDrag = (e) => {
+        const item = e.target.closest('[data-drag-id]');
+        if (!item) return;
+        item.setAttribute('draggable', e.target.closest('[data-drag-handle]') ? 'true' : 'false');
+    };
+    listEl.addEventListener('mousedown', armDrag);
+    listEl.addEventListener('touchstart', armDrag, { passive: true });
+
     listEl.addEventListener('dragstart', (e) => {
         const item = e.target.closest('[data-drag-id]');
         if (!item) return;
@@ -3517,7 +3534,7 @@ function initDragReorder(listEl, getArray, reorderApiPath) {
 
     listEl.addEventListener('dragend', async (e) => {
         const item = e.target.closest('[data-drag-id]') || dragEl;
-        if (item) item.classList.remove('dragging-now');
+        if (item) { item.classList.remove('dragging-now'); item.setAttribute('draggable', 'false'); }
         dragEl = null;
 
         const orderedIds = Array.from(listEl.querySelectorAll(':scope > [data-drag-id]')).map(el => el.dataset.dragId);
@@ -3543,9 +3560,9 @@ function renderQuickReplies() {
         return;
     }
     list.innerHTML = savedReplies.map((r, i) => `
-        <div id="qr-item-${r.id}" data-drag-id="${r.id}" draggable="true" class="qr-item">
+        <div id="qr-item-${r.id}" data-drag-id="${r.id}" draggable="false" class="qr-item">
             <div class="qr-item-header">
-                <div title="اسحب لترتيب الردود" class="qr-drag-handle">
+                <div title="اسحب لترتيب الردود" class="qr-drag-handle" data-drag-handle>
                     <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
                 </div>
                 <div class="qr-icon-box">
@@ -3672,11 +3689,11 @@ function renderCategories() {
         return;
     }
     list.innerHTML = problemCategories.map(c => `
-        <div id="cat-card-${c.id}" data-drag-id="${c.id}" draggable="true" style="background:var(--bg);border-radius:14px;border:1.5px solid var(--border);padding:16px;transition:all .2s" onmouseover="this.style.borderColor='var(--primary-light)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
+        <div id="cat-card-${c.id}" data-drag-id="${c.id}" draggable="false" style="background:var(--bg);border-radius:14px;border:1.5px solid var(--border);padding:16px;transition:all .2s" onmouseover="this.style.borderColor='var(--primary-light)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
             <div id="cat-view-${c.id}">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
                     <div style="display:flex;align-items:center;gap:8px;min-width:0">
-                        <div title="اسحب لترتيب التصنيفات" style="cursor:grab;color:var(--text-secondary);flex-shrink:0;touch-action:none">
+                        <div title="اسحب لترتيب التصنيفات" style="cursor:grab;color:var(--text-secondary);flex-shrink:0;touch-action:none" data-drag-handle>
                             <i data-lucide="grip-vertical" style="width:15px;height:15px"></i>
                         </div>
                         <div style="width:40px;height:40px;border-radius:10px;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${c.icon}</div>
