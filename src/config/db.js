@@ -379,6 +379,35 @@ async function ensureDevicesTableExists() {
   logger.info('✅ جدول Devices جاهز.');
 }
 
+// التاسكات المجدولة (Scheduled Tasks) — لما عميل يطلب حاجة والإيجنت يحتاج يجدولها
+// ليوم تاني، بنسجلها هنا: مين العميل، إيه المطلوب، مين الإيجنت اللي جدولها (من الجلسة
+// بتاعته)، تاريخ الإضافة (created_at تلقائي)، وتاريخ التسليم المتفق عليه (due_date).
+// التاسك بتفضل موجودة لما تتقفل (status='ended')، مش بتتمسح خالص — بس بتتنقل من
+// "Open Tasks" لـ "Ended Tasks" في الواجهة.
+async function ensureScheduledTasksTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_ScheduledTasks_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_ScheduledTasks_byA] (
+        id            BIGINT IDENTITY(1,1) PRIMARY KEY,
+        contact_id    BIGINT NOT NULL,
+        customer_name NVARCHAR(200) NULL,
+        task_text     NVARCHAR(MAX) NOT NULL,
+        agent_id      BIGINT NULL,
+        agent_name    NVARCHAR(200) NULL,
+        status        NVARCHAR(20) NOT NULL DEFAULT 'open',
+        due_date      DATE NOT NULL,
+        created_at    DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        ended_at      DATETIME2 NULL
+      );
+      CREATE INDEX IX_NileChat_ScheduledTasks_byA_contact_id
+        ON [dbo].[NileChat_ScheduledTasks_byA](contact_id);
+    END
+  `);
+  logger.info('✅ جدول Scheduled Tasks جاهز.');
+}
+
 // الردود المحفوظة (Quick Replies / Canned Responses) — نصوص جاهزة الإيجنت بيدرجها بضغطة واحدة
 async function ensureCannedResponsesTableExists() {
   const pool = await getPool();
@@ -472,6 +501,7 @@ async function ensureSchema() {
   await ensureContactPhonesHaveLabelColumn();
   await ensureConversationsHaveContactColumn();
   await ensureDevicesTableExists();
+  await ensureScheduledTasksTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
 }
@@ -496,6 +526,7 @@ module.exports = {
   ensureContactPhonesHaveLabelColumn,
   ensureConversationsHaveContactColumn,
   ensureDevicesTableExists,
+  ensureScheduledTasksTableExists,
   ensureCannedResponsesTableExists,
   ensureResolveCategoriesTableExists,
   ensureSchema,

@@ -336,6 +336,25 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .device-card-actions{display:flex;justify-content:flex-end;gap:4px;margin-top:8px}
 .device-edit-input{width:100%;padding:7px 9px;border-radius:7px;border:1.5px solid var(--primary);font-size:12px;font-family:inherit;outline:none;margin-bottom:6px;box-sizing:border-box}
 
+.cp-section-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cp-section-title-row .cp-section-title{margin-bottom:0}
+.st-count-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sched-subhead{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px;display:flex;align-items:center;gap:6px;cursor:default}
+.sched-subhead .sched-subhead-count{color:var(--text-secondary);font-weight:600;text-transform:none;letter-spacing:0}
+.sched-task-card{padding:11px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:8px}
+.sched-task-card.ended{opacity:.65}
+.sched-task-text{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;white-space:pre-wrap;word-break:break-word}
+.sched-task-meta{font-size:11.5px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;margin-bottom:3px}
+.sched-task-meta svg{width:13px;height:13px;flex-shrink:0}
+.sched-task-actions{display:flex;justify-content:flex-end;margin-top:6px}
+.sched-end-btn{padding:6px 12px;border-radius:8px;border:none;background:var(--success);color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px;transition:all .15s}
+.sched-end-btn:hover{background:#059669}
+.sched-ended-tag{font-size:10.5px;font-weight:700;color:var(--success);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:4px}
+.st-modal-readonly-row{display:flex;gap:8px;margin-bottom:14px}
+.st-modal-readonly{flex:1;padding:9px 11px;border-radius:9px;background:var(--bg);border:1.5px solid var(--border)}
+.st-modal-readonly-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.st-modal-readonly-value{font-size:13px;font-weight:600;color:var(--text)}
+
 .empty-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text-secondary)}
 .empty-chat-icon{width:80px;height:80px;border-radius:50%;background:rgba(108,92,231,0.08);display:flex;align-items:center;justify-content:center;color:var(--primary)}
 .empty-chat h3{font-size:18px;color:var(--text)}
@@ -760,6 +779,23 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                         </button>
                         <div class="agent-dropdown" id="agent-dropdown"></div>
                     </div>
+                </div>
+
+                <!-- Scheduled Tasks -->
+                <div class="cp-section">
+                    <div class="cp-section-title-row">
+                        <div class="cp-section-title">Scheduled Tasks</div>
+                        <span class="st-count-badge" id="sched-open-badge">0</span>
+                    </div>
+                    <button class="add-btn" id="sched-add-btn" onclick="openScheduledTaskModal()">
+                        <i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Adding scheduled tasks
+                    </button>
+
+                    <div class="sched-subhead"><i data-lucide="circle-dot" style="width:12px;height:12px"></i> Open Tasks <span class="sched-subhead-count" id="sched-open-count">(0)</span></div>
+                    <div id="sched-open-list"></div>
+
+                    <div class="sched-subhead"><i data-lucide="check-circle" style="width:12px;height:12px"></i> Ended Tasks <span class="sched-subhead-count" id="sched-ended-count">(0)</span></div>
+                    <div id="sched-ended-list"></div>
                 </div>
 
                 <!-- AI Assistant -->
@@ -2355,6 +2391,7 @@ let selectedChatId = null;
 let selectedAgentIdx = -1;
 let customerPanelOpen = false;
 let devices = [];
+let scheduledTasks = [];
 let generatedReply = '';
 
 /* ===== التنقل ===== */
@@ -2499,6 +2536,7 @@ function selectChat(id) {
         renderPhones(c);
         if (!c._contactLoaded) loadContactDetails(c);
         renderDevices(c);
+        renderScheduledTasks(c);
         hideAiResult();
         hideMergeContact();
         refreshTypingIndicator(c.id);
@@ -3438,6 +3476,156 @@ async function removeDevice(deviceId) {
     } catch (err) {
         console.error('[API] removeDevice error:', err);
         showToast(err.message || 'فشل حذف الجهاز', 'error');
+    }
+}
+
+/* ===== Scheduled Tasks =====
+   لما عميل يطلب حاجة، الإيجنت يقدر يجدولها ليوم تاني بدل ما ينساها. بتتخزن فعليًا
+   في الداتابيز لكل عميل (كونتاكت)، واسم الإيجنت واسم العميل وتاريخ الإضافة بتيجي
+   تلقائي (مش بتتكتب يدوي). التاسك لما تتقفل بتتنقل لـ "Ended Tasks" بس، مش بتختفي. */
+function renderScheduledTasksEmptyState(message) {
+    document.getElementById('sched-open-list').innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">${message}</div>`;
+    document.getElementById('sched-ended-list').innerHTML = '';
+    document.getElementById('sched-add-btn').style.display = 'none';
+    document.getElementById('sched-open-badge').textContent = '0';
+    document.getElementById('sched-open-count').textContent = '(0)';
+    document.getElementById('sched-ended-count').textContent = '(0)';
+}
+
+async function renderScheduledTasks(c) {
+    if (!c || !c.contactId) {
+        scheduledTasks = [];
+        renderScheduledTasksEmptyState('اربط المحادثة بعميل الأول عشان تقدر تضيف تاسكات');
+        return;
+    }
+    document.getElementById('sched-add-btn').style.display = '';
+    document.getElementById('sched-open-list').innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">جاري التحميل...</div>';
+    document.getElementById('sched-ended-list').innerHTML = '';
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/scheduled-tasks`);
+        if (!res.ok) throw new Error('فشل تحميل التاسكات');
+        scheduledTasks = await res.json();
+        // لو المستخدم بدّل المحادثة وهو لسه بيستنى الرد، متكتبش فوق تاسكات محادثة تانية
+        if (selectedChatId !== c.id) return;
+        drawScheduledTasks();
+    } catch (err) {
+        console.error('[API] renderScheduledTasks error:', err);
+        if (selectedChatId === c.id) renderScheduledTasksEmptyState('تعذر تحميل التاسكات');
+    }
+}
+
+function formatSchedDate(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value).slice(0, 10);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function drawScheduledTasks() {
+    const open = scheduledTasks.filter(t => t.status === 'open');
+    const ended = scheduledTasks.filter(t => t.status === 'ended');
+
+    document.getElementById('sched-open-badge').textContent = open.length;
+    document.getElementById('sched-open-count').textContent = `(${open.length})`;
+    document.getElementById('sched-ended-count').textContent = `(${ended.length})`;
+
+    document.getElementById('sched-open-list').innerHTML = open.length === 0
+        ? '<div style="font-size:12.5px;color:var(--text-secondary);text-align:center;padding:10px 4px">No open tasks</div>'
+        : open.map(t => `
+        <div class="sched-task-card">
+            <div class="sched-task-text">${escapeHtml(t.task_text)}</div>
+            <div class="sched-task-meta"><i data-lucide="user-round" style="width:13px;height:13px"></i>${escapeHtml(t.agent_name || 'Unknown')}</div>
+            <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
+            <div class="sched-task-meta"><i data-lucide="clock" style="width:13px;height:13px"></i>Due: ${formatSchedDate(t.due_date)}</div>
+            <div class="sched-task-actions">
+                <button class="sched-end-btn" onclick="endScheduledTask(${t.id})"><i data-lucide="check" style="width:13px;height:13px"></i>End Task</button>
+            </div>
+        </div>
+    `).join('');
+
+    document.getElementById('sched-ended-list').innerHTML = ended.length === 0
+        ? '<div style="font-size:12.5px;color:var(--text-secondary);text-align:center;padding:10px 4px">No ended tasks</div>'
+        : ended.map(t => `
+        <div class="sched-task-card ended">
+            <div class="sched-task-text">${escapeHtml(t.task_text)}</div>
+            <div class="sched-task-meta"><i data-lucide="user-round" style="width:13px;height:13px"></i>${escapeHtml(t.agent_name || 'Unknown')}</div>
+            <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
+            <div class="sched-task-meta"><i data-lucide="clock" style="width:13px;height:13px"></i>Due: ${formatSchedDate(t.due_date)}</div>
+            <div class="sched-task-actions">
+                <span class="sched-ended-tag"><i data-lucide="check-circle" style="width:12px;height:12px"></i>Ended</span>
+            </div>
+        </div>
+    `).join('');
+
+    lucide.createIcons();
+}
+
+function openScheduledTaskModal() {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c || !c.contactId) return showToast('اربط المحادثة بعميل الأول', 'error');
+
+    document.getElementById('sched-modal-customer').textContent = c.name || '-';
+    document.getElementById('sched-modal-agent').textContent = AUTH_USER.display_name || AUTH_USER.email;
+    document.getElementById('sched-modal-today').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    document.getElementById('sched-task-text').value = '';
+    const dueInput = document.getElementById('sched-task-due-date');
+    dueInput.value = '';
+    dueInput.min = new Date().toISOString().slice(0, 10);
+
+    document.getElementById('sched-task-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+function closeScheduledTaskModal(e) {
+    if (e && e.target !== document.getElementById('sched-task-overlay')) return;
+    document.getElementById('sched-task-overlay').classList.remove('show');
+}
+
+async function submitScheduledTask() {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c || !c.contactId) return;
+
+    const taskText = document.getElementById('sched-task-text').value.trim();
+    const dueDate = document.getElementById('sched-task-due-date').value;
+    if (!taskText) return showToast('اكتب التاسك المطلوب', 'error');
+    if (!dueDate) return showToast('حدد تاريخ التسليم', 'error');
+
+    const btn = document.getElementById('sched-task-confirm-btn');
+    btn.disabled = true;
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/scheduled-tasks`, {
+            method: 'POST',
+            body: JSON.stringify({ taskText, dueDate, customerName: c.name }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة التاسك');
+        scheduledTasks.unshift(data.task);
+        drawScheduledTasks();
+        closeScheduledTaskModal();
+        showToast('Scheduled task added', 'success');
+    } catch (err) {
+        console.error('[API] submitScheduledTask error:', err);
+        showToast(err.message || 'فشل إضافة التاسك', 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function endScheduledTask(taskId) {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c || !c.contactId) return;
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/scheduled-tasks/${taskId}/end`, { method: 'PATCH' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل قفل التاسك');
+        const idx = scheduledTasks.findIndex(t => String(t.id) === String(taskId));
+        if (idx !== -1) scheduledTasks[idx] = data.task;
+        drawScheduledTasks();
+        showToast('Task moved to Ended', 'success');
+    } catch (err) {
+        console.error('[API] endScheduledTask error:', err);
+        showToast(err.message || 'فشل قفل التاسك', 'error');
     }
 }
 
@@ -4503,6 +4691,47 @@ async function iwDeleteInbox(id) {
         </div>
 
         <div class="login-error" id="delete-agent-error" style="color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center"></div>
+    </div>
+</div>
+
+<div class="resolve-overlay" id="sched-task-overlay" onclick="closeScheduledTaskModal(event)">
+    <div class="resolve-modal" id="sched-task-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" style="background:rgba(108,92,231,0.12);color:var(--primary)">
+                <i data-lucide="calendar-plus" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title">Adding Scheduled Task</div>
+        </div>
+        <div class="resolve-modal-sub">جدول طلب العميل ليوم تاني — هيفضل موجود في السيكشن لحد ما تقفله</div>
+
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">Customer</div>
+                <div class="st-modal-readonly-value" id="sched-modal-customer">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">Agent</div>
+                <div class="st-modal-readonly-value" id="sched-modal-agent">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">Added on</div>
+                <div class="st-modal-readonly-value" id="sched-modal-today">-</div>
+            </div>
+        </div>
+
+        <div class="resolve-cats-label">التاسك المطلوب</div>
+        <textarea class="resolve-notes" id="sched-task-text" placeholder="اكتب اللي العميل طلبه..." style="height:80px;margin-bottom:14px"></textarea>
+
+        <div class="resolve-cats-label">تاريخ التسليم المتفق عليه</div>
+        <input type="date" class="iw-input" id="sched-task-due-date" style="margin-bottom:6px">
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeScheduledTaskModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="sched-task-confirm-btn" onclick="submitScheduledTask()">
+                <i data-lucide="calendar-check" style="width:16px;height:16px"></i>
+                Add Task
+            </button>
+        </div>
     </div>
 </div>
 
