@@ -1064,7 +1064,10 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     <div style="font-size:12px;color:var(--text-secondary);font-weight:500;margin-top:2px">Tasks agents scheduled from customer cards</div>
                 </div>
             </div>
-            <button class="page-btn" onclick="loadScheduledTasksPage()"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh</button>
+            <div style="display:flex;gap:8px">
+                <button class="page-btn" onclick="openScheduledTaskModalFromPage()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Add Task</button>
+                <button class="page-btn" onclick="loadScheduledTasksPage()"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh</button>
+            </div>
         </div>
 
         <div class="sched-filters-bar">
@@ -3564,11 +3567,16 @@ function formatSchedDate(value) {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-/* ----- إضافة تاسك (من كارت العميل) ----- */
+/* ----- إضافة تاسك (من كارت العميل أو من صفحة Scheduled Tasks) ----- */
+let schedModalMode = 'card'; // 'card' | 'page'
+
 function openScheduledTaskModal() {
     const c = conversations.find(x => x.id === selectedChatId);
     if (!c || !c.contactId) return showToast('اربط المحادثة بعميل الأول', 'error');
 
+    schedModalMode = 'card';
+    document.getElementById('sched-modal-customer').style.display = '';
+    document.getElementById('sched-modal-customer-select').style.display = 'none';
     document.getElementById('sched-modal-customer').textContent = c.name || '-';
     document.getElementById('sched-modal-agent').textContent = AUTH_USER.display_name || AUTH_USER.email;
     document.getElementById('sched-modal-today').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -3582,14 +3590,55 @@ function openScheduledTaskModal() {
     lucide.createIcons();
 }
 
+/* فتح المودال من صفحة Scheduled Tasks — هنا مفيش محادثة متفتحة فلازم العميل يتختار يدوي */
+async function openScheduledTaskModalFromPage() {
+    schedModalMode = 'page';
+    document.getElementById('sched-modal-customer').style.display = 'none';
+    const select = document.getElementById('sched-modal-customer-select');
+    select.style.display = '';
+    select.innerHTML = '<option value="">جاري تحميل العملاء...</option>';
+
+    document.getElementById('sched-modal-agent').textContent = AUTH_USER.display_name || AUTH_USER.email;
+    document.getElementById('sched-modal-today').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    document.getElementById('sched-task-text').value = '';
+    const dueInput = document.getElementById('sched-task-due-date');
+    dueInput.value = '';
+    dueInput.min = new Date().toISOString().slice(0, 10);
+
+    document.getElementById('sched-task-overlay').classList.add('show');
+    lucide.createIcons();
+
+    try {
+        const res = await apiFetch('/api/contacts');
+        if (!res.ok) throw new Error('فشل تحميل العملاء');
+        const contacts = await res.json();
+        select.innerHTML = '<option value="">اختر عميل...</option>' +
+            contacts.map(c => `<option value="${c.id}">${escapeHtml(c.name || ('عميل #' + c.id))}</option>`).join('');
+    } catch (err) {
+        console.error('[API] openScheduledTaskModalFromPage error:', err);
+        select.innerHTML = '<option value="">تعذر تحميل العملاء</option>';
+    }
+}
+
 function closeScheduledTaskModal(e) {
     if (e && e.target !== document.getElementById('sched-task-overlay')) return;
     document.getElementById('sched-task-overlay').classList.remove('show');
 }
 
 async function submitScheduledTask() {
-    const c = conversations.find(x => x.id === selectedChatId);
-    if (!c || !c.contactId) return;
+    let contactId, customerName;
+
+    if (schedModalMode === 'page') {
+        const select = document.getElementById('sched-modal-customer-select');
+        contactId = select.value;
+        customerName = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : '';
+        if (!contactId) return showToast('اختر العميل الأول', 'error');
+    } else {
+        const c = conversations.find(x => x.id === selectedChatId);
+        if (!c || !c.contactId) return;
+        contactId = c.contactId;
+        customerName = c.name;
+    }
 
     const taskText = document.getElementById('sched-task-text').value.trim();
     const dueDate = document.getElementById('sched-task-due-date').value;
@@ -3599,9 +3648,9 @@ async function submitScheduledTask() {
     const btn = document.getElementById('sched-task-confirm-btn');
     btn.disabled = true;
     try {
-        const res = await apiFetch(`/api/contacts/${c.contactId}/scheduled-tasks`, {
+        const res = await apiFetch(`/api/contacts/${contactId}/scheduled-tasks`, {
             method: 'POST',
-            body: JSON.stringify({ taskText, dueDate, customerName: c.name }),
+            body: JSON.stringify({ taskText, dueDate, customerName }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل إضافة التاسك');
@@ -4823,6 +4872,9 @@ async function iwDeleteInbox(id) {
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">Customer</div>
                 <div class="st-modal-readonly-value" id="sched-modal-customer">-</div>
+                <select class="iw-input" id="sched-modal-customer-select" style="display:none;margin-top:4px;padding:6px 8px;font-size:12.5px">
+                    <option value="">اختر عميل...</option>
+                </select>
             </div>
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">Agent</div>
