@@ -358,7 +358,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .conv-label-add-btn{width:26px;height:26px;border-radius:8px;border:1.5px dashed var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .conv-label-add-btn:hover{border-color:var(--primary);color:var(--primary);background:rgba(108,92,231,0.06)}
 .conv-label-add-wrap{position:relative;display:inline-block;z-index:5}
-.label-popover{position:absolute;top:calc(100% + 6px);right:0;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:600;display:none;overflow:hidden}
+.label-popover{position:fixed;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:99999;display:none;overflow:hidden}
 .label-popover.open{display:block}
 .label-popover-list{max-height:220px;overflow-y:auto;padding:6px}
 .label-popover-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
@@ -3443,10 +3443,10 @@ async function loadLabelsForConversation(c) {
 
 function renderConvLabels(c) {
     const list = document.getElementById('conv-label-list');
-    const headerStrip = document.getElementById('chat-header-labels');
+    // ملحوظة: الليبلز بقت بتتعرض في كارت العميل بس (conv-label-list)، مش فوق في شريط الشات
+    // (chat-header-labels) — عشان كدا مبقتش بتتاخد ولا يتحطلها show هنا خالص.
     if (!c.labels || c.labels.length === 0) {
         if (list) list.innerHTML = '<span class="conv-label-empty">No labels yet</span>';
-        if (headerStrip) { headerStrip.innerHTML = ''; headerStrip.classList.remove('show'); }
     } else {
         if (list) list.innerHTML = c.labels.map(l => `
             <span class="conv-label-chip" style="background:${hexToRgba(l.color, 0.12)};color:${l.color || '#6C5CE7'}">
@@ -3455,36 +3455,51 @@ function renderConvLabels(c) {
                 <button class="conv-label-remove" onclick="removeLabelFromConv(${l.id})" title="Remove"><i data-lucide="x" style="width:9px;height:9px"></i></button>
             </span>
         `).join('');
-        // نفس الليبلز بتتعرض فوق في الشات نفسه عشان أي إيجنت فاتح المحادثة دي يشوفها على طول
-        if (headerStrip) {
-            headerStrip.innerHTML = c.labels.map(l => `
-                <span class="conv-label-chip" style="background:${hexToRgba(l.color, 0.12)};color:${l.color || '#6C5CE7'}">
-                    <span class="conv-label-dot" style="background:${l.color || '#6C5CE7'}"></span>
-                    ${escapeHtml(l.name)}
-                </span>
-            `).join('');
-            headerStrip.classList.add('show');
-        }
     }
     lucide.createIcons();
+}
+
+// بننقل الـ popover ليبقى ابن مباشر لـ body عشان ميتقصش (يتقطع) من أي parent عنده overflow:hidden/auto
+// (زي كارت العميل أو التابز اللي بتعمل سكرول) — وكمان عشان يقعد فوق كل حاجة تانية دايمًا
+function positionLabelPopover() {
+    const pop = document.getElementById('label-popover');
+    const btn = document.getElementById('conv-label-add-btn');
+    if (!pop || !btn) return;
+    if (pop.parentElement !== document.body) document.body.appendChild(pop);
+    const btnRect = btn.getBoundingClientRect();
+    const popWidth = 240;
+    const margin = 8;
+    let left = btnRect.right - popWidth; // نفس محاذاة right:0 القديمة
+    if (left < margin) left = margin;
+    if (left + popWidth > window.innerWidth - margin) left = window.innerWidth - popWidth - margin;
+    let top = btnRect.bottom + 6;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
 }
 
 function toggleLabelPopover(e) {
     e.stopPropagation();
     const pop = document.getElementById('label-popover');
     const opening = !pop.classList.contains('open');
-    pop.classList.toggle('open');
     if (opening) {
+        positionLabelPopover();
+        pop.classList.add('open');
         document.getElementById('label-popover-new-form').classList.remove('show');
         renderLabelPopoverList();
         loadLabelsFromAPI().then(renderLabelPopoverList); // تأكيد إن القايمة أحدث نسخة من السيرفر
+    } else {
+        pop.classList.remove('open');
     }
 }
 document.addEventListener('click', e => {
-    if (!e.target.closest('.conv-label-add-wrap')) {
+    if (!e.target.closest('.conv-label-add-wrap') && !e.target.closest('#label-popover')) {
         const pop = document.getElementById('label-popover');
         if (pop) pop.classList.remove('open');
     }
+});
+window.addEventListener('resize', () => {
+    const pop = document.getElementById('label-popover');
+    if (pop && pop.classList.contains('open')) positionLabelPopover();
 });
 
 function renderLabelPopoverList() {
