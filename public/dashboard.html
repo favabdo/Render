@@ -123,6 +123,8 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
 .chat-header-left{display:flex;align-items:center;gap:12px;min-width:0;flex-shrink:1}
 .chat-header-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-header-status{font-size:12px;color:var(--success);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-header-labels{display:none;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.chat-header-labels.show{display:flex}
 .chat-header-actions{display:flex;gap:4px;flex-shrink:0}
 .ch-action-btn{width:38px;height:38px;border-radius:10px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .ch-action-btn:hover{background:var(--bg);color:var(--primary)}
@@ -355,8 +357,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .conv-label-empty{font-size:12.5px;color:var(--text-secondary)}
 .conv-label-add-btn{width:26px;height:26px;border-radius:8px;border:1.5px dashed var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .conv-label-add-btn:hover{border-color:var(--primary);color:var(--primary);background:rgba(108,92,231,0.06)}
-.conv-label-add-wrap{position:relative;display:inline-block}
-.label-popover{position:absolute;top:calc(100% + 6px);right:0;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:30;display:none;overflow:hidden}
+.conv-label-add-wrap{position:relative;display:inline-block;z-index:5}
+.label-popover{position:absolute;top:calc(100% + 6px);right:0;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:600;display:none;overflow:hidden}
 .label-popover.open{display:block}
 .label-popover-list{max-height:220px;overflow-y:auto;padding:6px}
 .label-popover-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
@@ -778,6 +780,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     <button class="ch-action-btn" id="panel-toggle-btn" title="Customer Info" onclick="toggleCustomerPanel()"><i data-lucide="user" style="width:18px;height:18px"></i></button>
                 </div>
             </div>
+            <div class="chat-header-labels" id="chat-header-labels"></div>
             <div class="chat-search-bar" id="chat-search-bar">
                 <i data-lucide="search" style="width:15px;height:15px;color:var(--text-secondary);flex-shrink:0"></i>
                 <input type="text" id="chat-search-input" placeholder="ابحث في الرسايل..." oninput="performChatSearch(this.value)" onkeydown="handleChatSearchKey(event)">
@@ -3440,17 +3443,28 @@ async function loadLabelsForConversation(c) {
 
 function renderConvLabels(c) {
     const list = document.getElementById('conv-label-list');
-    if (!list) return;
+    const headerStrip = document.getElementById('chat-header-labels');
     if (!c.labels || c.labels.length === 0) {
-        list.innerHTML = '<span class="conv-label-empty">No labels yet</span>';
+        if (list) list.innerHTML = '<span class="conv-label-empty">No labels yet</span>';
+        if (headerStrip) { headerStrip.innerHTML = ''; headerStrip.classList.remove('show'); }
     } else {
-        list.innerHTML = c.labels.map(l => `
+        if (list) list.innerHTML = c.labels.map(l => `
             <span class="conv-label-chip" style="background:${hexToRgba(l.color, 0.12)};color:${l.color || '#6C5CE7'}">
                 <span class="conv-label-dot" style="background:${l.color || '#6C5CE7'}"></span>
                 ${escapeHtml(l.name)}
                 <button class="conv-label-remove" onclick="removeLabelFromConv(${l.id})" title="Remove"><i data-lucide="x" style="width:9px;height:9px"></i></button>
             </span>
         `).join('');
+        // نفس الليبلز بتتعرض فوق في الشات نفسه عشان أي إيجنت فاتح المحادثة دي يشوفها على طول
+        if (headerStrip) {
+            headerStrip.innerHTML = c.labels.map(l => `
+                <span class="conv-label-chip" style="background:${hexToRgba(l.color, 0.12)};color:${l.color || '#6C5CE7'}">
+                    <span class="conv-label-dot" style="background:${l.color || '#6C5CE7'}"></span>
+                    ${escapeHtml(l.name)}
+                </span>
+            `).join('');
+            headerStrip.classList.add('show');
+        }
     }
     lucide.createIcons();
 }
