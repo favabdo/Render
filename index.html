@@ -433,7 +433,7 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
         <button class="sidebar-btn" data-page="settings" title="Settings" onclick="navigateTo('settings')">
             <i data-lucide="settings" style="width:22px;height:22px"></i>
         </button>
-        <div class="sidebar-avatar" title="My Profile">
+        <div class="sidebar-avatar" title="My Profile" onclick="navigateTo('profile')">
             <img src="https://picsum.photos/seed/agent-me/100/100.jpg" alt="Me">
         </div>
     </div>
@@ -833,29 +833,9 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
                 <h3>General</h3>
                 <div class="setting-row"><div><div class="setting-label">Account Name</div><div class="setting-desc">The name of your account</div></div><span style="font-size:14px;color:var(--text-secondary)">Nile Techno Support</span></div>
                 <div class="setting-row"><div><div class="setting-label">Site Language</div><div class="setting-desc">Used for the dashboard and conversations</div></div><span style="font-size:14px;color:var(--text-secondary)">English (en)</span></div>
-                <div class="setting-row"><div><div class="setting-label">Auto Resolve After Inactivity</div><div class="setting-desc">Days before an idle conversation is marked resolved</div></div><span style="font-size:14px;color:var(--text-secondary)">7 days</span></div>
-                <div class="setting-row"><div><div class="setting-label">Account ID</div><div class="setting-desc">Used when building integrations against the API</div></div><span style="font-size:13px;color:var(--primary);font-weight:600;background:rgba(108,92,231,0.08);padding:4px 10px;border-radius:8px">#1</span></div>
-            </div>
-            <div class="settings-section">
-                <h3>Profile</h3>
-                <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-                    <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light)"><img src="https://picsum.photos/seed/agent-me/100/100.jpg" style="width:100%;height:100%;object-fit:cover" alt=""></div>
-                    <div><div style="font-weight:700;font-size:16px">Support Agent</div><div style="font-size:13px;color:var(--text-secondary)">agent@nilechat.com</div></div>
-                    <button class="page-btn" style="margin-left:auto;padding:8px 16px;font-size:12px">Edit Profile</button>
-                </div>
-                <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Visible to customers</div></div><span style="font-size:14px;color:var(--text-secondary)">Support Agent</span></div>
-                <div class="setting-row"><div><div class="setting-label">Role</div><div class="setting-desc">Your permission level</div></div><span style="font-size:14px;color:var(--primary);font-weight:600">Administrator</span></div>
-            </div>
-            <div class="settings-section">
-                <h3>Notifications</h3>
-                <div class="setting-row"><div><div class="setting-label">New Message Alerts</div><div class="setting-desc">Play sound for incoming messages</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-                <div class="setting-row"><div><div class="setting-label">Desktop Notifications</div><div class="setting-desc">Show browser notifications</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-                <div class="setting-row"><div><div class="setting-label">Email Digest</div><div class="setting-desc">Daily summary of conversations</div></div><button class="toggle" onclick="this.classList.toggle('on')"></button></div>
-            </div>
-            <div class="settings-section">
-                <h3>Security</h3>
-                <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-                <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+                <div class="setting-row"><div><div class="setting-label">Email Conversation Continuity</div><div class="setting-desc">Conversation continuity with emails is enabled for your account.</div></div><span style="font-size:13px;color:var(--success);font-weight:600;background:rgba(16,185,129,0.1);padding:4px 10px;border-radius:8px">Enabled</span></div>
+                <div class="setting-row"><div><div class="setting-label">Auto Resolve After Inactivity</div><div class="setting-desc">Number of days after a ticket should auto resolve if there is no activity</div></div><span style="font-size:14px;color:var(--text-secondary)">7 days</span></div>
+                <div class="setting-row"><div><div class="setting-label">Account ID</div><div class="setting-desc">This ID is required if you are building an API based integration</div></div><span style="font-size:13px;color:var(--primary);font-weight:600;background:rgba(108,92,231,0.08);padding:4px 10px;border-radius:8px">#1</span></div>
             </div>
         </div>
         </div>
@@ -1030,6 +1010,42 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
         </div><!-- /settings-content-panel -->
     </div><!-- /settings-layout -->
 </div><!-- /page-settings -->
+
+<!-- PROFILE PAGE (per-agent, not org-wide Settings) -->
+<div id="page-profile" class="page flex flex-1">
+    <div class="page-content" style="max-width:700px;margin:0 auto;padding:32px 24px;overflow-y:auto;width:100%">
+        <div class="settings-top-row"><div><h2>Profile</h2><div class="settings-top-desc">Your personal account details</div></div></div>
+
+        <div class="settings-section">
+            <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+                <div style="width:64px;height:64px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;flex-shrink:0">ع</div>
+                <div>
+                    <div style="font-weight:700;font-size:16px">عبدالله</div>
+                    <div style="font-size:13px;color:var(--text-secondary)">abdallah666mo@gmail.com</div>
+                </div>
+            </div>
+            <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Visible to customers instead of your email</div></div><span style="font-size:14px;color:var(--text-secondary)">عبدالله</span></div>
+            <div class="setting-row"><div><div class="setting-label">Role</div><div class="setting-desc">Your permission level</div></div><span style="font-size:14px;color:var(--primary);font-weight:600">Super Admin</span></div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Notifications</h3>
+            <div class="setting-row"><div><div class="setting-label">New Message Alerts</div><div class="setting-desc">Play sound for incoming messages</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Desktop Notifications</div><div class="setting-desc">Show browser notifications</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Email Digest</div><div class="setting-desc">Daily summary of conversations</div></div><button class="toggle" onclick="this.classList.toggle('on')"></button></div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Security</h3>
+            <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+        </div>
+
+        <button class="page-btn" style="width:100%;justify-content:center;background:var(--danger);margin-top:4px" onclick="handleLogout()">
+            <i data-lucide="log-out" style="width:16px;height:16px"></i> Logout
+        </button>
+    </div>
+</div>
 
 </div></div>
 <div id="toast-container"></div>
@@ -1241,7 +1257,8 @@ function navigateTo(page) {
     target.style.display = 'flex';
 
     document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`[data-page="${page}"]`).classList.add('active');
+    const navBtn = document.querySelector(`.sidebar-btn[data-page="${page}"]`);
+    if (navBtn) navBtn.classList.add('active');
 
     // مزامنة التوب بار: لو وصلنا لصفحة الإعدادات من السايدبار الجانبي، نفعّل تاب SETTINGS فوق
     syncTopbarWithPage(page);
@@ -1930,6 +1947,32 @@ function showToast(msg, type = 'success') {
     setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
+/* ===== صلاحيات اليوزر الحالي =====
+   Settings (Account Settings / Agents / Teams / Inboxes / ... إلخ) خاص بالمنظمة كلها،
+   فبيظهر بس لـ Super Admin و Admin. الإيجنت العادي (agent) مش بيشوفه خالص،
+   وبيروح بدل كده على صفحة الـ Profile الشخصية بتاعته من الأڤاتار تحت. */
+const CURRENT_USER_ROLE = 'super_admin'; // 'super_admin' | 'admin' | 'agent'
+
+function applyRoleVisibility() {
+    const canSeeSettings = CURRENT_USER_ROLE === 'super_admin' || CURRENT_USER_ROLE === 'admin';
+
+    const sidebarSettingsBtn = document.querySelector('.sidebar-btn[data-page="settings"]');
+    if (sidebarSettingsBtn) sidebarSettingsBtn.style.display = canSeeSettings ? '' : 'none';
+
+    const topbarSettingsTab = document.querySelector('.topbar-tab[data-toptab="settings"]');
+    if (topbarSettingsTab) topbarSettingsTab.style.display = canSeeSettings ? '' : 'none';
+
+    // لو الإيجنت العادي كان بالصدفة واقف على صفحة settings (رابط قديم مثلاً)، رجّعه لصفحة الشاتس
+    if (!canSeeSettings && currentPage === 'settings') {
+        navigateTo('chats');
+    }
+}
+
+function handleLogout() {
+    showToast('تم تسجيل الخروج', 'info');
+    // هنا لاحقًا: مسح التوكن الحقيقي (localStorage / cookie) والتحويل لصفحة اللوجين
+}
+
 /* ===== تهيئة ===== */
 function init() {
     // تأكيد إن الصفحة النشطة بس ظاهرة من أول تحميل
@@ -1942,6 +1985,7 @@ function init() {
     renderCategories();
     renderChart();
     renderActivity();
+    applyRoleVisibility();
     lucide.createIcons();
 
     // جيب المحادثات الحقيقية من الباك إند (WhatsApp Cloud API)
