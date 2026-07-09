@@ -107,17 +107,7 @@ async function listConversations() {
         SELECT COUNT(*)
         FROM [dbo].[${TABLE_NAME}] m
         WHERE m.conversation_id = c.id
-      ) AS message_count,
-      (
-        -- الليبلز المحطوطة على المحادثة دي (كـ JSON عشان نجيبهم في نفس الكويري
-        -- من غير ما نعمل استعلام منفصل لكل محادثة في القايمة)
-        SELECT l.id, l.name, l.color
-        FROM [dbo].[NileChat_ConversationLabels_byA] cl
-        JOIN [dbo].[NileChat_Labels_byA] l ON l.id = cl.label_id
-        WHERE cl.conversation_id = c.id
-        ORDER BY cl.created_at ASC
-        FOR JSON PATH
-      ) AS labels_json
+      ) AS message_count
     FROM [dbo].[NileChat_Conversations_byA] c
     LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
     LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
@@ -125,8 +115,30 @@ async function listConversations() {
     LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
     ORDER BY c.last_message_at DESC
   `);
-  return result.recordset;
+  const conversations = result.recordset;
+
+  // بنجيب كل الليبلز المحطوطة على أي محادثة في استعلام واحد منفصل (مش FOR JSON PATH
+  // عشان بعض نسخ SQL Server -زي الـ instance اللي شغالة عليه دلوقتي- مش بتدعمها)
+  // وبعدين بنجمعهم في JS حسب conversation_id ونحطهم كـ labels_json نص جاهز للفرونت إند
+  const labelsResult = await pool.request().query(`
+    SELECT cl.conversation_id, l.id, l.name, l.color
+    FROM [dbo].[NileChat_ConversationLabels_byA] cl
+    JOIN [dbo].[NileChat_Labels_byA] l ON l.id = cl.label_id
+    ORDER BY cl.conversation_id, cl.created_at ASC
+  `);
+  const labelsByConversation = new Map();
+  for (const row of labelsResult.recordset) {
+    const key = String(row.conversation_id);
+    if (!labelsByConversation.has(key)) labelsByConversation.set(key, []);
+    labelsByConversation.get(key).push({ id: row.id, name: row.name, color: row.color });
+  }
+  for (const c of conversations) {
+    c.labels_json = JSON.stringify(labelsByConversation.get(String(c.id)) || []);
+  }
+
+  return conversations;
 }
+
 
 async function getConversationById(id) {
   const pool = await getPool();
