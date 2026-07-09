@@ -354,6 +354,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .st-modal-readonly{flex:1;padding:9px 11px;border-radius:9px;background:var(--bg);border:1.5px solid var(--border)}
 .st-modal-readonly-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
 .st-modal-readonly-value{font-size:13px;font-weight:600;color:var(--text)}
+.sched-tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 
 .empty-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text-secondary)}
 .empty-chat-icon{width:80px;height:80px;border-radius:50%;background:rgba(108,92,231,0.08);display:flex;align-items:center;justify-content:center;color:var(--primary)}
@@ -646,6 +647,10 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <button class="sidebar-btn" data-page="analytics" title="Analytics" onclick="navigateTo('analytics')">
             <i data-lucide="chart-bar" style="width:22px;height:22px"></i>
         </button>
+        <button class="sidebar-btn" data-page="scheduled-tasks" title="Scheduled Tasks" onclick="navigateTo('scheduled-tasks')">
+            <i data-lucide="calendar-clock" style="width:22px;height:22px"></i>
+            <span class="badge" id="sidebar-sched-badge" style="display:none">0</span>
+        </button>
     </nav>
     <div class="sidebar-bottom">
         <button class="sidebar-btn" data-page="settings" title="Settings" onclick="navigateTo('settings')">
@@ -783,19 +788,10 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
                 <!-- Scheduled Tasks -->
                 <div class="cp-section">
-                    <div class="cp-section-title-row">
-                        <div class="cp-section-title">Scheduled Tasks</div>
-                        <span class="st-count-badge" id="sched-open-badge">0</span>
-                    </div>
+                    <div class="cp-section-title">Scheduled Tasks</div>
                     <button class="add-btn" id="sched-add-btn" onclick="openScheduledTaskModal()">
                         <i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Adding scheduled tasks
                     </button>
-
-                    <div class="sched-subhead"><i data-lucide="circle-dot" style="width:12px;height:12px"></i> Open Tasks <span class="sched-subhead-count" id="sched-open-count">(0)</span></div>
-                    <div id="sched-open-list"></div>
-
-                    <div class="sched-subhead"><i data-lucide="check-circle" style="width:12px;height:12px"></i> Ended Tasks <span class="sched-subhead-count" id="sched-ended-count">(0)</span></div>
-                    <div id="sched-ended-list"></div>
                 </div>
 
                 <!-- AI Assistant -->
@@ -1030,6 +1026,34 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <div class="chart-container">
             <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Recent Activity</h3>
             <div id="activity-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- SCHEDULED TASKS PAGE -->
+<div id="page-scheduled-tasks" class="page flex flex-1">
+    <div class="page-content">
+        <div class="page-header">
+            <div style="display:flex;align-items:center;gap:14px">
+                <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(108,92,231,0.35);flex-shrink:0">
+                    <i data-lucide="calendar-clock" style="width:22px;height:22px;color:#fff"></i>
+                </div>
+                <div>
+                    <h2 style="margin:0;line-height:1.1">Scheduled Tasks</h2>
+                    <div style="font-size:12px;color:var(--text-secondary);font-weight:500;margin-top:2px">Tasks agents scheduled from customer cards</div>
+                </div>
+            </div>
+            <button class="page-btn" onclick="loadScheduledTasksPage()"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh</button>
+        </div>
+
+        <div class="chart-container">
+            <div class="sched-subhead" style="margin-top:0"><i data-lucide="circle-dot" style="width:13px;height:13px"></i> Open Tasks <span class="sched-subhead-count" id="sched-page-open-count">(0)</span></div>
+            <div class="sched-tasks-grid" id="sched-page-open-list"></div>
+        </div>
+
+        <div class="chart-container">
+            <div class="sched-subhead" style="margin-top:0"><i data-lucide="check-circle" style="width:13px;height:13px"></i> Ended Tasks <span class="sched-subhead-count" id="sched-page-ended-count">(0)</span></div>
+            <div class="sched-tasks-grid" id="sched-page-ended-list"></div>
         </div>
     </div>
 </div>
@@ -2417,6 +2441,7 @@ function navigateTo(page) {
     lucide.createIcons();
 
     if (page === 'contacts') loadContactsPage();
+    if (page === 'scheduled-tasks') loadScheduledTasksPage();
 }
 
 /* ===== التنقل داخل صفحة Settings (الـ sub-sidebar الجانبية) ===== */
@@ -2536,7 +2561,6 @@ function selectChat(id) {
         renderPhones(c);
         if (!c._contactLoaded) loadContactDetails(c);
         renderDevices(c);
-        renderScheduledTasks(c);
         hideAiResult();
         hideMergeContact();
         refreshTypingIndicator(c.id);
@@ -3480,40 +3504,11 @@ async function removeDevice(deviceId) {
 }
 
 /* ===== Scheduled Tasks =====
-   لما عميل يطلب حاجة، الإيجنت يقدر يجدولها ليوم تاني بدل ما ينساها. بتتخزن فعليًا
-   في الداتابيز لكل عميل (كونتاكت)، واسم الإيجنت واسم العميل وتاريخ الإضافة بتيجي
-   تلقائي (مش بتتكتب يدوي). التاسك لما تتقفل بتتنقل لـ "Ended Tasks" بس، مش بتختفي. */
-function renderScheduledTasksEmptyState(message) {
-    document.getElementById('sched-open-list').innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">${message}</div>`;
-    document.getElementById('sched-ended-list').innerHTML = '';
-    document.getElementById('sched-add-btn').style.display = 'none';
-    document.getElementById('sched-open-badge').textContent = '0';
-    document.getElementById('sched-open-count').textContent = '(0)';
-    document.getElementById('sched-ended-count').textContent = '(0)';
-}
-
-async function renderScheduledTasks(c) {
-    if (!c || !c.contactId) {
-        scheduledTasks = [];
-        renderScheduledTasksEmptyState('اربط المحادثة بعميل الأول عشان تقدر تضيف تاسكات');
-        return;
-    }
-    document.getElementById('sched-add-btn').style.display = '';
-    document.getElementById('sched-open-list').innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px">جاري التحميل...</div>';
-    document.getElementById('sched-ended-list').innerHTML = '';
-    try {
-        const res = await apiFetch(`/api/contacts/${c.contactId}/scheduled-tasks`);
-        if (!res.ok) throw new Error('فشل تحميل التاسكات');
-        scheduledTasks = await res.json();
-        // لو المستخدم بدّل المحادثة وهو لسه بيستنى الرد، متكتبش فوق تاسكات محادثة تانية
-        if (selectedChatId !== c.id) return;
-        drawScheduledTasks();
-    } catch (err) {
-        console.error('[API] renderScheduledTasks error:', err);
-        if (selectedChatId === c.id) renderScheduledTasksEmptyState('تعذر تحميل التاسكات');
-    }
-}
-
+   لما عميل يطلب حاجة، الإيجنت يقدر يجدولها ليوم تاني بدل ما ينساها. الإضافة بتتم من
+   كارت العميل (زرار "Adding scheduled tasks")، لكن عرض كل التاسكات (المفتوحة والمقفولة
+   من كل العملاء) بقى في صفحة لوحده في السايد بار تحت Analytics — مش في الكارت نفسه.
+   اسم الإيجنت واسم العميل وتاريخ الإضافة بتيجي تلقائي (مش بتتكتب يدوي). التاسك لما
+   تتقفل بتتنقل لـ "Ended Tasks" بس، مش بتختفي. */
 function formatSchedDate(value) {
     if (!value) return '-';
     const d = new Date(value);
@@ -3521,45 +3516,7 @@ function formatSchedDate(value) {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function drawScheduledTasks() {
-    const open = scheduledTasks.filter(t => t.status === 'open');
-    const ended = scheduledTasks.filter(t => t.status === 'ended');
-
-    document.getElementById('sched-open-badge').textContent = open.length;
-    document.getElementById('sched-open-count').textContent = `(${open.length})`;
-    document.getElementById('sched-ended-count').textContent = `(${ended.length})`;
-
-    document.getElementById('sched-open-list').innerHTML = open.length === 0
-        ? '<div style="font-size:12.5px;color:var(--text-secondary);text-align:center;padding:10px 4px">No open tasks</div>'
-        : open.map(t => `
-        <div class="sched-task-card">
-            <div class="sched-task-text">${escapeHtml(t.task_text)}</div>
-            <div class="sched-task-meta"><i data-lucide="user-round" style="width:13px;height:13px"></i>${escapeHtml(t.agent_name || 'Unknown')}</div>
-            <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
-            <div class="sched-task-meta"><i data-lucide="clock" style="width:13px;height:13px"></i>Due: ${formatSchedDate(t.due_date)}</div>
-            <div class="sched-task-actions">
-                <button class="sched-end-btn" onclick="endScheduledTask(${t.id})"><i data-lucide="check" style="width:13px;height:13px"></i>End Task</button>
-            </div>
-        </div>
-    `).join('');
-
-    document.getElementById('sched-ended-list').innerHTML = ended.length === 0
-        ? '<div style="font-size:12.5px;color:var(--text-secondary);text-align:center;padding:10px 4px">No ended tasks</div>'
-        : ended.map(t => `
-        <div class="sched-task-card ended">
-            <div class="sched-task-text">${escapeHtml(t.task_text)}</div>
-            <div class="sched-task-meta"><i data-lucide="user-round" style="width:13px;height:13px"></i>${escapeHtml(t.agent_name || 'Unknown')}</div>
-            <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
-            <div class="sched-task-meta"><i data-lucide="clock" style="width:13px;height:13px"></i>Due: ${formatSchedDate(t.due_date)}</div>
-            <div class="sched-task-actions">
-                <span class="sched-ended-tag"><i data-lucide="check-circle" style="width:12px;height:12px"></i>Ended</span>
-            </div>
-        </div>
-    `).join('');
-
-    lucide.createIcons();
-}
-
+/* ----- إضافة تاسك (من كارت العميل) ----- */
 function openScheduledTaskModal() {
     const c = conversations.find(x => x.id === selectedChatId);
     if (!c || !c.contactId) return showToast('اربط المحادثة بعميل الأول', 'error');
@@ -3601,7 +3558,8 @@ async function submitScheduledTask() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل إضافة التاسك');
         scheduledTasks.unshift(data.task);
-        drawScheduledTasks();
+        // لو صفحة Scheduled Tasks كانت متفتحة قبل كده، حدّثها كمان
+        if (currentPage === 'scheduled-tasks') drawScheduledTasksPage();
         closeScheduledTaskModal();
         showToast('Scheduled task added', 'success');
     } catch (err) {
@@ -3612,16 +3570,76 @@ async function submitScheduledTask() {
     }
 }
 
-async function endScheduledTask(taskId) {
-    const c = conversations.find(x => x.id === selectedChatId);
-    if (!c || !c.contactId) return;
+/* ----- صفحة Scheduled Tasks (سايد بار تحت Analytics) — كل التاسكات من كل العملاء ----- */
+async function loadScheduledTasksPage() {
+    document.getElementById('sched-page-open-list').innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">جاري التحميل...</div>';
+    document.getElementById('sched-page-ended-list').innerHTML = '';
     try {
-        const res = await apiFetch(`/api/contacts/${c.contactId}/scheduled-tasks/${taskId}/end`, { method: 'PATCH' });
+        const res = await apiFetch('/api/scheduled-tasks');
+        if (!res.ok) throw new Error('فشل تحميل التاسكات');
+        scheduledTasks = await res.json();
+        drawScheduledTasksPage();
+    } catch (err) {
+        console.error('[API] loadScheduledTasksPage error:', err);
+        document.getElementById('sched-page-open-list').innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">تعذر تحميل التاسكات</div>';
+    }
+}
+
+function goToTaskConversation(contactId) {
+    const match = conversations.find(x => String(x.contactId) === String(contactId));
+    if (!match) return showToast('محادثة العميل ده مش ظاهرة في القايمة دلوقتي', 'info');
+    navigateTo('chats');
+    selectChat(match.id);
+}
+
+function scheduledTaskCardHtml(t, ended) {
+    return `
+        <div class="sched-task-card${ended ? ' ended' : ''}">
+            <div class="sched-task-text">${escapeHtml(t.task_text)}</div>
+            <div class="sched-task-meta"><i data-lucide="user-round-search" style="width:13px;height:13px"></i><span onclick="goToTaskConversation(${t.contact_id})" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted">${escapeHtml(t.customer_name || 'Unknown customer')}</span></div>
+            <div class="sched-task-meta"><i data-lucide="user-round" style="width:13px;height:13px"></i>${escapeHtml(t.agent_name || 'Unknown')}</div>
+            <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
+            <div class="sched-task-meta"><i data-lucide="clock" style="width:13px;height:13px"></i>Due: ${formatSchedDate(t.due_date)}</div>
+            <div class="sched-task-actions">
+                ${ended
+                    ? '<span class="sched-ended-tag"><i data-lucide="check-circle" style="width:12px;height:12px"></i>Ended</span>'
+                    : `<button class="sched-end-btn" onclick="endScheduledTask(${t.id}, ${t.contact_id})"><i data-lucide="check" style="width:13px;height:13px"></i>End Task</button>`}
+            </div>
+        </div>
+    `;
+}
+
+function drawScheduledTasksPage() {
+    const open = scheduledTasks.filter(t => t.status === 'open');
+    const ended = scheduledTasks.filter(t => t.status === 'ended');
+
+    document.getElementById('sched-page-open-count').textContent = `(${open.length})`;
+    document.getElementById('sched-page-ended-count').textContent = `(${ended.length})`;
+    const sidebarBadge = document.getElementById('sidebar-sched-badge');
+    if (sidebarBadge) {
+        sidebarBadge.style.display = open.length > 0 ? 'flex' : 'none';
+        sidebarBadge.textContent = open.length;
+    }
+
+    document.getElementById('sched-page-open-list').innerHTML = open.length === 0
+        ? '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">No open tasks</div>'
+        : open.map(t => scheduledTaskCardHtml(t, false)).join('');
+
+    document.getElementById('sched-page-ended-list').innerHTML = ended.length === 0
+        ? '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">No ended tasks</div>'
+        : ended.map(t => scheduledTaskCardHtml(t, true)).join('');
+
+    lucide.createIcons();
+}
+
+async function endScheduledTask(taskId, contactId) {
+    try {
+        const res = await apiFetch(`/api/contacts/${contactId}/scheduled-tasks/${taskId}/end`, { method: 'PATCH' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل قفل التاسك');
         const idx = scheduledTasks.findIndex(t => String(t.id) === String(taskId));
         if (idx !== -1) scheduledTasks[idx] = data.task;
-        drawScheduledTasks();
+        drawScheduledTasksPage();
         showToast('Task moved to Ended', 'success');
     } catch (err) {
         console.error('[API] endScheduledTask error:', err);

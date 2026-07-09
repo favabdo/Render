@@ -14,6 +14,12 @@ async function listTasks(req, res) {
   res.json(tasks);
 }
 
+// كل التاسكات من كل العملاء — لصفحة "Scheduled Tasks" في السايد بار
+async function listAllTasks(req, res) {
+  const tasks = await scheduledTaskRepo.listAllScheduledTasks();
+  res.json(tasks);
+}
+
 async function addTask(req, res) {
   const { taskText, dueDate, customerName } = req.body || {};
   const trimmedTask = (taskText || '').trim();
@@ -71,4 +77,4 @@ async function reopenTask(req, res) {
   res.json({ ok: true, task });
 }
 
-module.exports = { listTasks, addTask, endTask, reopenTask };
+module.exports = { listTasks, listAllTasks, addTask, endTask, reopenTask };

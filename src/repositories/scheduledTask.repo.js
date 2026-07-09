@@ -16,6 +16,16 @@ async function listScheduledTasksForContact(contactId) {
   return result.recordset;
 }
 
+// كل التاسكات من كل العملاء — مستخدمة في صفحة "Scheduled Tasks" في السايد بار
+async function listAllScheduledTasks() {
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT * FROM [dbo].[NileChat_ScheduledTasks_byA]
+    ORDER BY created_at DESC
+  `);
+  return result.recordset;
+}
+
 async function getScheduledTaskById(taskId) {
   const pool = await getPool();
   const result = await pool
@@ -74,6 +84,7 @@ async function reopenScheduledTask(taskId) {
 
 module.exports = {
   listScheduledTasksForContact,
+  listAllScheduledTasks,
   getScheduledTaskById,
   addScheduledTask,
   endScheduledTask,
