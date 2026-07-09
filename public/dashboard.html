@@ -179,6 +179,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     .settings-section{padding:16px}
     #cat-list{grid-template-columns:1fr!important}
     .settings-card-grid{grid-template-columns:1fr!important}
+    .chart-container{padding:14px;overflow:hidden}
+    .sched-tasks-grid{grid-template-columns:1fr}
 }
 .resolve-modal-actions{display:flex;gap:10px;margin-top:18px}
 .resolve-cancel-btn{flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
@@ -341,7 +343,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .st-count-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .sched-subhead{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px;display:flex;align-items:center;gap:6px;cursor:default}
 .sched-subhead .sched-subhead-count{color:var(--text-secondary);font-weight:600;text-transform:none;letter-spacing:0}
-.sched-task-card{padding:11px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:8px}
+.sched-task-card{padding:11px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:8px;min-width:0;box-sizing:border-box}
 .sched-task-card.ended{opacity:.65}
 .sched-task-text{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;white-space:pre-wrap;word-break:break-word}
 .sched-task-meta{font-size:11.5px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;margin-bottom:3px}
@@ -354,7 +356,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .st-modal-readonly{flex:1;padding:9px 11px;border-radius:9px;background:var(--bg);border:1.5px solid var(--border)}
 .st-modal-readonly-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
 .st-modal-readonly-value{font-size:13px;font-weight:600;color:var(--text)}
-.sched-tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.sched-tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;min-width:0}
 
 .empty-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text-secondary)}
 .empty-chat-icon{width:80px;height:80px;border-radius:50%;background:rgba(108,92,231,0.08);display:flex;align-items:center;justify-content:center;color:var(--primary)}
