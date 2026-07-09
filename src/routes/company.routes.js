@@ -11,4 +11,8 @@ router.get('/api/company/settings', requireAuth, asyncHandler(companyController.
 // التعديل (اسم الشركة + عدد أيام الـ Auto Resolve) للـ admin/owner بس
 router.patch('/api/company/settings', requireAuth, requireAdmin, asyncHandler(companyController.updateSettings));
 
+// إعدادات الأتمتة (Automation): Auto-assign / رسالة الترحيب / رسالة الـ CSAT
+router.get('/api/company/automation-settings', requireAuth, asyncHandler(companyController.getAutomationSettings));
+router.patch('/api/company/automation-settings', requireAuth, requireAdmin, asyncHandler(companyController.updateAutomationSettings));
+
 module.exports = router;

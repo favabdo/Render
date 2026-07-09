@@ -662,6 +662,34 @@ async function ensureConversationTeamsTableExists() {
   logger.info('✅ جدول Conversation Teams جاهز.');
 }
 
+// إعدادات الأتمتة (Automation) بتاعة الشركة: تعيين تلقائي لإيجنت معين على أي
+// محادثة جديدة، رسالة ترحيب ثابتة تتبعت أول ما محادثة جديدة تتفتح، ورسالة
+// CSAT تتبعت للعميل بمجرد ما المحادثة تتعمللها Resolve — كل واحدة ليها toggle
+// مستقل ونص قابل للتعديل من صفحة الإعدادات
+async function ensureCompaniesHaveAutomationColumns() {
+  const pool = await getPool();
+  const columns = [
+    { name: 'automation_auto_assign_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_auto_assign_agent_id', def: 'BIGINT NULL' },
+    { name: 'automation_welcome_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_welcome_message', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'automation_csat_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_csat_message', def: 'NVARCHAR(MAX) NULL' },
+  ];
+  for (const col of columns) {
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.NileChat_Companies_byA') AND name = '${col.name}'
+      )
+      BEGIN
+        ALTER TABLE [dbo].[NileChat_Companies_byA] ADD ${col.name} ${col.def};
+      END
+    `);
+  }
+  logger.info('✅ أعمدة إعدادات الأتمتة (Automation) جاهزة على جدول Companies.');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -687,6 +715,7 @@ async function ensureSchema() {
   await ensureConversationLabelsTableExists();
   await ensureCompaniesTableExists();
   await ensureUsersHaveCompanyAssigned();
+  await ensureCompaniesHaveAutomationColumns();
   await ensureTeamsTableExists();
   await ensureTeamMembersTableExists();
   await ensureConversationTeamsTableExists();
@@ -719,6 +748,7 @@ module.exports = {
   ensureConversationLabelsTableExists,
   ensureCompaniesTableExists,
   ensureUsersHaveCompanyAssigned,
+  ensureCompaniesHaveAutomationColumns,
   generateCompanyCode,
   ensureTeamsTableExists,
   ensureTeamMembersTableExists,

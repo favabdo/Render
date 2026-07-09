@@ -3,7 +3,9 @@
 
 const conversationRepo = require('../repositories/conversation.repo');
 const userRepo = require('../repositories/user.repo');
+const companyRepo = require('../repositories/company.repo');
 const conversationService = require('../services/conversation.service');
+const whatsappService = require('../services/whatsapp.service');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
@@ -124,7 +126,34 @@ async function resolve(req, res) {
   }
 
   res.json({ ok: true, conversation: updated });
+
+  // قاعدة أتمتة "Send CSAT after resolution" — لو مفعّلة، بتبعت رسالة تقييم
+  // رضا العميل جاهزة (قابلة للتعديل من صفحة الإعدادات) فور ما المحادثة تتقفل.
+  // بتتنفذ بعد ما رجعنا الرد للإيجنت عشان مبتأخرش قفل المحادثة في الواجهة
+  applySendCsatIfEnabled(updated, io).catch((err) => {
+    logger.error('❌ فشل إرسال رسالة الـ CSAT التلقائية:', err.message);
+  });
 }
+
+// بتبعت رسالة الـ CSAT المحفوظة في إعدادات الأتمتة للعميل بمجرد ما المحادثة تتقفل،
+// لو القاعدة مفعّلة وفيه نص متسجل فعلاً
+async function applySendCsatIfEnabled(conversation, io) {
+  const settings = await companyRepo.getAutomationSettings();
+  if (!settings || !settings.csat_enabled || !settings.csat_message) return;
+
+  const message = await whatsappService.sendTextMessage(
+    conversation.contact_number,
+    settings.csat_message,
+    conversation.id,
+    conversation.inbox_id,
+    { id: null, name: 'Automation' }
+  );
+  await conversationRepo.touchConversation(conversation.id);
+  if (io && message) {
+    io.emit('new_message', { conversationId: conversation.id, message });
+  }
+}
+
 
 // لو حبيت ترجّع محادثة اتقفلت تفتح تاني (مثلاً العميل رجع يكلم)
 async function reopen(req, res) {

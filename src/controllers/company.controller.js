@@ -65,4 +65,93 @@ async function updateSettings(req, res) {
   });
 }
 
-module.exports = { getSettings, updateSettings };
+module.exports = { getSettings, updateSettings, getAutomationSettings, updateAutomationSettings };
+
+// ===== إعدادات الأتمتة (Automation) =====
+// أي إيجنت مسجل دخول يقدر يشوف حالة القواعد (عرض بس)، والتعديل للـ admin/owner بس
+async function getAutomationSettings(req, res) {
+  const user = await userRepo.findUserById(req.user.userId);
+  const company = await companyRepo.getCompanyForUser(user);
+  if (!company) {
+    return res.status(404).json({ error: 'مفيش شركة مربوطة بالحساب ده' });
+  }
+
+  const settings = await companyRepo.getAutomationSettings(company.id);
+
+  // بنرجع اسم الإيجنت المختار للـ Auto-assign جنب الـ id، عشان الواجهة تقدر تعرضه
+  // من غير ما تحتاج تجيب ليستة الإيجنتس كلها وتدور فيها بنفسها
+  let autoAssignAgentName = null;
+  if (settings.auto_assign_agent_id) {
+    const agent = await userRepo.findUserById(settings.auto_assign_agent_id);
+    autoAssignAgentName = agent ? userRepo.resolveDisplayName(agent) : null;
+  }
+
+  res.json({ ...settings, auto_assign_agent_name: autoAssignAgentName });
+}
+
+async function updateAutomationSettings(req, res) {
+  const {
+    auto_assign_enabled,
+    auto_assign_agent_id,
+    welcome_enabled,
+    welcome_message,
+    csat_enabled,
+    csat_message,
+  } = req.body || {};
+
+  const user = await userRepo.findUserById(req.user.userId);
+  const company = await companyRepo.getCompanyForUser(user);
+  if (!company) {
+    return res.status(404).json({ error: 'مفيش شركة مربوطة بالحساب ده' });
+  }
+
+  const fields = {};
+
+  if (auto_assign_enabled !== undefined) {
+    fields.autoAssignEnabled = Boolean(auto_assign_enabled);
+  }
+  if (auto_assign_agent_id !== undefined) {
+    const agentId = auto_assign_agent_id === null || auto_assign_agent_id === '' ? null : Number(auto_assign_agent_id);
+    if (agentId !== null) {
+      const agent = await userRepo.findUserById(agentId);
+      if (!agent) {
+        return res.status(400).json({ error: 'الموظف المختار للتعيين التلقائي مش موجود' });
+      }
+    }
+    fields.autoAssignAgentId = agentId;
+  }
+  if (welcome_enabled !== undefined) {
+    fields.welcomeEnabled = Boolean(welcome_enabled);
+  }
+  if (welcome_message !== undefined) {
+    const trimmed = String(welcome_message || '').trim();
+    if (trimmed.length > 4000) {
+      return res.status(400).json({ error: 'رسالة الترحيب طويلة أوي' });
+    }
+    fields.welcomeMessage = trimmed;
+  }
+  if (csat_enabled !== undefined) {
+    fields.csatEnabled = Boolean(csat_enabled);
+  }
+  if (csat_message !== undefined) {
+    const trimmed = String(csat_message || '').trim();
+    if (trimmed.length > 4000) {
+      return res.status(400).json({ error: 'رسالة الـ CSAT طويلة أوي' });
+    }
+    fields.csatMessage = trimmed;
+  }
+
+  // لو حد فعّل قاعدة الـ Auto-assign لازم يكون في إيجنت مختار (سواء دلوقتي أو
+  // متحدد من قبل كده وموجود في الداتابيز بالفعل)
+  const willBeEnabled = fields.autoAssignEnabled !== undefined ? fields.autoAssignEnabled : undefined;
+  if (willBeEnabled) {
+    const existing = await companyRepo.getAutomationSettings(company.id);
+    const finalAgentId = fields.autoAssignAgentId !== undefined ? fields.autoAssignAgentId : existing.auto_assign_agent_id;
+    if (!finalAgentId) {
+      return res.status(400).json({ error: 'لازم تختار الإيجنت اللي هيتعينله المحادثات الجديدة الأول' });
+    }
+  }
+
+  const updated = await companyRepo.updateAutomationSettings(company.id, fields);
+  res.json({ ok: true, ...updated });
+}

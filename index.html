@@ -840,29 +840,11 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
             <button class="settings-nav-item" data-settings-nav="labels" onclick="navigateSettingsSection('labels', this)">
                 <i data-lucide="tag" style="width:16px;height:16px"></i> Labels
             </button>
-            <button class="settings-nav-item" data-settings-nav="custom-attributes" onclick="navigateSettingsSection('custom-attributes', this)">
-                <i data-lucide="list-tree" style="width:16px;height:16px"></i> Custom Attributes
-            </button>
             <button class="settings-nav-item" data-settings-nav="automation" onclick="navigateSettingsSection('automation', this)">
                 <i data-lucide="workflow" style="width:16px;height:16px"></i> Automation
             </button>
-            <button class="settings-nav-item" data-settings-nav="macros" onclick="navigateSettingsSection('macros', this)">
-                <i data-lucide="terminal" style="width:16px;height:16px"></i> Macros
-            </button>
-            <button class="settings-nav-item" data-settings-nav="canned-responses" onclick="navigateSettingsSection('canned-responses', this)">
-                <i data-lucide="message-square-text" style="width:16px;height:16px"></i> Canned Responses
-            </button>
             <button class="settings-nav-item" data-settings-nav="integrations" onclick="navigateSettingsSection('integrations', this)">
                 <i data-lucide="plug" style="width:16px;height:16px"></i> Integrations
-            </button>
-            <button class="settings-nav-item" data-settings-nav="audit-logs" onclick="navigateSettingsSection('audit-logs', this)">
-                <i data-lucide="file-clock" style="width:16px;height:16px"></i> Audit Logs
-            </button>
-            <button class="settings-nav-item" data-settings-nav="custom-roles" onclick="navigateSettingsSection('custom-roles', this)">
-                <i data-lucide="shield-check" style="width:16px;height:16px"></i> Custom Roles <span class="beta-tag">BETA</span>
-            </button>
-            <button class="settings-nav-item" data-settings-nav="sla" onclick="navigateSettingsSection('sla', this)">
-                <i data-lucide="gauge" style="width:16px;height:16px"></i> SLA <span class="beta-tag">BETA</span>
             </button>
         </aside>
 
@@ -942,22 +924,6 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
         </div>
         </div>
 
-        <!-- ============ 6. CUSTOM ATTRIBUTES ============ -->
-        <div class="settings-content-section" id="settings-sec-custom-attributes">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Custom Attributes</h2><div class="settings-top-desc">Custom fields to track on contacts or conversations</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Attribute</button></div>
-            <table class="settings-table">
-                <thead><tr><th>Attribute</th><th>Applies To</th><th>Type</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><strong>Subscription Plan</strong></td><td><span class="st-pill role-agent">Contact</span></td><td style="color:var(--text-secondary)">List</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Device Serial Number</strong></td><td><span class="st-pill role-admin">Conversation</span></td><td style="color:var(--text-secondary)">Text</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Account ID</strong></td><td><span class="st-pill role-agent">Contact</span></td><td style="color:var(--text-secondary)">Number</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Issue Severity</strong></td><td><span class="st-pill role-admin">Conversation</span></td><td style="color:var(--text-secondary)">List</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
         <!-- ============ 7. AUTOMATION ============ -->
         <div class="settings-content-section" id="settings-sec-automation">
         <div class="page-content">
@@ -965,32 +931,6 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
             <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Auto-assign new WhatsApp conversations</div><div class="rule-row-desc">When conversation is created → Assign to Tech Support team</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
             <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Tag billing keywords</div><div class="rule-row-desc">When message contains "فاتورة" or "دفع" → Add label Billing</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
             <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send CSAT after resolution</div><div class="rule-row-desc">When conversation is resolved → Send satisfaction survey</div></div></div><div class="rule-row-right"><button class="toggle" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
-        </div>
-        </div>
-
-        <!-- ============ 8. MACROS ============ -->
-        <div class="settings-content-section" id="settings-sec-macros">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Macros</h2><div class="settings-top-desc">Reusable sequences of actions you can run on a conversation</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> New Macro</button></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="terminal" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Close as Resolved + Thank You</div><div class="rule-row-desc">3 actions · Send reply, Add label, Resolve conversation</div></div></div><div class="rule-row-right"><span class="st-pill role-agent">Public</span><button class="st-icon-btn"><i data-lucide="play" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="terminal" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Escalate to Billing Team</div><div class="rule-row-desc">2 actions · Assign team, Add note</div></div></div><div class="rule-row-right"><span class="st-pill role-agent">Public</span><button class="st-icon-btn"><i data-lucide="play" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="terminal" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">My Follow-up Reminder</div><div class="rule-row-desc">1 action · Snooze conversation for 1 day</div></div></div><div class="rule-row-right"><span class="st-pill role-admin">Private</span><button class="st-icon-btn"><i data-lucide="play" style="width:14px;height:14px"></i></button></div></div>
-        </div>
-        </div>
-
-        <!-- ============ 9. CANNED RESPONSES ============ -->
-        <div class="settings-content-section" id="settings-sec-canned-responses">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Canned Responses</h2><div class="settings-top-desc">Saved replies for frequently asked questions</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Canned Response</button></div>
-            <table class="settings-table">
-                <thead><tr><th>Short Code</th><th>Content</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><strong>greeting</strong></td><td style="color:var(--text-secondary)">شكراً لتواصلكم معنا، سنقوم بالرد قريباً</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>transfer</strong></td><td style="color:var(--text-secondary)">تم تحويل طلبكم للقسم المختص</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>ask-sn</strong></td><td style="color:var(--text-secondary)">هل يمكنكم تزويدنا برقم الجهاز؟</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>resolved</strong></td><td style="color:var(--text-secondary)">تم حل المشكلة بنجاح، هل تحتاج مساعدة أخرى؟</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
-            </table>
         </div>
         </div>
 
@@ -1004,46 +944,6 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
                 <div class="settings-card"><div class="settings-card-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="slack" style="width:20px;height:20px"></i></div><div class="settings-card-title">Slack</div><div class="settings-card-desc">Get notified about conversations in Slack</div><div class="settings-card-meta"><span>Not connected</span><span class="settings-card-connect">Connect</span></div></div>
                 <div class="settings-card"><div class="settings-card-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="key-round" style="width:20px;height:20px"></i></div><div class="settings-card-title">API Access Token</div><div class="settings-card-desc">Authenticate requests to the Chatwoot-style API</div><div class="settings-card-meta"><span>Active</span><span class="settings-card-connect">View</span></div></div>
             </div>
-        </div>
-        </div>
-
-        <!-- ============ 11. AUDIT LOGS ============ -->
-        <div class="settings-content-section" id="settings-sec-audit-logs">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Audit Logs</h2><div class="settings-top-desc">A record of administrative actions on this account</div></div></div>
-            <table class="settings-table">
-                <thead><tr><th>Activity</th><th>User</th><th>IP Address</th><th>Time</th></tr></thead>
-                <tbody>
-                    <tr><td>Updated Account Settings</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">Today, 2:14 PM</td></tr>
-                    <tr><td>Added agent Hana Mohamed</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">Today, 11:02 AM</td></tr>
-                    <tr><td>Changed role: Mona Ali → Agent</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">Yesterday, 4:40 PM</td></tr>
-                    <tr><td>Created label "VIP Customer"</td><td>Ahmed Salah</td><td style="color:var(--text-secondary)">156.201.4.19</td><td style="color:var(--text-secondary)">Yesterday, 10:15 AM</td></tr>
-                    <tr><td>Deleted macro "Old Greeting"</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">3 days ago</td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
-        <!-- ============ 12. CUSTOM ROLES (BETA) ============ -->
-        <div class="settings-content-section" id="settings-sec-custom-roles">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Custom Roles <span class="beta-tag" style="margin-right:8px">BETA</span></h2><div class="settings-top-desc">Fine-grained permission sets beyond Administrator and Agent</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Custom Role</button></div>
-            <table class="settings-table">
-                <thead><tr><th>Role</th><th>Permissions</th><th>Agents</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><strong>Reports Viewer</strong></td><td style="color:var(--text-secondary)">View reports, View contacts</td><td>2</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Billing Specialist</strong></td><td style="color:var(--text-secondary)">Manage contacts, View conversations</td><td>3</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
-        <!-- ============ 13. SLA (BETA) ============ -->
-        <div class="settings-content-section" id="settings-sec-sla">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>SLA <span class="beta-tag" style="margin-right:8px">BETA</span></h2><div class="settings-top-desc">Service level agreements for response & resolution times</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add SLA Policy</button></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(239,68,68,0.1);color:var(--danger)"><i data-lucide="gauge" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">VIP Response SLA</div><div class="rule-row-desc">First response in 15 min · Resolution in 4 hrs</div></div></div><div class="rule-row-right"><span class="st-pill verified">Active</span><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="gauge" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Standard Support SLA</div><div class="rule-row-desc">First response in 1 hr · Resolution in 24 hrs</div></div></div><div class="rule-row-right"><span class="st-pill verified">Active</span><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
         </div>
         </div>
 

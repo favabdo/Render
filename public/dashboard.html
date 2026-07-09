@@ -1383,10 +1383,24 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <!-- ============ 7. AUTOMATION ============ -->
         <div class="settings-content-section" id="settings-sec-automation">
         <div class="page-content">
-            <div class="settings-top-row"><div><h2>Automation</h2><div class="settings-top-desc">Rules that act automatically on conversations</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Rule</button></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Auto-assign new WhatsApp conversations</div><div class="rule-row-desc">When conversation is created → Assign to Tech Support team</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
+            <div class="settings-top-row"><div><h2>Automation</h2><div class="settings-top-desc">Rules that act automatically on conversations</div></div></div>
+
+            <div class="rule-row" id="rule-row-auto_assign">
+                <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Auto-assign new WhatsApp conversations</div><div class="rule-row-desc" id="auto_assign-desc">When conversation is created → Assign to selected agent</div></div></div>
+                <div class="rule-row-right"><button class="toggle" id="auto_assign-toggle" onclick="toggleAutomationRule('auto_assign')"></button><button class="st-icon-btn" onclick="openAutomationModal('auto_assign')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
+            </div>
+
+            <div class="rule-row" id="rule-row-welcome">
+                <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="message-circle" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send welcome message</div><div class="rule-row-desc" id="welcome-desc">When conversation is created → Send a fixed auto-reply</div></div></div>
+                <div class="rule-row-right"><button class="toggle" id="welcome-toggle" onclick="toggleAutomationRule('welcome')"></button><button class="st-icon-btn" onclick="openAutomationModal('welcome')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
+            </div>
+
             <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Tag billing keywords</div><div class="rule-row-desc">When message contains "فاتورة" or "دفع" → Add label Billing</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send CSAT after resolution</div><div class="rule-row-desc">When conversation is resolved → Send satisfaction survey</div></div></div><div class="rule-row-right"><button class="toggle" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
+
+            <div class="rule-row" id="rule-row-csat">
+                <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send CSAT after resolution</div><div class="rule-row-desc" id="csat-desc">When conversation is resolved → Send satisfaction survey</div></div></div>
+                <div class="rule-row-right"><button class="toggle" id="csat-toggle" onclick="toggleAutomationRule('csat')"></button><button class="st-icon-btn" onclick="openAutomationModal('csat')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
+            </div>
         </div>
         </div>
 
@@ -2824,6 +2838,7 @@ function navigateSettingsSection(section, el) {
     if (section === 'agents') loadAgentsSettings();
     if (section === 'general') loadAccountSettings();
     if (section === 'teams') loadTeams();
+    if (section === 'automation') loadAutomationSettings();
     if (section === 'profile' || section === 'general') renderProfileSection();
 }
 
@@ -6424,5 +6439,299 @@ async function saveTeamMembers() {
     }
 }
 </script>
+
+<!-- ===== Automation Modal (Auto-assign / Welcome Message / CSAT) ===== -->
+<div class="resolve-overlay" id="automation-overlay" onclick="closeAutomationModal(event)">
+    <div class="resolve-modal" id="automation-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" id="automation-modal-icon">
+                <i data-lucide="workflow" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title" id="automation-modal-title">Automation Rule</div>
+        </div>
+
+        <div class="setting-row" style="padding:0 0 14px 0;border:none">
+            <div>
+                <div class="setting-label">Enable this rule</div>
+                <div class="setting-desc" id="automation-modal-enable-desc">Turn this automation on or off</div>
+            </div>
+            <button class="toggle" id="automation-modal-enable-toggle" onclick="this.classList.toggle('on')"></button>
+        </div>
+
+        <!-- Auto-assign: اختيار إيجنت واحد من ليستة الإيجنتس الحقيقية -->
+        <div id="automation-agent-field" style="display:none">
+            <div class="resolve-cats-label">Assign new conversations to</div>
+            <select class="iw-input" id="automation-agent-select" style="margin-bottom:14px">
+                <option value="">Select an agent…</option>
+            </select>
+        </div>
+
+        <!-- Welcome / CSAT: نص رسالة قابل للتعديل بالكامل من اليوزر -->
+        <div id="automation-message-field" style="display:none">
+            <div class="resolve-cats-label" id="automation-message-label">Message content</div>
+            <textarea class="resolve-notes" id="automation-message-input" style="min-height:110px;margin-bottom:6px" maxlength="4000"></textarea>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px" id="automation-message-hint"></div>
+        </div>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeAutomationModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="automation-save-btn" onclick="saveAutomationModal()">
+                <i data-lucide="check" style="width:16px;height:16px"></i>
+                Save
+            </button>
+        </div>
+
+        <div class="login-error" id="automation-modal-error" style="color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center"></div>
+    </div>
+</div>
+
+<script>
+/* ============================================================
+   AUTOMATION — متصلة فعليًا بالباك إند (company.automation_* columns)
+   3 قواعد حقيقية:
+   1) Auto-assign new WhatsApp conversations -> تعيين أي محادثة جديدة فورًا
+      لإيجنت محدد بيختاره اليوزر من قايمة الإيجنتس الحقيقية
+   2) Send welcome message -> رسالة ثابتة (نصها قابل للتعديل بالكامل) بتتبعت
+      تلقائيًا للعميل أول ما محادثة جديدة تتفتح
+   3) Send CSAT after resolution -> رسالة تقييم رضا (نصها قابل للتعديل) بتتبعت
+      للعميل بمجرد ما المحادثة تتعمللها Resolve
+============================================================ */
+let AUTOMATION_SETTINGS_CACHE = null;
+let AUTOMATION_AGENTS_CACHE = [];
+let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat'
+
+const AUTOMATION_RULE_META = {
+    auto_assign: {
+        title: 'Auto-assign new WhatsApp conversations',
+        icon: 'workflow',
+        enableDesc: 'When a new conversation is created, assign it immediately',
+        offDesc: 'When conversation is created → Assign to selected agent',
+    },
+    welcome: {
+        title: 'Send welcome message',
+        icon: 'message-circle',
+        enableDesc: 'Send a fixed reply automatically to every new conversation',
+        offDesc: 'When conversation is created → Send a fixed auto-reply',
+        messageLabel: 'Welcome message sent to the customer',
+        messageHint: 'This exact text is sent automatically as soon as a new conversation is opened.',
+        placeholder: 'شكراً لتواصلكم معنا! أحد ممثلي خدمة العملاء هيرد عليكم في أقرب وقت.',
+    },
+    csat: {
+        title: 'Send CSAT after resolution',
+        icon: 'workflow',
+        enableDesc: 'Send a satisfaction survey right after a conversation is resolved',
+        offDesc: 'When conversation is resolved → Send satisfaction survey',
+        messageLabel: 'CSAT message sent to the customer',
+        messageHint: 'This exact text is sent automatically the moment an agent resolves the conversation.',
+        placeholder: 'شكراً لتواصلكم معنا! برجاء تقييم تجربتكم اليوم من 1 لـ 5.',
+    },
+};
+
+async function loadAutomationSettings() {
+    try {
+        const res = await apiFetch('/api/company/automation-settings');
+        if (!res.ok) throw new Error('Failed to fetch automation settings');
+        AUTOMATION_SETTINGS_CACHE = await res.json();
+        renderAutomationSettings();
+    } catch (err) {
+        console.error('[API] loadAutomationSettings error:', err);
+    }
+}
+
+function renderAutomationSettings() {
+    if (!AUTOMATION_SETTINGS_CACHE) return;
+    const s = AUTOMATION_SETTINGS_CACHE;
+    const canEdit = isOwnerOrAdmin();
+
+    const autoAssignToggle = document.getElementById('auto_assign-toggle');
+    const welcomeToggle = document.getElementById('welcome-toggle');
+    const csatToggle = document.getElementById('csat-toggle');
+
+    if (autoAssignToggle) {
+        autoAssignToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
+        autoAssignToggle.disabled = !canEdit;
+    }
+    if (welcomeToggle) {
+        welcomeToggle.classList.toggle('on', Boolean(s.welcome_enabled));
+        welcomeToggle.disabled = !canEdit;
+    }
+    if (csatToggle) {
+        csatToggle.classList.toggle('on', Boolean(s.csat_enabled));
+        csatToggle.disabled = !canEdit;
+    }
+
+    const autoAssignDesc = document.getElementById('auto_assign-desc');
+    if (autoAssignDesc) {
+        autoAssignDesc.textContent = s.auto_assign_enabled && s.auto_assign_agent_name
+            ? `When conversation is created → Assign to ${s.auto_assign_agent_name}`
+            : 'When conversation is created → Assign to selected agent (disabled)';
+    }
+
+    const welcomeDesc = document.getElementById('welcome-desc');
+    if (welcomeDesc) {
+        welcomeDesc.textContent = s.welcome_enabled && s.welcome_message
+            ? `When conversation is created → Send: "${s.welcome_message.slice(0, 60)}${s.welcome_message.length > 60 ? '…' : ''}"`
+            : 'When conversation is created → Send a fixed auto-reply (disabled)';
+    }
+
+    const csatDesc = document.getElementById('csat-desc');
+    if (csatDesc) {
+        csatDesc.textContent = s.csat_enabled && s.csat_message
+            ? `When conversation is resolved → Send: "${s.csat_message.slice(0, 60)}${s.csat_message.length > 60 ? '…' : ''}"`
+            : 'When conversation is resolved → Send satisfaction survey (disabled)';
+    }
+}
+
+/* تبديل سريع من زرار التوجل نفسه في الليستة (من غير فتح المودال) — بيتحفظ فورًا،
+   إلا لو القاعدة auto_assign ومفيش إيجنت متسجل لسه، فبنفتحله المودال يختار الأول */
+async function toggleAutomationRule(type) {
+    if (!isOwnerOrAdmin()) return;
+    if (!AUTOMATION_SETTINGS_CACHE) return;
+
+    const s = AUTOMATION_SETTINGS_CACHE;
+    if (type === 'auto_assign') {
+        if (!s.auto_assign_enabled && !s.auto_assign_agent_id) {
+            openAutomationModal('auto_assign');
+            return;
+        }
+        await patchAutomationSettings({ auto_assign_enabled: !s.auto_assign_enabled });
+    } else if (type === 'welcome') {
+        if (!s.welcome_enabled && !s.welcome_message) {
+            openAutomationModal('welcome');
+            return;
+        }
+        await patchAutomationSettings({ welcome_enabled: !s.welcome_enabled });
+    } else if (type === 'csat') {
+        if (!s.csat_enabled && !s.csat_message) {
+            openAutomationModal('csat');
+            return;
+        }
+        await patchAutomationSettings({ csat_enabled: !s.csat_enabled });
+    }
+}
+
+async function patchAutomationSettings(body) {
+    try {
+        const res = await apiFetch('/api/company/automation-settings', {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل الحفظ');
+        AUTOMATION_SETTINGS_CACHE = data;
+        renderAutomationSettings();
+        return true;
+    } catch (err) {
+        console.error('[API] patchAutomationSettings error:', err);
+        showToast(err.message || 'فشل حفظ إعدادات الأتمتة', 'error');
+        renderAutomationSettings(); // نرجّع التوجل لحالته الحقيقية لو فشل الحفظ
+        return false;
+    }
+}
+
+async function openAutomationModal(type) {
+    if (!isOwnerOrAdmin()) return;
+    automationModalType = type;
+    const meta = AUTOMATION_RULE_META[type];
+    const s = AUTOMATION_SETTINGS_CACHE || {};
+
+    document.getElementById('automation-modal-title').textContent = meta.title;
+    document.getElementById('automation-modal-icon').innerHTML = `<i data-lucide="${meta.icon}" style="width:22px;height:22px"></i>`;
+    document.getElementById('automation-modal-enable-desc').textContent = meta.enableDesc;
+    document.getElementById('automation-modal-error').textContent = '';
+
+    const enableToggle = document.getElementById('automation-modal-enable-toggle');
+    const agentField = document.getElementById('automation-agent-field');
+    const messageField = document.getElementById('automation-message-field');
+    const messageInput = document.getElementById('automation-message-input');
+
+    if (type === 'auto_assign') {
+        enableToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
+        agentField.style.display = '';
+        messageField.style.display = 'none';
+        await populateAutomationAgentSelect(s.auto_assign_agent_id);
+    } else {
+        enableToggle.classList.toggle('on', Boolean(type === 'welcome' ? s.welcome_enabled : s.csat_enabled));
+        agentField.style.display = 'none';
+        messageField.style.display = '';
+        document.getElementById('automation-message-label').textContent = meta.messageLabel;
+        document.getElementById('automation-message-hint').textContent = meta.messageHint;
+        messageInput.placeholder = meta.placeholder;
+        messageInput.value = (type === 'welcome' ? s.welcome_message : s.csat_message) || '';
+    }
+
+    document.getElementById('automation-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+async function populateAutomationAgentSelect(selectedAgentId) {
+    const select = document.getElementById('automation-agent-select');
+    select.innerHTML = '<option value="">جارِ التحميل…</option>';
+    try {
+        if (!AUTOMATION_AGENTS_CACHE.length) {
+            const res = await apiFetch('/api/agents-list');
+            if (!res.ok) throw new Error('Failed to fetch agents');
+            AUTOMATION_AGENTS_CACHE = await res.json();
+        }
+        select.innerHTML = '<option value="">Select an agent…</option>' +
+            AUTOMATION_AGENTS_CACHE.map((a) => `<option value="${a.id}">${escapeHtml(a.display_name || a.email)}</option>`).join('');
+        if (selectedAgentId) select.value = String(selectedAgentId);
+    } catch (err) {
+        console.error('[API] populateAutomationAgentSelect error:', err);
+        select.innerHTML = '<option value="">تعذر تحميل الموظفين</option>';
+    }
+}
+
+function closeAutomationModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('automation-overlay').classList.remove('show');
+    automationModalType = null;
+}
+
+async function saveAutomationModal() {
+    if (!automationModalType) return;
+    const errorBox = document.getElementById('automation-modal-error');
+    errorBox.textContent = '';
+
+    const enabled = document.getElementById('automation-modal-enable-toggle').classList.contains('on');
+    const body = {};
+
+    if (automationModalType === 'auto_assign') {
+        const agentId = document.getElementById('automation-agent-select').value;
+        if (enabled && !agentId) {
+            errorBox.textContent = 'لازم تختار الإيجنت اللي هيتعينله المحادثات الجديدة الأول';
+            return;
+        }
+        body.auto_assign_enabled = enabled;
+        body.auto_assign_agent_id = agentId ? Number(agentId) : null;
+    } else {
+        const text = document.getElementById('automation-message-input').value.trim();
+        if (enabled && !text) {
+            errorBox.textContent = 'لازم تكتب نص الرسالة الأول';
+            return;
+        }
+        if (automationModalType === 'welcome') {
+            body.welcome_enabled = enabled;
+            body.welcome_message = text;
+        } else {
+            body.csat_enabled = enabled;
+            body.csat_message = text;
+        }
+    }
+
+    const saveBtn = document.getElementById('automation-save-btn');
+    saveBtn.disabled = true;
+    try {
+        const ok = await patchAutomationSettings(body);
+        if (ok) {
+            closeAutomationModal();
+            showToast('اتحفظت إعدادات الأتمتة بنجاح', 'success');
+        }
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+</script>
 </body>
+
 </html>

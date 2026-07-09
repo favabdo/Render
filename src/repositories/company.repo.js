@@ -79,6 +79,66 @@ async function getPrimaryAutoResolveDays() {
   return company ? company.auto_resolve_days : null;
 }
 
+// بيرجع إعدادات الأتمتة (Automation) الحالية للشركة المطلوبة (أو أول شركة في
+// النظام لو مفيش company اتحددت — نفس فكرة getPrimaryAutoResolveDays بالظبط،
+// مستخدمة من webhook/resolve اللي مفيهمش يوزر مسجل دخول أصلاً)
+function mapAutomationSettings(company) {
+  if (!company) return null;
+  return {
+    auto_assign_enabled: Boolean(company.automation_auto_assign_enabled),
+    auto_assign_agent_id: company.automation_auto_assign_agent_id || null,
+    welcome_enabled: Boolean(company.automation_welcome_enabled),
+    welcome_message: company.automation_welcome_message || '',
+    csat_enabled: Boolean(company.automation_csat_enabled),
+    csat_message: company.automation_csat_message || '',
+  };
+}
+
+async function getAutomationSettings(companyId = null) {
+  const company = companyId ? await getCompanyById(companyId) : await getFirstCompany();
+  return mapAutomationSettings(company);
+}
+
+async function updateAutomationSettings(companyId, fields = {}) {
+  const pool = await getPool();
+  const req = pool.request().input('id', sql.BigInt, companyId);
+  const sets = [];
+
+  if (fields.autoAssignEnabled !== undefined) {
+    req.input('autoAssignEnabled', sql.Bit, fields.autoAssignEnabled ? 1 : 0);
+    sets.push('automation_auto_assign_enabled = @autoAssignEnabled');
+  }
+  if (fields.autoAssignAgentId !== undefined) {
+    req.input('autoAssignAgentId', sql.BigInt, fields.autoAssignAgentId);
+    sets.push('automation_auto_assign_agent_id = @autoAssignAgentId');
+  }
+  if (fields.welcomeEnabled !== undefined) {
+    req.input('welcomeEnabled', sql.Bit, fields.welcomeEnabled ? 1 : 0);
+    sets.push('automation_welcome_enabled = @welcomeEnabled');
+  }
+  if (fields.welcomeMessage !== undefined) {
+    req.input('welcomeMessage', sql.NVarChar(sql.MAX), fields.welcomeMessage);
+    sets.push('automation_welcome_message = @welcomeMessage');
+  }
+  if (fields.csatEnabled !== undefined) {
+    req.input('csatEnabled', sql.Bit, fields.csatEnabled ? 1 : 0);
+    sets.push('automation_csat_enabled = @csatEnabled');
+  }
+  if (fields.csatMessage !== undefined) {
+    req.input('csatMessage', sql.NVarChar(sql.MAX), fields.csatMessage);
+    sets.push('automation_csat_message = @csatMessage');
+  }
+
+  if (sets.length === 0) return getAutomationSettings(companyId);
+
+  await req.query(`
+    UPDATE [dbo].[NileChat_Companies_byA]
+    SET ${sets.join(', ')}
+    WHERE id = @id
+  `);
+  return getAutomationSettings(companyId);
+}
+
 module.exports = {
   getCompanyById,
   getFirstCompany,
@@ -86,4 +146,6 @@ module.exports = {
   createCompany,
   updateCompany,
   getPrimaryAutoResolveDays,
+  getAutomationSettings,
+  updateAutomationSettings,
 };

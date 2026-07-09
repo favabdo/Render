@@ -43,7 +43,7 @@ async function findOrCreateConversation(contactNumber, contactName, inboxId = nu
         .input('contactId', sql.BigInt, contactId)
         .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_id = @contactId WHERE id = @id`);
     }
-    return convo.id;
+    return { id: convo.id, isNew: false };
   }
 
   const inserted = await pool
@@ -58,7 +58,7 @@ async function findOrCreateConversation(contactNumber, contactName, inboxId = nu
       VALUES (@contactNumber, @contactName, 'open', SYSUTCDATETIME(), @inboxId, @contactId)
     `);
 
-  return inserted.recordset[0].id;
+  return { id: inserted.recordset[0].id, isNew: true };
 }
 
 // بتحدّث الكونتاكت المرتبط بمحادثة معينة (تُستخدم لما الإيجنت يدمج رقم مع كونتاكت تاني)

@@ -3,6 +3,8 @@
 
 const conversationRepo = require('../repositories/conversation.repo');
 const inboxRepo = require('../repositories/inbox.repo');
+const companyRepo = require('../repositories/company.repo');
+const userRepo = require('../repositories/user.repo');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
 const logger = require('../utils/logger');
@@ -93,7 +95,7 @@ async function processIncomingMessages(value, io) {
     // أول ما رقم يبعت رسالة: لو عندنا كونتاكت مسجل بالرقم ده نستخدمه، ولو لأ ننشئ كونتاكت جديد تلقائيًا
     const matchedContact = await contactService.findOrCreateContactForIncoming(msg.from, contactName);
 
-    const conversationId = await conversationRepo.findOrCreateConversation(
+    const { id: conversationId, isNew } = await conversationRepo.findOrCreateConversation(
       msg.from,
       contactName,
       matchedInbox?.id || null,
@@ -116,6 +118,64 @@ async function processIncomingMessages(value, io) {
 
     if (io) {
       io.emit('new_message', { conversationId, message: saved });
+    }
+
+    // قواعد الأتمتة (Automation) اللي بتتفعّل أول ما محادثة جديدة تتفتح فعليًا —
+    // بتتنفذ مرة واحدة بس (أول رسالة فعلاً بتنشئ المحادثة)، مش مع كل رسالة جاية
+    // بعد كده على نفس المحادثة المفتوحة
+    if (isNew) {
+      applyAutomationForNewConversation(conversationId, matchedInbox?.id || null, msg.from, io).catch((err) => {
+        logger.error('❌ فشل تنفيذ قواعد الأتمتة على محادثة جديدة:', err.message);
+      });
+    }
+  }
+}
+
+// بتنفذ قاعدتين من قواعد الأتمتة على أي محادثة جديدة اتفتحت فعلاً:
+// 1) Auto-assign: لو مفعّلة، بتعين المحادثة فورًا للإيجنت المحدد في الإعدادات
+// 2) رسالة الترحيب: لو مفعّلة، بتبعت نص ثابت للعميل بمجرد ما المحادثة تتفتح
+async function applyAutomationForNewConversation(conversationId, inboxId, contactNumber, io) {
+  const settings = await companyRepo.getAutomationSettings();
+  if (!settings) return;
+
+  if (settings.auto_assign_enabled && settings.auto_assign_agent_id) {
+    try {
+      const agent = await userRepo.findUserById(settings.auto_assign_agent_id);
+      if (agent) {
+        const agentName = userRepo.resolveDisplayName(agent);
+        const [, systemMessage] = await Promise.all([
+          conversationRepo.assignConversation(conversationId, settings.auto_assign_agent_id),
+          conversationRepo.addSystemMessage(
+            conversationId,
+            `Auto-assigned to ${agentName} (Automation rule: Auto-assign new WhatsApp conversations)`
+          ),
+        ]);
+        const updated = await conversationRepo.getConversationById(conversationId);
+        if (io && updated) {
+          io.emit('conversation_updated', updated);
+          io.emit('new_message', { conversationId, message: systemMessage });
+        }
+      }
+    } catch (err) {
+      logger.error('❌ فشل الـ Auto-assign التلقائي للمحادثة الجديدة:', err.message);
+    }
+  }
+
+  if (settings.welcome_enabled && settings.welcome_message) {
+    try {
+      const message = await whatsappService.sendTextMessage(
+        contactNumber,
+        settings.welcome_message,
+        conversationId,
+        inboxId,
+        { id: null, name: 'Automation' }
+      );
+      await conversationRepo.touchConversation(conversationId);
+      if (io && message) {
+        io.emit('new_message', { conversationId, message });
+      }
+    } catch (err) {
+      logger.error('❌ فشل إرسال رسالة الترحيب التلقائية:', err.message);
     }
   }
 }
