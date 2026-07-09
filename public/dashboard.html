@@ -679,7 +679,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <i data-lucide="bell" style="width:20px;height:20px"></i>
             <span class="badge" id="sidebar-notifications-badge" style="display:none">0</span>
         </button>
-        <div class="sidebar-avatar" id="my-avatar" title="My Profile"></div>
+        <div class="sidebar-avatar" id="my-avatar" title="My Profile" onclick="navigateTo('profile')"></div>
     </div>
 </aside>
 
@@ -1110,28 +1110,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <h3>General</h3>
                 <div class="setting-row"><div><div class="setting-label">Account Name</div><div class="setting-desc">The name of your account</div></div><span style="font-size:14px;color:var(--text-secondary)">Nile Techno Support</span></div>
                 <div class="setting-row"><div><div class="setting-label">Site Language</div><div class="setting-desc">Used for the dashboard and conversations</div></div><span style="font-size:14px;color:var(--text-secondary)">English (en)</span></div>
-                <div class="setting-row"><div><div class="setting-label">Auto Resolve After Inactivity</div><div class="setting-desc">Days before an idle conversation is marked resolved</div></div><span style="font-size:14px;color:var(--text-secondary)">7 days</span></div>
-                <div class="setting-row"><div><div class="setting-label">Account ID</div><div class="setting-desc">Used when building integrations against the API</div></div><span style="font-size:13px;color:var(--primary);font-weight:600;background:rgba(108,92,231,0.08);padding:4px 10px;border-radius:8px">#1</span></div>
-            </div>
-            <div class="settings-section">
-                <h3>Profile</h3>
-                <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-                    <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light)" id="profile-avatar"></div>
-                    <div><div id="profile-display-name" style="font-weight:700;font-size:16px"></div><div id="profile-email" style="font-size:13px;color:var(--text-secondary)"></div></div>
-                </div>
-                <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Visible to customers instead of your email</div></div><span id="profile-display-name-row" style="font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:8px"></span></div>
-                <div class="setting-row"><div><div class="setting-label">Role</div><div class="setting-desc">Your permission level</div></div><span id="profile-role" style="font-size:14px;color:var(--primary);font-weight:600"></span></div>
-            </div>
-            <div class="settings-section">
-                <h3>Notifications</h3>
-                <div class="setting-row"><div><div class="setting-label">New Message Alerts</div><div class="setting-desc">Play sound for incoming messages</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-                <div class="setting-row"><div><div class="setting-label">Desktop Notifications</div><div class="setting-desc">Show browser notifications</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-                <div class="setting-row"><div><div class="setting-label">Email Digest</div><div class="setting-desc">Daily summary of conversations</div></div><button class="toggle" onclick="this.classList.toggle('on')"></button></div>
-            </div>
-            <div class="settings-section">
-                <h3>Security</h3>
-                <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-                <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+                <div class="setting-row"><div><div class="setting-label">Email Conversation Continuity</div><div class="setting-desc">Conversation continuity with emails is enabled for your account.</div></div><span style="font-size:13px;color:var(--success);font-weight:600;background:rgba(16,185,129,0.1);padding:4px 10px;border-radius:8px">Enabled</span></div>
+                <div class="setting-row"><div><div class="setting-label">Auto Resolve After Inactivity</div><div class="setting-desc">Number of days after a ticket should auto resolve if there is no activity</div></div><span style="font-size:14px;color:var(--text-secondary)">7 days</span></div>
+                <div class="setting-row"><div><div class="setting-label">Account ID</div><div class="setting-desc">This ID is required if you are building an API based integration</div></div><span style="font-size:13px;color:var(--primary);font-weight:600;background:rgba(108,92,231,0.08);padding:4px 10px;border-radius:8px">#1</span></div>
             </div>
         </div>
         </div>
@@ -1302,6 +1283,35 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         </div><!-- /settings-content-panel -->
     </div><!-- /settings-layout -->
 </div><!-- /page-settings -->
+
+<!-- PROFILE PAGE (خاص بكل إيجنت، منفصل عن Settings العامة بتاعة المنظمة) -->
+<div id="page-profile" class="page flex flex-1">
+    <div class="page-content" style="max-width:700px;margin:0 auto;padding:32px 24px;overflow-y:auto;width:100%">
+        <div class="settings-top-row"><div><h2>Profile</h2><div class="settings-top-desc">Your personal account details</div></div></div>
+
+        <div class="settings-section">
+            <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+                <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light)" id="profile-avatar"></div>
+                <div><div id="profile-display-name" style="font-weight:700;font-size:16px"></div><div id="profile-email" style="font-size:13px;color:var(--text-secondary)"></div></div>
+            </div>
+            <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Visible to customers instead of your email</div></div><span id="profile-display-name-row" style="font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:8px"></span></div>
+            <div class="setting-row"><div><div class="setting-label">Role</div><div class="setting-desc">Your permission level</div></div><span id="profile-role" style="font-size:14px;color:var(--primary);font-weight:600"></span></div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Notifications</h3>
+            <div class="setting-row"><div><div class="setting-label">New Message Alerts</div><div class="setting-desc">Play sound for incoming messages</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Desktop Notifications</div><div class="setting-desc">Show browser notifications</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Email Digest</div><div class="setting-desc">Daily summary of conversations</div></div><button class="toggle" onclick="this.classList.toggle('on')"></button></div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Security</h3>
+            <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
+            <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+        </div>
+    </div>
+</div>
 
 </div></div>
 <div id="toast-container"></div>
@@ -2018,6 +2028,20 @@ function isOwnerOrAdmin() {
     return AUTH_USER.role <= 1;
 }
 
+/* الـ Settings (Account Settings / Agents / Teams / Inboxes / ... إلخ) خاص بالمنظمة كلها،
+   فبيظهر بس لـ Owner (role 0) و Admin (role 1). الإيجنت العادي (role 2) مش بيشوفه خالص من السايدبار،
+   وده منفصل تمامًا عن صفحة الـ Profile الشخصية بتاعته (من الأڤاتار تحت). */
+function applyRoleVisibility() {
+    const canSeeSettings = isOwnerOrAdmin();
+    const settingsBtn = document.querySelector('.sidebar-btn[data-page="settings"]');
+    if (settingsBtn) settingsBtn.style.display = canSeeSettings ? '' : 'none';
+
+    // لو الإيجنت العادي كان واقف على صفحة settings (رابط قديم/مفتوحة قبل تحديث الرول)، رجّعه للشاتس
+    if (!canSeeSettings && currentPage === 'settings') {
+        navigateTo('chats');
+    }
+}
+
 async function loadAgentsSettings() {
     const tbody = document.getElementById('agents-settings-tbody');
     if (!tbody) return;
@@ -2388,6 +2412,7 @@ async function refreshCurrentUser() {
         AUTH_USER.role = data.role;
         localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
         renderProfileSection();
+        applyRoleVisibility();
         const avatarEl = document.getElementById('my-avatar');
         if (avatarEl) {
             avatarEl.title = AUTH_USER.display_name;
@@ -2428,12 +2453,14 @@ function navigateTo(page) {
     document.getElementById('settings-layout').classList.remove('mobile-section-open');
 
     document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`[data-page="${page}"]`).classList.add('active');
+    const navBtn = document.querySelector(`.sidebar-btn[data-page="${page}"]`);
+    if (navBtn) navBtn.classList.add('active');
 
     lucide.createIcons();
 
     if (page === 'contacts') loadContactsPage();
     if (page === 'scheduled-tasks') loadScheduledTasksPage();
+    if (page === 'profile') renderProfileSection();
 }
 
 /* ===== التنقل داخل صفحة Settings (الـ sub-sidebar الجانبية) ===== */
@@ -4181,6 +4208,7 @@ function init() {
     });
     document.getElementById('my-avatar').title = AUTH_USER.display_name || AUTH_USER.email;
     document.getElementById('my-avatar').innerHTML = customerAvatarHtml(AUTH_USER.display_name || AUTH_USER.email, 'agent-' + AUTH_USER.id, 36);
+    applyRoleVisibility();
     renderChatList('open', '');
     renderProfileSection();
     renderContacts();
