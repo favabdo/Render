@@ -115,24 +115,7 @@ async function listConversations() {
     LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
     ORDER BY c.last_message_at DESC
   `);
-  const conversations = result.recordset;
-  
-  // جلب الليبلز لكل محادثة
-  for (const conv of conversations) {
-    const labelsResult = await pool
-      .request()
-      .input('conversationId', sql.BigInt, conv.id)
-      .query(`
-        SELECT l.*
-        FROM [dbo].[NileChat_ConversationLabels_byA] cl
-        JOIN [dbo].[NileChat_Labels_byA] l ON l.id = cl.label_id
-        WHERE cl.conversation_id = @conversationId
-        ORDER BY cl.created_at ASC
-      `);
-    conv.labels = labelsResult.recordset || [];
-  }
-  
-  return conversations;
+  return result.recordset;
 }
 
 async function getConversationById(id) {

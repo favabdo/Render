@@ -358,19 +358,19 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .conv-label-add-btn{width:26px;height:26px;border-radius:8px;border:1.5px dashed var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .conv-label-add-btn:hover{border-color:var(--primary);color:var(--primary);background:rgba(108,92,231,0.06)}
 .conv-label-add-wrap{position:relative;display:inline-block;z-index:5}
-.label-popover{position:fixed;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:999999;display:none;overflow:visible;max-height:none}
-.label-popover.open{display:flex;flex-direction:column}
-.label-popover-list{max-height:280px;overflow-y:auto;padding:6px;flex-shrink:1;min-height:0}
+.label-popover{position:fixed;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:99999;display:none;overflow:hidden}
+.label-popover.open{display:block}
+.label-popover-list{max-height:220px;overflow-y:auto;padding:6px}
 .label-popover-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
 .label-popover-option{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .1s}
 .label-popover-option:hover{background:rgba(108,92,231,0.06)}
 .label-popover-check{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .label-popover-option.selected .label-popover-check{background:var(--primary);border-color:var(--primary);color:#fff}
 .label-popover-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.label-popover-footer{border-top:1px solid var(--border);padding:8px;flex-shrink:0}
-.label-popover-new-btn{width:100%;padding:8px;border-radius:8px;border:none;background:transparent;color:var(--primary);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.label-popover-footer{border-top:1px solid var(--border);padding:8px}
+.label-popover-new-btn{width:100%;padding:8px;border-radius:8px;border:none;background:transparent;color:var(--primary);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
 .label-popover-new-btn:hover{background:rgba(108,92,231,0.08)}
-.label-popover-new-form{padding:10px;display:none;flex-direction:column;gap:8px;flex-shrink:0}
+.label-popover-new-form{padding:10px;display:none;flex-direction:column;gap:8px}
 .label-popover-new-form.show{display:flex}
 .label-popover-new-form input{padding:8px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:12.5px;font-family:inherit;outline:none}
 .label-popover-new-form input:focus{border-color:var(--primary)}
