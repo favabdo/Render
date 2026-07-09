@@ -121,7 +121,7 @@ async function listConversations() {
   // عشان بعض نسخ SQL Server -زي الـ instance اللي شغالة عليه دلوقتي- مش بتدعمها)
   // وبعدين بنجمعهم في JS حسب conversation_id ونحطهم كـ labels_json نص جاهز للفرونت إند
   const labelsResult = await pool.request().query(`
-    SELECT cl.conversation_id, l.id, l.name, l.color
+    SELECT cl.conversation_id, l.id, l.name, l.color, l.description
     FROM [dbo].[NileChat_ConversationLabels_byA] cl
     JOIN [dbo].[NileChat_Labels_byA] l ON l.id = cl.label_id
     ORDER BY cl.conversation_id, cl.created_at ASC
@@ -130,7 +130,7 @@ async function listConversations() {
   for (const row of labelsResult.recordset) {
     const key = String(row.conversation_id);
     if (!labelsByConversation.has(key)) labelsByConversation.set(key, []);
-    labelsByConversation.get(key).push({ id: row.id, name: row.name, color: row.color });
+    labelsByConversation.get(key).push({ id: row.id, name: row.name, color: row.color, description: row.description });
   }
   for (const c of conversations) {
     c.labels_json = JSON.stringify(labelsByConversation.get(String(c.id)) || []);

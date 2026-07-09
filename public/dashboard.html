@@ -123,8 +123,11 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
 .chat-header-left{display:flex;align-items:center;gap:12px;min-width:0;flex-shrink:1}
 .chat-header-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-header-status{font-size:12px;color:var(--success);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chat-header-labels{display:none;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.chat-header-labels{display:none;align-items:center;gap:8px;padding:8px 20px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12.5px;border-right:3px solid transparent}
 .chat-header-labels.show{display:flex}
+.chat-header-labels .chlbl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.chat-header-labels .chlbl-name{font-weight:700;flex-shrink:0;white-space:nowrap}
+.chat-header-labels .chlbl-desc{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chat-header-actions{display:flex;gap:4px;flex-shrink:0}
 .ch-action-btn{width:38px;height:38px;border-radius:10px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .ch-action-btn:hover{background:var(--bg);color:var(--primary)}
@@ -3473,8 +3476,7 @@ async function loadLabelsForConversation(c) {
 
 function renderConvLabels(c) {
     const list = document.getElementById('conv-label-list');
-    // ملحوظة: الليبلز بقت بتتعرض في كارت المحادثة في القايمة الجانبية (renderChatList)
-    // بدل الشريط اللي كان فوق الشات، فمبقاش محتاجين نحدّث chat-header-labels هنا خالص
+    const headerBar = document.getElementById('chat-header-labels');
     if (!c.labels || c.labels.length === 0) {
         if (list) list.innerHTML = '<span class="conv-label-empty">No labels yet</span>';
     } else {
@@ -3485,6 +3487,23 @@ function renderConvLabels(c) {
                 <button class="conv-label-remove" onclick="removeLabelFromConv(${l.id})" title="Remove"><i data-lucide="x" style="width:9px;height:9px"></i></button>
             </span>
         `).join('');
+    }
+    // بار الوصف اللي بيظهر تحت اسم العميل فوق الشات، لكن بس لو الشات ده هو المفتوح دلوقتي
+    // (الليبل نفسه فاضل جوه كارت العميل، هنا بس بنعرض وصفه لو موجود)
+    if (headerBar) {
+        const activeLabel = c.labels && c.labels.length > 0 ? c.labels[0] : null;
+        if (activeLabel && activeLabel.description) {
+            headerBar.style.borderRightColor = activeLabel.color || '#6C5CE7';
+            headerBar.innerHTML = `
+                <span class="chlbl-dot" style="background:${activeLabel.color || '#6C5CE7'}"></span>
+                <span class="chlbl-name">${escapeHtml(activeLabel.name)}:</span>
+                <span class="chlbl-desc">${escapeHtml(activeLabel.description)}</span>
+            `;
+            headerBar.classList.add('show');
+        } else {
+            headerBar.innerHTML = '';
+            headerBar.classList.remove('show');
+        }
     }
     lucide.createIcons();
 }
@@ -3604,7 +3623,7 @@ async function selectLabelForConv(labelId) {
         c.labels = [];
     } else {
         const labelMeta = allLabels.find(l => Number(l.id) === Number(labelId));
-        c.labels = labelMeta ? [{ id: labelMeta.id, name: labelMeta.name, color: labelMeta.color }] : previousLabels;
+        c.labels = labelMeta ? [{ id: labelMeta.id, name: labelMeta.name, color: labelMeta.color, description: labelMeta.description }] : previousLabels;
     }
     renderConvLabels(c);
     renderLabelPopoverList();
