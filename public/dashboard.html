@@ -282,6 +282,14 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .agent-option.selected{background:rgba(108,92,231,0.1);color:var(--primary);font-weight:600}
 .agent-option-avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0}
 .agent-option-avatar img{width:100%;height:100%;object-fit:cover}
+/* مربع البحث اللي بيظهر فوق أي ليستة اختيار (إيجنت أو عميل) — بيسمح إنك تكتب
+   جزء من الاسم بدل ما تفضل تسكرول في ليستة طويلة */
+.agent-dropdown-search-wrap{position:relative;padding:8px;border-bottom:1px solid var(--border)}
+.agent-dropdown-search{width:100%;box-sizing:border-box;padding:8px 10px 8px 30px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);font-size:12.5px;font-family:inherit;outline:none;transition:border-color .2s;color:var(--text)}
+.agent-dropdown-search:focus{border-color:var(--primary)}
+.agent-dropdown-search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--text-secondary);width:14px;height:14px;pointer-events:none}
+.agent-dropdown-list{max-height:220px;overflow-y:auto}
+.agent-dropdown-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
 
 /* Previous Conversations */
 .prev-conv-list{display:flex;flex-direction:column;gap:6px}
@@ -295,19 +303,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .prev-conv-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
 .prev-conv-count{font-size:11px;color:var(--text-secondary)}
 .prev-conv-agent{font-size:11px;color:var(--primary);display:flex;align-items:center;gap:4px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-/* AI Section */
-.ai-generate-btn{width:100%;padding:12px;border-radius:10px;border:1.5px solid var(--primary);background:rgba(108,92,231,0.06);color:var(--primary);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
-.ai-generate-btn:hover{background:var(--primary);color:#fff}
-.ai-generate-btn:disabled{opacity:.6;cursor:not-allowed}
-.ai-result{margin-top:10px;padding:12px;border-radius:10px;background:rgba(108,92,231,0.06);border:1px solid var(--primary-light);font-size:13px;line-height:1.6;display:none}
-.ai-result.show{display:block;animation:fadeIn .3s}
-.ai-result-text{margin-bottom:10px}
-.use-reply-btn{padding:7px 16px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-.use-reply-btn:hover{background:var(--primary-dark);transform:translateY(-1px)}
-.ai-loading{display:none;text-align:center;padding:12px}
-.ai-loading.show{display:block}
-.ai-loading-spinner{width:24px;height:24px;border:2.5px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
 
 /* Info tab */
 .info-list{display:flex;flex-direction:column;gap:8px}
@@ -390,21 +385,12 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .page-btn{padding:10px 20px;border-radius:12px;border:none;background:var(--primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;transition:all .2s}
 .page-btn:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 15px rgba(108,92,231,0.3)}
 
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:28px}
-.stat-card{background:var(--surface);border-radius:16px;padding:20px;border:1px solid var(--border);transition:all .2s}
-.stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,0.08)}
-.stat-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.stat-card-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center}
-.stat-card-value{font-size:28px;font-weight:800;font-family:'Space Grotesk'}
-.stat-card-label{font-size:13px;color:var(--text-secondary);margin-top:2px}
-
 .chart-container{background:var(--surface);border-radius:16px;padding:24px;border:1px solid var(--border);margin-bottom:28px}
-.chart-bars{display:flex;align-items:flex-end;gap:12px;height:200px;padding-top:20px}
-.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px}
-.chart-bar{width:100%;border-radius:8px 8px 0 0;transition:height .6s ease;min-height:4px;position:relative}
-.chart-bar:hover{opacity:.85}
-.chart-bar-label{font-size:11px;color:var(--text-secondary);font-weight:600}
-.chart-bar-value{font-size:11px;font-weight:700;color:var(--text);position:absolute;top:-20px;left:50%;transform:translateX(-50%)}
+/* بلوك "قريبًا" بسيط بيتحط بدل أي صفحة لسه مش متفعّلة */
+.coming-soon-box{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:80px 20px;background:var(--surface);border:1px solid var(--border);border-radius:16px;color:var(--text-secondary)}
+.coming-soon-icon{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(108,92,231,0.35);margin-bottom:4px}
+.coming-soon-box h3{font-size:18px;font-weight:700;color:var(--text)}
+.coming-soon-box p{font-size:13.5px}
 
 .contacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .contact-card{background:var(--surface);border-radius:16px;padding:20px;border:1px solid var(--border);display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s}
@@ -420,18 +406,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .template-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;margin-bottom:10px}
 .template-card h4{font-size:15px;font-weight:700;margin-bottom:8px}
 .template-card p{font-size:13px;color:var(--text-secondary);line-height:1.5}
-
-.ai-messages{flex:1;overflow-y:auto;padding:20px 0}
-.ai-msg{display:flex;gap:12px;margin-bottom:20px}
-.ai-msg-avatar{width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.ai-msg.user .ai-msg-avatar{background:var(--primary);color:#fff;order:2}
-.ai-msg.bot .ai-msg-avatar{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff}
-.ai-msg-content{max-width:70%;padding:14px 18px;border-radius:16px;font-size:14px;line-height:1.6}
-.ai-msg.user .ai-msg-content{background:var(--primary);color:#fff;border-bottom-right-radius:4px;margin-left:auto}
-.ai-msg.bot .ai-msg-content{background:var(--surface);color:var(--text);border-bottom-left-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
-.ai-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
-.ai-sug-btn{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s;color:var(--text)}
-.ai-sug-btn:hover{border-color:var(--primary);color:var(--primary);background:rgba(108,92,231,0.06)}
 
 .settings-section{background:var(--surface);border-radius:16px;padding:24px;border:1px solid var(--border);margin-bottom:20px}
 .settings-section h3{font-size:16px;font-weight:700;margin-bottom:16px}
@@ -479,9 +453,17 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .settings-content-section.active{display:block}
 
 /* Settings page top action row */
-.settings-top-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.settings-top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.settings-top-row>div:first-child{min-width:0;flex:1 1 220px}
 .settings-top-row h2{font-size:22px;font-weight:700}
 .settings-top-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+.settings-top-row .page-btn{flex-shrink:0;white-space:nowrap}
+/* على الشاشات الصغيرة الزرار (زي Add Agent) كان بيتزنق جنب العنوان الطويل وينزاح بره
+   حدود الشاشة فيختفي فعليًا؛ هنا بنخليه ياخد سطر لوحده بعرض كامل عشان يفضل ظاهر وسهل الضغط عليه */
+@media (max-width:860px){
+    .settings-top-row{flex-direction:column;align-items:stretch}
+    .settings-top-row .page-btn{width:100%;justify-content:center}
+}
 
 /* Generic data table used across settings pages */
 .settings-table{width:100%;border-collapse:collapse;background:var(--surface);border-radius:14px;overflow:hidden;border:1px solid var(--border)}
@@ -809,7 +791,13 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                             <span id="agent-selected">Unassigned</span>
                             <i data-lucide="chevron-down" style="width:16px;height:16px;color:var(--text-secondary)"></i>
                         </button>
-                        <div class="agent-dropdown" id="agent-dropdown"></div>
+                        <div class="agent-dropdown" id="agent-dropdown">
+                            <div class="agent-dropdown-search-wrap">
+                                <i data-lucide="search" class="agent-dropdown-search-icon"></i>
+                                <input type="text" id="agent-dropdown-search" class="agent-dropdown-search" placeholder="اكتب اسم الإيجنت..." autocomplete="off" oninput="renderAgentDropdown(this.value)">
+                            </div>
+                            <div class="agent-dropdown-list" id="agent-dropdown-list"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -819,23 +807,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     <button class="add-btn" id="sched-add-btn" onclick="openScheduledTaskModal()">
                         <i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Adding scheduled tasks
                     </button>
-                </div>
-
-                <!-- AI Assistant -->
-                <div class="cp-section">
-                    <div class="cp-section-title">AI Assistant</div>
-                    <button class="ai-generate-btn" id="ai-generate-btn" onclick="aiGenerateReply()">
-                        <i data-lucide="sparkles" style="width:18px;height:18px"></i>
-                        Generate Reply
-                    </button>
-                    <div class="ai-loading" id="ai-loading"><div class="ai-loading-spinner"></div></div>
-                    <div class="ai-result" id="ai-result">
-                        <div class="ai-result-text" id="ai-result-text"></div>
-                        <button class="use-reply-btn" onclick="useAiReply()">
-                            <i data-lucide="arrow-right" style="width:14px;height:14px"></i>
-                            Use this reply
-                        </button>
-                    </div>
                 </div>
 
                 <!-- Previous Conversations -->
@@ -884,33 +855,14 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
 <!-- AI ASSISTANT PAGE -->
 <div id="page-ai" class="page flex flex-1">
-    <div class="page-content" style="display:flex;flex-direction:column;max-width:860px;margin:0 auto;width:100%;padding:32px 32px 0">
+    <div class="page-content">
         <div class="page-header">
-            <div style="display:flex;align-items:center;gap:14px">
-                <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(108,92,231,0.35);flex-shrink:0">
-                    <i data-lucide="sparkles" style="width:22px;height:22px;color:#fff"></i>
-                </div>
-                <div>
-                    <h2 style="margin:0;line-height:1.1">AI Assistant</h2>
-                    <div style="font-size:12px;color:var(--text-secondary);font-weight:500;margin-top:2px">Powered by NileChat AI</div>
-                </div>
-            </div>
-            <button class="page-btn" onclick="clearAiChat()"><i data-lucide="plus" style="width:16px;height:16px"></i> New Chat</button>
+            <h2>AI Assistant</h2>
         </div>
-        <div class="ai-suggestions">
-            <button class="ai-sug-btn" onclick="aiSuggest('Draft a professional response to an angry customer')">Draft response to angry customer</button>
-            <button class="ai-sug-btn" onclick="aiSuggest('Summarize all open conversations from today')">Summarize today's open chats</button>
-            <button class="ai-sug-btn" onclick="aiSuggest('Suggest ways to improve average response time')">Improve response time</button>
-        </div>
-        <div class="ai-messages" id="ai-messages">
-            <div class="ai-msg bot fade-in">
-                <div class="ai-msg-avatar"><i data-lucide="bot" style="width:20px;height:20px"></i></div>
-                <div class="ai-msg-content">Hello! I'm your AI assistant. I can help you draft responses, summarize conversations, and improve your support workflow. How can I help you today?</div>
-            </div>
-        </div>
-        <div class="chat-input-area" style="padding:16px 0 24px;background:transparent;border:none">
-            <textarea id="ai-input" rows="1" placeholder="Ask the AI assistant..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMessage()}" oninput="autoResize(this)"></textarea>
-            <button class="send-btn" onclick="sendAiMessage()" style="margin-left:10px"><i data-lucide="send" style="width:18px;height:18px"></i></button>
+        <div class="coming-soon-box">
+            <div class="coming-soon-icon"><i data-lucide="sparkles" style="width:26px;height:26px;color:#fff"></i></div>
+            <h3>Coming Soon</h3>
+            <p>هنفعّل مساعد الـ AI قريب.</p>
         </div>
     </div>
 </div>
@@ -1028,31 +980,11 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     <div class="page-content">
         <div class="page-header">
             <h2>Analytics</h2>
-            <div style="display:flex;gap:8px">
-                <button class="cl-filter-btn active">Today</button>
-                <button class="cl-filter-btn">This Week</button>
-                <button class="cl-filter-btn">This Month</button>
-            </div>
         </div>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="stat-card-header"><div class="stat-card-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="message-circle" style="width:22px;height:22px"></i></div><span style="font-size:12px;color:var(--success);font-weight:600">+12.5%</span></div><div class="stat-card-value">1,248</div><div class="stat-card-label">Total Conversations</div></div>
-            <div class="stat-card"><div class="stat-card-header"><div class="stat-card-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="clock" style="width:22px;height:22px"></i></div><span style="font-size:12px;color:var(--success);font-weight:600">-8.3%</span></div><div class="stat-card-value">2.4m</div><div class="stat-card-label">Avg Response Time</div></div>
-            <div class="stat-card"><div class="stat-card-header"><div class="stat-card-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="star" style="width:22px;height:22px"></i></div><span style="font-size:12px;color:var(--success);font-weight:600">+3.1%</span></div><div class="stat-card-value">94.2%</div><div class="stat-card-label">Satisfaction Rate</div></div>
-            <div class="stat-card"><div class="stat-card-header"><div class="stat-card-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="users" style="width:22px;height:22px"></i></div><span style="font-size:12px;color:var(--text-secondary);font-weight:600">Online</span></div><div class="stat-card-value">8</div><div class="stat-card-label">Active Agents</div></div>
-        </div>
-        <div class="chart-container">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-                <h3 style="font-size:16px;font-weight:700">Conversations Overview</h3>
-                <div style="display:flex;gap:16px;font-size:12px">
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--primary)"></span>Open</span>
-                    <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--secondary)"></span>Resolved</span>
-                </div>
-            </div>
-            <div class="chart-bars" id="chart-bars"></div>
-        </div>
-        <div class="chart-container">
-            <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Recent Activity</h3>
-            <div id="activity-list"></div>
+        <div class="coming-soon-box">
+            <div class="coming-soon-icon"><i data-lucide="bar-chart-3" style="width:26px;height:26px;color:#fff"></i></div>
+            <h3>Coming Soon</h3>
+            <p>صفحة الـ Analytics هتتفعّل قريب.</p>
         </div>
     </div>
 </div>
@@ -2003,16 +1935,11 @@ function initSocket() {
    - agents            -> حقيقية فعليًا من GET /api/inboxes-available-agents (شوف loadAgentsFromAPI)
    - savedReplies      -> حقيقية فعليًا من GET /api/canned-responses (شوف loadCannedResponsesFromAPI)
    - problemCategories -> حقيقية فعليًا من GET /api/resolve-categories (شوف loadResolveCategoriesFromAPI)
-   - contactsData      -> حقيقية فعليًا من GET /api/contacts (شوف loadContactsPage)
-   لسه مفيش endpoints للتقارير دي، فهتفضل فاضية لحد ما تتعمل:
-   - chartData         -> GET /api/reports/weekly (لسه مفيش route)
-   - activityData      -> GET /api/activity (لسه مفيش route) */
+   - contactsData      -> حقيقية فعليًا من GET /api/contacts (شوف loadContactsPage) */
 let agents = []; // هتتعبى فعليًا من /api/inboxes-available-agents جوه loadAgentsFromAPI()
 let savedReplies = []; // هتتعبى فعليًا من /api/canned-responses جوه loadCannedResponsesFromAPI()
 let problemCategories = []; // هتتعبى فعليًا من /api/resolve-categories جوه loadResolveCategoriesFromAPI()
 let contactsData = []; // هتتعبى فعليًا من /api/contacts جوه loadContactsPage()
-const chartData = [];
-const activityData = [];
 
 // بيحول شكل الرد الجاي من السيرفر (label, message_text) لنفس الشكل اللي الواجهة مستخدمة بيه من زمان (label, text)
 function mapCannedResponse(r) {
@@ -2471,7 +2398,6 @@ let scheduledTasks = [];
 let schedActiveTab = 'open';
 let schedFilterAgent = '';
 let schedFilterCustomer = '';
-let generatedReply = '';
 
 /* ===== التنقل ===== */
 function navigateTo(page) {
@@ -2616,7 +2542,6 @@ function selectChat(id) {
         renderPhones(c);
         if (!c._contactLoaded) loadContactDetails(c);
         renderDevices(c);
-        hideAiResult();
         hideMergeContact();
         refreshTypingIndicator(c.id);
 
@@ -3060,20 +2985,44 @@ function updateAssignUI(c) {
     renderAgentDropdown();
 }
 
-/* ===== تعيين وكيل ===== */
-function renderAgentDropdown() {
-    const dd = document.getElementById('agent-dropdown');
-    dd.innerHTML = agents.map((a, i) => `
+/* ===== تعيين وكيل =====
+   بيدعم الكتابة في مربع بحث فوق الليستة عشان لو الإيجنتس كتير، تكتب جزء
+   من الاسم (مثلاً "عين") فتظهرلك الليستة مفلترة على طول بدل ما تسكرول */
+function renderAgentDropdown(filter) {
+    const list = document.getElementById('agent-dropdown-list');
+    if (!list) return;
+    const q = (filter !== undefined ? filter : (document.getElementById('agent-dropdown-search')?.value || '')).trim().toLowerCase();
+    const filtered = q ? agents.filter(a => (a.name || '').toLowerCase().includes(q)) : agents;
+    if (!filtered.length) {
+        list.innerHTML = '<div class="agent-dropdown-empty">لا يوجد إيجنتس مطابقين</div>';
+        return;
+    }
+    list.innerHTML = filtered.map((a) => {
+        const i = agents.indexOf(a);
+        return `
         <div class="agent-option ${i === selectedAgentIdx ? 'selected' : ''}" onclick="assignAgent(${i})">
             <div class="agent-option-avatar">${customerAvatarHtml(a.name, a.avatar, 32)}</div>
             <div>
-                <div style="font-weight:600;font-size:13px">${a.name}</div>
-                <div style="font-size:11px;color:var(--text-secondary)">${a.role}</div>
+                <div style="font-weight:600;font-size:13px">${escapeHtml(a.name)}</div>
+                <div style="font-size:11px;color:var(--text-secondary)">${escapeHtml(a.role)}</div>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+    lucide.createIcons();
 }
-function toggleAgentDropdown() { document.getElementById('agent-dropdown').classList.toggle('open'); }
+function toggleAgentDropdown() {
+    const dd = document.getElementById('agent-dropdown');
+    const opening = !dd.classList.contains('open');
+    dd.classList.toggle('open');
+    if (opening) {
+        const search = document.getElementById('agent-dropdown-search');
+        if (search) {
+            search.value = '';
+            renderAgentDropdown('');
+            setTimeout(() => search.focus(), 30);
+        }
+    }
+}
 async function assignAgent(idx) {
     const c = conversations.find(x => x.id === selectedChatId);
     if (!c) return;
@@ -3135,59 +3084,6 @@ function openPrevConversation(conversationId) {
     }
     navigateTo('chats');
     setTimeout(() => selectChat(target.id), 50);
-}
-
-/* ===== AI Generate Reply ===== */
-function getLastCustomerMsg(c) {
-    for (let i = c.messages.length - 1; i >= 0; i--) {
-        if (c.messages[i].from === 'customer') return c.messages[i].text;
-    }
-    return null;
-}
-
-function hideAiResult() {
-    document.getElementById('ai-result').classList.remove('show');
-    document.getElementById('ai-loading').classList.remove('show');
-    document.getElementById('ai-generate-btn').disabled = false;
-    generatedReply = '';
-}
-
-function aiGenerateReply() {
-    const c = conversations.find(x => x.id === selectedChatId);
-    if (!c) return;
-    const lastMsg = getLastCustomerMsg(c);
-    if (!lastMsg) { showToast('No customer message to reply to', 'error'); return; }
-
-    hideAiResult();
-    document.getElementById('ai-loading').classList.add('show');
-    document.getElementById('ai-generate-btn').disabled = true;
-
-    setTimeout(() => {
-        document.getElementById('ai-loading').classList.remove('show');
-        document.getElementById('ai-generate-btn').disabled = false;
-
-        /* محاكاة رد AI مبني على آخر رسالة */
-        const replies = [
-            `شكراً لتواصلك معنا بخصوص: "${lastMsg}". نود إفادتك بأننا نعمل على حل المشكلة حالياً. هل يمكنك تزويدنا بمزيد من التفاصيل حتى نتمكن من مساعدتك بشكل أسرع؟`,
-            `مرحباً، بالنسبة لاستفسارك عن: "${lastMsg}" — نرجو منك التأكد من تحديث التطبيق لأحدث إصدار ثم إعادة المحاولة. إذا استمرت المشكلة سنقوم بتحويلك للفني المختص.`,
-            `نشكرك على تواصلك. بخصوص: "${lastMsg}" — تم رفع تذكرتك وسيتم الرد عليك خلال 15 دقيقة. شكراً لصبرك.`
-        ];
-        generatedReply = replies[Math.floor(Math.random() * replies.length)];
-        document.getElementById('ai-result-text').textContent = generatedReply;
-        document.getElementById('ai-result').classList.add('show');
-        lucide.createIcons();
-    }, 1800);
-}
-
-function useAiReply() {
-    if (!generatedReply) return;
-    const input = document.getElementById('msg-input');
-    input.value = generatedReply;
-    input.focus();
-    autoResize(input);
-    /* سكرول لبوكس الإدخال */
-    input.scrollIntoView({behavior:'smooth', block:'center'});
-    showToast('Reply inserted — review and send', 'info');
 }
 
 /* ===== أرقام الهاتف الحقيقية المرتبطة بالكونتاكت =====
@@ -3573,6 +3469,9 @@ function formatSchedDate(value) {
 
 /* ----- إضافة تاسك (من كارت العميل أو من صفحة Scheduled Tasks) ----- */
 let schedModalMode = 'card'; // 'card' | 'page'
+let schedModalContacts = [];
+let schedModalSelectedContactId = '';
+let schedModalSelectedContactName = '';
 
 function openScheduledTaskModal() {
     const c = conversations.find(x => x.id === selectedChatId);
@@ -3580,7 +3479,7 @@ function openScheduledTaskModal() {
 
     schedModalMode = 'card';
     document.getElementById('sched-modal-customer').style.display = '';
-    document.getElementById('sched-modal-customer-select').style.display = 'none';
+    document.getElementById('sched-modal-customer-picker').style.display = 'none';
     document.getElementById('sched-modal-customer').textContent = c.name || '-';
     document.getElementById('sched-modal-agent').textContent = AUTH_USER.display_name || AUTH_USER.email;
     document.getElementById('sched-modal-today').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -3598,9 +3497,15 @@ function openScheduledTaskModal() {
 async function openScheduledTaskModalFromPage() {
     schedModalMode = 'page';
     document.getElementById('sched-modal-customer').style.display = 'none';
-    const select = document.getElementById('sched-modal-customer-select');
-    select.style.display = '';
-    select.innerHTML = '<option value="">جاري تحميل العملاء...</option>';
+    const picker = document.getElementById('sched-modal-customer-picker');
+    picker.style.display = '';
+    schedModalSelectedContactId = '';
+    schedModalSelectedContactName = '';
+    schedModalContacts = [];
+    const search = document.getElementById('sched-modal-customer-search');
+    search.value = '';
+    search.placeholder = 'جاري تحميل العملاء...';
+    document.getElementById('sched-modal-customer-dropdown-list').innerHTML = '';
 
     document.getElementById('sched-modal-agent').textContent = AUTH_USER.display_name || AUTH_USER.email;
     document.getElementById('sched-modal-today').textContent = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -3615,14 +3520,55 @@ async function openScheduledTaskModalFromPage() {
     try {
         const res = await apiFetch('/api/contacts');
         if (!res.ok) throw new Error('فشل تحميل العملاء');
-        const contacts = await res.json();
-        select.innerHTML = '<option value="">اختر عميل...</option>' +
-            contacts.map(c => `<option value="${c.id}">${escapeHtml(c.name || ('عميل #' + c.id))}</option>`).join('');
+        schedModalContacts = await res.json();
+        search.placeholder = 'اكتب اسم العميل...';
     } catch (err) {
         console.error('[API] openScheduledTaskModalFromPage error:', err);
-        select.innerHTML = '<option value="">تعذر تحميل العملاء</option>';
+        search.placeholder = 'تعذر تحميل العملاء';
     }
 }
+
+/* بحث/اختيار العميل: بتكتب جزء من الاسم فتظهرلك ليستة مفلترة، تدوس على واحد فيهم يتحدد.
+   نفس فكرة مربع بحث "Assign to Agent" فوق */
+function renderSchedCustomerDropdown(filter) {
+    const list = document.getElementById('sched-modal-customer-dropdown-list');
+    if (!list) return;
+    const q = (filter || '').trim().toLowerCase();
+    const filtered = q ? schedModalContacts.filter(c => (c.name || '').toLowerCase().includes(q)) : schedModalContacts;
+    if (!filtered.length) {
+        list.innerHTML = `<div class="agent-dropdown-empty">${schedModalContacts.length ? 'مفيش عملاء مطابقين' : 'جاري التحميل...'}</div>`;
+        return;
+    }
+    list.innerHTML = filtered.map(c => `
+        <div class="agent-option" onclick="selectSchedCustomer('${c.id}')">
+            <div class="agent-option-avatar">${customerAvatarHtml(c.name || ('عميل #' + c.id), 'contact-' + c.id, 32)}</div>
+            <div style="font-weight:600;font-size:13px">${escapeHtml(c.name || ('عميل #' + c.id))}</div>
+        </div>
+    `).join('');
+}
+function openSchedCustomerDropdown() {
+    renderSchedCustomerDropdown(document.getElementById('sched-modal-customer-search').value);
+    document.getElementById('sched-modal-customer-dropdown').classList.add('open');
+}
+function filterSchedCustomerDropdown(v) {
+    schedModalSelectedContactId = '';
+    renderSchedCustomerDropdown(v);
+    document.getElementById('sched-modal-customer-dropdown').classList.add('open');
+}
+function selectSchedCustomer(id) {
+    const c = schedModalContacts.find(x => String(x.id) === String(id));
+    if (!c) return;
+    schedModalSelectedContactId = c.id;
+    schedModalSelectedContactName = c.name || ('عميل #' + c.id);
+    document.getElementById('sched-modal-customer-search').value = schedModalSelectedContactName;
+    document.getElementById('sched-modal-customer-dropdown').classList.remove('open');
+}
+document.addEventListener('click', e => {
+    if (!e.target.closest('#sched-modal-customer-picker')) {
+        const dd = document.getElementById('sched-modal-customer-dropdown');
+        if (dd) dd.classList.remove('open');
+    }
+});
 
 function closeScheduledTaskModal(e) {
     if (e && e.target !== document.getElementById('sched-task-overlay')) return;
@@ -3633,9 +3579,8 @@ async function submitScheduledTask() {
     let contactId, customerName;
 
     if (schedModalMode === 'page') {
-        const select = document.getElementById('sched-modal-customer-select');
-        contactId = select.value;
-        customerName = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : '';
+        contactId = schedModalSelectedContactId;
+        customerName = schedModalSelectedContactName;
         if (!contactId) return showToast('اختر العميل الأول', 'error');
     } else {
         const c = conversations.find(x => x.id === selectedChatId);
@@ -4207,60 +4152,6 @@ function syncResolveCategories() {
     `).join('');
 }
 
-function renderChart() {
-    const container = document.getElementById('chart-bars');
-    if (chartData.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;width:100%">لا توجد بيانات تقارير لعرضها</div>';
-        return;
-    }
-    const maxVal = Math.max(...chartData.map(d => Math.max(d.open, d.resolved)));
-    container.innerHTML = chartData.map(d => {
-        const oH = (d.open / maxVal) * 170, rH = (d.resolved / maxVal) * 170;
-        return `<div class="chart-bar-col"><div style="display:flex;gap:4px;align-items:flex-end;height:180px">
-            <div class="chart-bar" style="height:${oH}px;background:var(--primary);flex:1;position:relative"><div class="chart-bar-value">${d.open}</div></div>
-            <div class="chart-bar" style="height:${rH}px;background:var(--secondary);flex:1;position:relative"><div class="chart-bar-value">${d.resolved}</div></div>
-        </div><div class="chart-bar-label">${d.label}</div></div>`;
-    }).join('');
-}
-
-function renderActivity() {
-    const list = document.getElementById('activity-list');
-    if (activityData.length === 0) {
-        list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px">لا يوجد نشاط لعرضه</div>';
-        return;
-    }
-    list.innerHTML = activityData.map(a => `
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
-            <div style="width:36px;height:36px;border-radius:10px;background:${a.color}15;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="${a.icon}" style="width:18px;height:18px;color:${a.color}"></i></div>
-            <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.text}</div><div style="font-size:11px;color:var(--text-secondary)">${a.time}</div></div>
-        </div>
-    `).join('');
-}
-
-function sendAiMessage() {
-    const input = document.getElementById('ai-input');
-    const text = input.value.trim();
-    if (!text) return;
-    const container = document.getElementById('ai-messages');
-    container.innerHTML += `<div class="ai-msg user fade-in"><div class="ai-msg-avatar"><i data-lucide="user" style="width:18px;height:18px"></i></div><div class="ai-msg-content">${text}</div></div>`;
-    input.value = ''; lucide.createIcons(); container.scrollTop = container.scrollHeight;
-    setTimeout(() => {
-        const replies = [
-            'Based on the conversation history, I suggest responding with an empathetic tone acknowledging the customer\'s frustration, followed by clear steps to resolve their issue.',
-            'I\'ve analyzed the pattern in recent conversations. Most issues are related to device connectivity. Consider creating a troubleshooting guide template.',
-            'Looking at the customer\'s history, I recommend assigning a dedicated agent for better continuity and personalization.',
-            'Response times have improved by 15% this week. Here are some suggestions to maintain this momentum...'
-        ];
-        container.innerHTML += `<div class="ai-msg bot fade-in"><div class="ai-msg-avatar"><i data-lucide="bot" style="width:18px;height:18px"></i></div><div class="ai-msg-content">${replies[Math.floor(Math.random()*replies.length)]}</div></div>`;
-        lucide.createIcons(); container.scrollTop = container.scrollHeight;
-    }, 1200);
-}
-function aiSuggest(text) { document.getElementById('ai-input').value = text; sendAiMessage(); }
-function clearAiChat() {
-    document.getElementById('ai-messages').innerHTML = `<div class="ai-msg bot fade-in"><div class="ai-msg-avatar"><i data-lucide="bot" style="width:20px;height:20px"></i></div><div class="ai-msg-content">Hello! I'm your AI assistant. How can I help you today?</div></div>`;
-    lucide.createIcons();
-}
-
 function showToast(msg, type = 'success') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -4282,8 +4173,6 @@ function init() {
     renderChatList('open', '');
     renderProfileSection();
     renderContacts();
-    renderChart();
-    renderActivity();
 
     // جيب المحادثات الحقيقية من الباك إند + فعّل الـ realtime
     // (اتحطوا قبل lucide.createIcons() عمدًا: لو مكتبة الأيقونات فشلت تتحمل من الـ CDN،
@@ -4892,9 +4781,12 @@ async function iwDeleteInbox(id) {
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">Customer</div>
                 <div class="st-modal-readonly-value" id="sched-modal-customer">-</div>
-                <select class="iw-input" id="sched-modal-customer-select" style="display:none;margin-top:4px;padding:6px 8px;font-size:12.5px">
-                    <option value="">اختر عميل...</option>
-                </select>
+                <div class="agent-select-wrap" id="sched-modal-customer-picker" style="display:none;margin-top:4px">
+                    <input type="text" class="iw-input" id="sched-modal-customer-search" placeholder="اكتب اسم العميل..." autocomplete="off" style="padding:6px 8px;font-size:12.5px" oninput="filterSchedCustomerDropdown(this.value)" onfocus="openSchedCustomerDropdown()">
+                    <div class="agent-dropdown" id="sched-modal-customer-dropdown">
+                        <div class="agent-dropdown-list" id="sched-modal-customer-dropdown-list"></div>
+                    </div>
+                </div>
             </div>
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">Agent</div>
