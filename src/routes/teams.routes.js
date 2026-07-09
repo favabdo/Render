@@ -17,4 +17,9 @@ router.delete('/api/teams/:id', requireAdmin, asyncHandler(teamController.remove
 router.get('/api/teams/:id/members', asyncHandler(teamController.getMembers));
 router.post('/api/teams/:id/members', requireAdmin, asyncHandler(teamController.setMembers));
 
+// ربط/فك ربط تيم بمحادثة معينة (نفس فكرة labels بالظبط)
+router.get('/api/conversations/:id/teams', asyncHandler(teamController.listForConversation));
+router.post('/api/conversations/:id/teams', asyncHandler(teamController.addToConversation));
+router.delete('/api/conversations/:id/teams/:teamId', asyncHandler(teamController.removeFromConversation));
+
 module.exports = router;

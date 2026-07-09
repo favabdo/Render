@@ -111,6 +111,53 @@ async function setMembersForTeam(teamId, userIds) {
   return getMembersForTeam(teamId);
 }
 
+// كل التيمز المتحطة على محادثة معينة (نفس فكرة listLabelsForConversation بالظبط)
+async function listTeamsForConversation(conversationId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .query(`
+      SELECT t.*
+      FROM [dbo].[NileChat_ConversationTeams_byA] ct
+      JOIN [dbo].[NileChat_Teams_byA] t ON t.id = ct.team_id
+      WHERE ct.conversation_id = @conversationId
+      ORDER BY ct.created_at ASC
+    `);
+  return result.recordset;
+}
+
+// بتحط تيم على محادثة (بتتجاهل بهدوء لو أصلاً متحط، بفضل UNIQUE constraint)
+async function addTeamToConversation(conversationId, teamId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .input('teamId', sql.BigInt, teamId)
+    .query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM [dbo].[NileChat_ConversationTeams_byA]
+        WHERE conversation_id = @conversationId AND team_id = @teamId
+      )
+      INSERT INTO [dbo].[NileChat_ConversationTeams_byA] (conversation_id, team_id)
+      VALUES (@conversationId, @teamId)
+    `);
+  return listTeamsForConversation(conversationId);
+}
+
+async function removeTeamFromConversation(conversationId, teamId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .input('teamId', sql.BigInt, teamId)
+    .query(`
+      DELETE FROM [dbo].[NileChat_ConversationTeams_byA]
+      WHERE conversation_id = @conversationId AND team_id = @teamId
+    `);
+  return listTeamsForConversation(conversationId);
+}
+
 module.exports = {
   listTeams,
   getTeamById,
@@ -119,4 +166,7 @@ module.exports = {
   deleteTeam,
   getMembersForTeam,
   setMembersForTeam,
+  listTeamsForConversation,
+  addTeamToConversation,
+  removeTeamFromConversation,
 };

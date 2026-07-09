@@ -136,6 +136,24 @@ async function listConversations() {
     c.labels_json = JSON.stringify(labelsByConversation.get(String(c.id)) || []);
   }
 
+  // نفس فكرة الليبلز بالظبط بس للتيمز — استعلام منفصل وتجميع في JS
+  // عشان نحط teams_json جاهز للفرونت إند (يستخدم نفس parseLabelsJson هناك)
+  const teamsResult = await pool.request().query(`
+    SELECT ct.conversation_id, t.id, t.name, t.icon, t.color
+    FROM [dbo].[NileChat_ConversationTeams_byA] ct
+    JOIN [dbo].[NileChat_Teams_byA] t ON t.id = ct.team_id
+    ORDER BY ct.conversation_id, ct.created_at ASC
+  `);
+  const teamsByConversation = new Map();
+  for (const row of teamsResult.recordset) {
+    const key = String(row.conversation_id);
+    if (!teamsByConversation.has(key)) teamsByConversation.set(key, []);
+    teamsByConversation.get(key).push({ id: row.id, name: row.name, icon: row.icon, color: row.color });
+  }
+  for (const c of conversations) {
+    c.teams_json = JSON.stringify(teamsByConversation.get(String(c.id)) || []);
+  }
+
   return conversations;
 }
 

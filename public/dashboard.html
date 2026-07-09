@@ -932,6 +932,29 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     </div>
                 </div>
 
+                <!-- Teams -->
+                <div class="cp-section" id="cp-section-teams">
+                    <div class="cp-section-header" onclick="toggleCpSection('cp-section-teams')">
+                        <div class="cp-section-title">Teams</div>
+                        <div class="cp-section-header-right">
+                            <i data-lucide="chevron-down" class="cp-collapse-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="cp-section-body">
+                        <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+                            <div class="conv-label-list" id="conv-team-list"></div>
+                            <div class="conv-label-add-wrap" id="conv-team-add-wrap">
+                                <button class="conv-label-add-btn" id="conv-team-add-btn" onclick="toggleTeamPopover(event)" title="Add team">
+                                    <i data-lucide="plus" style="width:14px;height:14px"></i>
+                                </button>
+                                <div class="label-popover" id="team-popover">
+                                    <div class="label-popover-list" id="team-popover-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Previous Conversations -->
                 <div class="cp-section" id="cp-section-prevconv">
                     <div class="cp-section-header" onclick="toggleCpSection('cp-section-prevconv')">
@@ -1632,6 +1655,8 @@ function mapApiConversation(row) {
         prevConvs: [],
         labels: parseLabelsJson(row.labels_json),
         _labelsLoaded: true,
+        teams: parseLabelsJson(row.teams_json),
+        _teamsLoaded: true,
         _messagesLoaded: false,
         _contactLoaded: false,
         // بنخزن الخام (raw) بتاع آخر رسالة عشان نقدر نكتشف "فيه رسالة جديدة"
@@ -2131,6 +2156,8 @@ function initSocket() {
             if (document.getElementById('settings-sec-teams')?.classList.contains('active')) {
                 renderTeamsGrid();
             }
+            const teamPop = document.getElementById('team-popover');
+            if (teamPop && teamPop.classList.contains('open')) renderTeamPopoverList();
         });
 
         /* لما أي إيجنت يحط/يشيل ليبل على محادثة، بنحدّث نفس المحادثة عند كل
@@ -2143,6 +2170,19 @@ function initSocket() {
             c._labelsLoaded = true;
             if (selectedChatId === c.id) renderConvLabels(c);
             // نحدّث كارت المحادثة في القايمة الجانبية عشان شيب الليبل الجديد يظهر فورًا
+            renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+        });
+
+        /* نفس فكرة conversation_labels_updated بالظبط بس للتيمز — أي إيجنت يحط/يشيل
+           تيم على محادثة، بنحدّثها فورًا عند كل الإيجنتس المتصلين من غير ما يحتاجوا ريفريش */
+        socket.on('conversation_teams_updated', ({ conversationId, teams } = {}) => {
+            if (!conversationId) return;
+            const c = conversations.find(x => String(x.id) === String(conversationId));
+            if (!c) return;
+            c.teams = teams || [];
+            c._teamsLoaded = true;
+            if (selectedChatId === c.id) renderConvTeams(c);
+            // نحدّث كارت المحادثة في القايمة الجانبية عشان شيب التيم الجديد يظهر فورًا جنب الليبل
             renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
         });
 
@@ -2828,12 +2868,18 @@ function renderChatList(filter, search) {
                     <i data-lucide="user-round" style="width:11px;height:11px"></i>
                     ${c.assignedTo ? escapeHtml(c.assignedTo) : 'Unassigned'}
                 </div>
-                ${c.labels && c.labels.length > 0 ? `
+                ${(c.labels && c.labels.length > 0) || (c.teams && c.teams.length > 0) ? `
                 <div class="chat-item-labels">
-                    ${c.labels.map(l => `
+                    ${(c.labels || []).map(l => `
                         <span class="chat-item-label-chip" style="background:${hexToRgba(l.color, 0.12)};color:${l.color || '#6C5CE7'}">
                             <span class="chat-item-label-dot" style="background:${l.color || '#6C5CE7'}"></span>
                             ${escapeHtml(l.name)}
+                        </span>
+                    `).join('')}
+                    ${(c.teams || []).map(t => `
+                        <span class="chat-item-label-chip" style="background:${hexToRgba(t.color, 0.12)};color:${t.color || '#6C5CE7'}">
+                            <span class="chat-item-label-dot" style="background:${t.color || '#6C5CE7'}"></span>
+                            ${escapeHtml(t.name)}
                         </span>
                     `).join('')}
                 </div>` : ''}
@@ -2897,6 +2943,8 @@ function selectChat(id) {
         renderPrevConvs(c);
         renderConvLabels(c);
         if (!c._labelsLoaded) loadLabelsForConversation(c);
+        renderConvTeams(c);
+        if (!c._teamsLoaded) loadTeamsForConversation(c);
         renderPhones(c);
         if (!c._contactLoaded) loadContactDetails(c);
         renderDevices(c);
@@ -3590,9 +3638,13 @@ function positionLabelPopover(anchorBtn) {
 }
 
 document.addEventListener('click', e => {
-    if (!e.target.closest('.conv-label-add-wrap')) {
+    if (!e.target.closest('#conv-label-add-btn') && !e.target.closest('#label-popover')) {
         const pop = document.getElementById('label-popover');
         if (pop) pop.classList.remove('open');
+    }
+    if (!e.target.closest('#conv-team-add-wrap')) {
+        const teamPop = document.getElementById('team-popover');
+        if (teamPop) teamPop.classList.remove('open');
     }
 });
 // لو المستخدم عمل سكرول جوه لوحة العميل والپوب أب مفتوح، بنقفله بدل ما يفضل معلق
@@ -3600,12 +3652,17 @@ document.addEventListener('click', e => {
 window.addEventListener('scroll', () => {
     const pop = document.getElementById('label-popover');
     if (pop && pop.classList.contains('open')) pop.classList.remove('open');
+    const teamPop = document.getElementById('team-popover');
+    if (teamPop && teamPop.classList.contains('open')) teamPop.classList.remove('open');
 }, true);
 // لو المستخدم غيّر حجم الشاشة والپوب أب مفتوح، بنعيد حساب مكانه/طوله عشان يفضل جوه الشاشة
 window.addEventListener('resize', () => {
     const pop = document.getElementById('label-popover');
     const btn = document.getElementById('conv-label-add-btn');
     if (pop && pop.classList.contains('open') && btn) positionLabelPopover(btn);
+    const teamPop = document.getElementById('team-popover');
+    const teamBtn = document.getElementById('conv-team-add-btn');
+    if (teamPop && teamPop.classList.contains('open') && teamBtn) positionTeamPopover(teamBtn);
 });
 
 function renderLabelPopoverList() {
@@ -3696,6 +3753,184 @@ async function removeLabelFromConv(labelId) {
     } catch (err) {
         console.error('[API] removeLabelFromConv error:', err);
         showToast(err.message || 'حصل خطأ', 'error');
+    }
+}
+
+/* ============================================================
+   TEAMS على المحادثة — نفس فكرة الليبلز بالظبط (نفس اللوجيك، نفس
+   طريقة العرض، تحديث optimistic فوري في الواجهة الأول وبعدين تسجيل
+   في الخلفية)، بس هنا بنستخدم TEAMS_CACHE (متعبّاة أصلاً من صفحة
+   الإعدادات) بدل ما نعمل قايمة تانية منفصلة
+============================================================ */
+
+/* التيمز المتحطة على المحادثة المفتوحة حاليًا */
+async function loadTeamsForConversation(c) {
+    try {
+        const res = await apiFetch(`/api/conversations/${c.id}/teams`);
+        const rows = await res.json();
+        c.teams = rows;
+        c._teamsLoaded = true;
+        if (selectedChatId === c.id) renderConvTeams(c);
+    } catch (err) {
+        console.error('[API] loadTeamsForConversation error:', err);
+    }
+}
+
+function renderConvTeams(c) {
+    const list = document.getElementById('conv-team-list');
+    if (!c.teams || c.teams.length === 0) {
+        if (list) list.innerHTML = '<span class="conv-label-empty">No teams yet</span>';
+    } else {
+        if (list) list.innerHTML = c.teams.map(t => `
+            <span class="conv-label-chip" style="background:${hexToRgba(t.color, 0.12)};color:${t.color || '#6C5CE7'}">
+                <span class="conv-label-dot" style="background:${t.color || '#6C5CE7'}"></span>
+                ${escapeHtml(t.name)}
+                <button class="conv-label-remove" onclick="removeTeamFromConv(${t.id})" title="Remove"><i data-lucide="x" style="width:9px;height:9px"></i></button>
+            </span>
+        `).join('');
+    }
+    lucide.createIcons();
+}
+
+function toggleTeamPopover(e) {
+    e.stopPropagation();
+    const pop = document.getElementById('team-popover');
+    const opening = !pop.classList.contains('open');
+    pop.classList.toggle('open');
+    if (opening) {
+        const anchorBtn = e.currentTarget;
+        renderTeamPopoverList();
+        positionTeamPopover(anchorBtn);
+        loadTeams().then(() => {
+            renderTeamPopoverList();
+            positionTeamPopover(anchorBtn);
+        });
+    }
+}
+
+/* نفس فكرة positionLabelPopover بالظبط، بس بتستهدف team-popover */
+function positionTeamPopover(anchorBtn) {
+    const pop = document.getElementById('team-popover');
+    if (!pop || !anchorBtn) return;
+    const rect = anchorBtn.getBoundingClientRect();
+    const popWidth = 240;
+    const margin = 8;
+    const viewportH = window.innerHeight;
+
+    let left = rect.right - popWidth;
+    left = Math.max(margin, Math.min(left, window.innerWidth - popWidth - margin));
+
+    pop.style.maxHeight = 'none';
+    const spaceBelow = viewportH - rect.bottom - 6 - margin;
+    const spaceAbove = rect.top - 6 - margin;
+    const neededHeight = Math.min(pop.scrollHeight, viewportH - margin * 2);
+
+    let top;
+    if (neededHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+        top = rect.bottom + 6;
+        pop.style.maxHeight = Math.max(120, Math.min(viewportH - margin * 2, spaceBelow)) + 'px';
+    } else {
+        const cap = Math.max(120, Math.min(viewportH - margin * 2, spaceAbove));
+        pop.style.maxHeight = cap + 'px';
+        top = Math.max(margin, rect.top - 6 - Math.min(neededHeight, cap));
+    }
+
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+}
+
+function renderTeamPopoverList() {
+    const c = conversations.find(x => x.id === selectedChatId);
+    const container = document.getElementById('team-popover-list');
+    if (!container) return;
+    if (TEAMS_CACHE.length === 0) {
+        container.innerHTML = '<div class="label-popover-empty">No teams yet — create one from Settings</div>';
+        return;
+    }
+    const appliedIds = (c && c.teams ? c.teams : []).map(t => Number(t.id));
+    container.innerHTML = TEAMS_CACHE.map(t => `
+        <div class="label-popover-option ${appliedIds.includes(Number(t.id)) ? 'selected' : ''}" onclick="selectTeamForConv(${t.id})">
+            <span class="label-popover-check">${appliedIds.includes(Number(t.id)) ? '<span style="width:7px;height:7px;border-radius:50%;background:currentColor"></span>' : ''}</span>
+            <span class="label-popover-dot" style="background:${t.color || '#6C5CE7'}"></span>
+            <span>${escapeHtml(t.name)}</span>
+        </div>
+    `).join('');
+    lucide.createIcons();
+}
+
+// التيم بيبقى واحد بس في المرة الواحدة للمحادثة (زي الليبل بالظبط) — تحديث optimistic
+// فوري في الواجهة (الاختيار في البوب أب + شيب الكارت في القايمة الجانبية جنب الليبل)
+// وبعدين بنبعت الطلب للسيرفر في الخلفية. لو السيرفر رجّع خطأ، بنرجّع الحالة القديمة.
+async function selectTeamForConv(teamId) {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c) return;
+    const previousTeams = c.teams || [];
+    const applied = previousTeams.some(t => Number(t.id) === Number(teamId));
+
+    // ---- تحديث فوري في الواجهة قبل ما نستنى السيرفر خالص ----
+    if (applied) {
+        c.teams = [];
+    } else {
+        const teamMeta = TEAMS_CACHE.find(t => Number(t.id) === Number(teamId));
+        c.teams = teamMeta ? [{ id: teamMeta.id, name: teamMeta.name, icon: teamMeta.icon, color: teamMeta.color }] : previousTeams;
+    }
+    renderConvTeams(c);
+    renderTeamPopoverList();
+    renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+
+    try {
+        if (applied) {
+            const res = await apiFetch(`/api/conversations/${c.id}/teams/${teamId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'فشل شيل التيم');
+            c.teams = data.teams;
+        } else {
+            for (const old of previousTeams) {
+                await apiFetch(`/api/conversations/${c.id}/teams/${old.id}`, { method: 'DELETE' });
+            }
+            const res = await apiFetch(`/api/conversations/${c.id}/teams`, {
+                method: 'POST',
+                body: JSON.stringify({ teamId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'فشل إضافة التيم');
+            c.teams = data.teams;
+        }
+        renderConvTeams(c);
+        renderTeamPopoverList();
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+    } catch (err) {
+        console.error('[API] selectTeamForConv error:', err);
+        showToast(err.message || 'حصل خطأ', 'error');
+        // فشل الحفظ فعليًا -> بنرجّع الحالة القديمة تاني في الواجهة
+        c.teams = previousTeams;
+        renderConvTeams(c);
+        renderTeamPopoverList();
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+    }
+}
+
+async function removeTeamFromConv(teamId) {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c) return;
+    const previousTeams = c.teams || [];
+    // ---- تحديث فوري في الواجهة قبل ما نستنى السيرفر ----
+    c.teams = [];
+    renderConvTeams(c);
+    renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+    try {
+        const res = await apiFetch(`/api/conversations/${c.id}/teams/${teamId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل شيل التيم');
+        c.teams = data.teams;
+        renderConvTeams(c);
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+    } catch (err) {
+        console.error('[API] removeTeamFromConv error:', err);
+        showToast(err.message || 'حصل خطأ', 'error');
+        c.teams = previousTeams;
+        renderConvTeams(c);
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
     }
 }
 
@@ -4986,6 +5221,7 @@ function init() {
     loadCannedResponsesFromAPI();
     loadResolveCategoriesFromAPI();
     loadLabelsFromAPI();
+    loadTeams();
     loadScheduledTasksBadge();
     refreshCurrentUser();
     initSocket();
@@ -5821,12 +6057,8 @@ async function confirmResolve() {
         <div class="resolve-cats-label">Color</div>
         <div class="team-color-grid" id="team-color-grid" style="margin-bottom:14px"></div>
 
-        <div class="resolve-cats-label">Routing Strategy</div>
-        <select class="iw-input" id="team-strategy-input">
-            <option value="manual">Manual</option>
-            <option value="round_robin">Round Robin</option>
-            <option value="balanced">Balanced</option>
-        </select>
+        <div class="resolve-cats-label">Agents</div>
+        <div class="iw-agent-list" id="team-form-agents-list" style="margin-bottom:14px"><div class="iw-empty">جارِ تحميل الموظفين...</div></div>
 
         <div class="resolve-modal-actions">
             <button class="resolve-cancel-btn" onclick="closeTeamModal()">إلغاء</button>
@@ -5879,7 +6111,11 @@ let teamMembersSelectedIds = new Set();
 
 const TEAM_ICON_OPTIONS = ['users-round', 'headset', 'credit-card', 'sparkles', 'shield', 'globe', 'wrench', 'star'];
 const TEAM_COLOR_OPTIONS = ['#6C5CE7', '#f59e0b', '#10b981', '#00D2FF', '#ef4444', '#64748b'];
-const TEAM_STRATEGY_LABELS = { manual: 'Manual', round_robin: 'Round Robin', balanced: 'Balanced' };
+
+/* ===== إيجنتس الفورم (Add/Edit Team) — بدل Routing Strategy القديمة، دلوقتي
+   بتختار الإيجنتس اللي عايزهم في التيم مباشرة وقت الإنشاء/التعديل نفسه ===== */
+let teamFormAvailableAgents = [];
+let teamFormSelectedIds = new Set();
 
 /* hexToRgba موجودة أصلاً فوق (تستخدمها صفحة Labels) — بنعيد استخدامها هنا بدل ما نكررها */
 
@@ -5916,7 +6152,6 @@ function renderTeamsGrid() {
             <div class="settings-card-desc">${escapeHtml(t.description || '')}</div>
             <div class="settings-card-meta">
                 <span>${t.members_count} agent${t.members_count === 1 ? '' : 's'}</span>
-                <span>${TEAM_STRATEGY_LABELS[t.routing_strategy] || 'Manual'}</span>
             </div>
             ${canManage ? `
             <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
@@ -5970,14 +6205,13 @@ function selectTeamColor(color) {
     renderTeamColorGrid();
 }
 
-function openTeamModal(teamId = null) {
+async function openTeamModal(teamId = null) {
     editingTeamId = teamId || null;
     const team = teamId ? TEAMS_CACHE.find((t) => t.id === teamId) : null;
 
     document.getElementById('team-modal-title').textContent = team ? 'Edit Team' : 'Add Team';
     document.getElementById('team-name-input').value = team ? team.name : '';
     document.getElementById('team-desc-input').value = team ? (team.description || '') : '';
-    document.getElementById('team-strategy-input').value = team ? team.routing_strategy : 'manual';
     document.getElementById('team-modal-error').textContent = '';
     selectedTeamIcon = team ? team.icon : 'users-round';
     selectedTeamColor = team ? team.color : '#6C5CE7';
@@ -5987,7 +6221,64 @@ function openTeamModal(teamId = null) {
 
     document.getElementById('team-overlay').classList.add('show');
     lucide.createIcons();
+
+    await loadTeamFormAgents(teamId);
 }
+
+/* بتجيب كل الإيجنتس المسجلين + (لو بنعدّل تيم موجود) أعضاؤه الحاليين، وبترسمهم
+   كـ checkbox list جوه فورم الإضافة/التعديل نفسه بدل Routing Strategy القديمة */
+async function loadTeamFormAgents(teamId) {
+    const list = document.getElementById('team-form-agents-list');
+    list.innerHTML = '<div class="iw-empty">جارِ تحميل الموظفين...</div>';
+    try {
+        const requests = [apiFetch('/api/agents-list')];
+        if (teamId) requests.push(apiFetch(`/api/teams/${teamId}/members`));
+
+        const [agentsRes, membersRes] = await Promise.all(requests);
+        if (!agentsRes.ok) throw new Error('Failed to fetch agents');
+        teamFormAvailableAgents = await agentsRes.json();
+
+        if (membersRes) {
+            if (!membersRes.ok) throw new Error('Failed to fetch team members');
+            const members = await membersRes.json();
+            teamFormSelectedIds = new Set(members.map((m) => String(m.id)));
+        } else {
+            teamFormSelectedIds = new Set();
+        }
+        renderTeamFormAgentsList();
+    } catch (err) {
+        console.error('[API] loadTeamFormAgents error:', err);
+        list.innerHTML = '<div class="iw-empty">تعذر تحميل الموظفين</div>';
+    }
+}
+
+function renderTeamFormAgentsList() {
+    const list = document.getElementById('team-form-agents-list');
+    if (!teamFormAvailableAgents.length) {
+        list.innerHTML = '<div class="iw-empty">مفيش إيجنتس متسجلين لسه — ضيف إيجنت من صفحة Agents الأول</div>';
+        return;
+    }
+    list.innerHTML = teamFormAvailableAgents.map((a) => {
+        const idStr = String(a.id);
+        const isSelected = teamFormSelectedIds.has(idStr);
+        return `
+        <div class="iw-agent-row ${isSelected ? 'selected' : ''}" data-agent-id="${idStr}">
+            <div class="iw-agent-check">${isSelected ? '<i data-lucide="check" style="width:12px;height:12px"></i>' : ''}</div>
+            <div class="iw-agent-name">${escapeHtml(a.display_name || a.email)}</div>
+            <div class="iw-agent-role">${roleLabel(a.role)}</div>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+document.getElementById('team-form-agents-list').addEventListener('click', (e) => {
+    const row = e.target.closest('.iw-agent-row');
+    if (!row) return;
+    const idStr = row.dataset.agentId;
+    if (teamFormSelectedIds.has(idStr)) teamFormSelectedIds.delete(idStr);
+    else teamFormSelectedIds.add(idStr);
+    renderTeamFormAgentsList();
+});
 
 function closeTeamModal(e) {
     if (e && e.target !== document.getElementById('team-overlay')) return;
@@ -6006,7 +6297,7 @@ async function saveTeam() {
         description: document.getElementById('team-desc-input').value.trim() || null,
         icon: selectedTeamIcon,
         color: selectedTeamColor,
-        routingStrategy: document.getElementById('team-strategy-input').value,
+        agentIds: Array.from(teamFormSelectedIds).map(Number),
     };
 
     const saveBtn = document.getElementById('team-save-btn');

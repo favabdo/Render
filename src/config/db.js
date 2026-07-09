@@ -641,6 +641,27 @@ async function ensureTeamMembersTableExists() {
   logger.info('✅ جدول Team Members جاهز.');
 }
 
+// جدول الربط بين المحادثات والتيمز (many-to-many) — نفس فكرة
+// NileChat_ConversationLabels_byA بالظبط، بس للتيمز بدل الليبلز
+async function ensureConversationTeamsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_ConversationTeams_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_ConversationTeams_byA] (
+        id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+        conversation_id BIGINT NOT NULL,
+        team_id         BIGINT NOT NULL,
+        created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT UQ_NileChat_ConversationTeams_byA UNIQUE (conversation_id, team_id)
+      );
+      CREATE INDEX IX_NileChat_ConversationTeams_byA_conversation_id
+        ON [dbo].[NileChat_ConversationTeams_byA](conversation_id);
+    END
+  `);
+  logger.info('✅ جدول Conversation Teams جاهز.');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -668,6 +689,7 @@ async function ensureSchema() {
   await ensureUsersHaveCompanyAssigned();
   await ensureTeamsTableExists();
   await ensureTeamMembersTableExists();
+  await ensureConversationTeamsTableExists();
 }
 
 module.exports = {
@@ -700,6 +722,7 @@ module.exports = {
   generateCompanyCode,
   ensureTeamsTableExists,
   ensureTeamMembersTableExists,
+  ensureConversationTeamsTableExists,
   ensureSchema,
   TABLE_NAME,
 };
