@@ -3589,25 +3589,37 @@ function renderLabelPopoverList() {
 // الليبل بيبقى واحد بس في المرة الواحدة للمحادثة (زي radio button مش checkbox):
 // - لو ضغطت على اللي مختار أصلاً: بيتشال (تفضل المحادثة من غير ليبل)
 // - لو ضغطت على ليبل تاني: أي ليبل قديم بيتشال الأول وبعدين الجديد بيتحط
+//
+// التحديث بقى "optimistic": بنغيّر الواجهة (الاختيار في البوب أب + شيب الكارت في القايمة
+// الجانبية) فورًا لحظة الضغط، وبعدين بنبعت الطلب للسيرفر في الخلفية من غير ما نستنى
+// رده عشان يحس المستخدم إنها بتحصل على طول. لو السيرفر رجّع خطأ، بنرجّع الحالة القديمة.
 async function selectLabelForConv(labelId) {
     const c = conversations.find(x => x.id === selectedChatId);
     if (!c) return;
-    const applied = (c.labels || []).some(l => Number(l.id) === Number(labelId));
+    const previousLabels = c.labels || [];
+    const applied = previousLabels.some(l => Number(l.id) === Number(labelId));
+
+    // ---- تحديث فوري في الواجهة قبل ما نستنى السيرفر خالص ----
+    if (applied) {
+        c.labels = [];
+    } else {
+        const labelMeta = allLabels.find(l => Number(l.id) === Number(labelId));
+        c.labels = labelMeta ? [{ id: labelMeta.id, name: labelMeta.name, color: labelMeta.color }] : previousLabels;
+    }
+    renderConvLabels(c);
+    renderLabelPopoverList();
+    renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
+
     try {
         if (applied) {
             const res = await apiFetch(`/api/conversations/${c.id}/labels/${labelId}`, { method: 'DELETE' });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'فشل شيل الليبل');
-            c.labels = data.labels;
+            c.labels = data.labels; // تأكيد نهائي من السيرفر (harmless لو نفس القيمة اللي حطيناها)
         } else {
-            // بنشيل أي ليبلز قديمة متحطة على المحادثة الأول عشان يفضل ليبل واحد بس
-            const existingIds = (c.labels || []).map(l => l.id);
-            for (const oldId of existingIds) {
-                const delRes = await apiFetch(`/api/conversations/${c.id}/labels/${oldId}`, { method: 'DELETE' });
-                if (delRes.ok) {
-                    const delData = await delRes.json();
-                    c.labels = delData.labels;
-                }
+            // بنشيل أي ليبلز قديمة كانت متحطة الأول (لازم بالترتيب عشان يفضل ليبل واحد بس محفوظ)
+            for (const old of previousLabels) {
+                await apiFetch(`/api/conversations/${c.id}/labels/${old.id}`, { method: 'DELETE' });
             }
             const res = await apiFetch(`/api/conversations/${c.id}/labels`, {
                 method: 'POST',
@@ -3619,9 +3631,15 @@ async function selectLabelForConv(labelId) {
         }
         renderConvLabels(c);
         renderLabelPopoverList();
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
     } catch (err) {
         console.error('[API] selectLabelForConv error:', err);
         showToast(err.message || 'حصل خطأ', 'error');
+        // فشل الحفظ فعليًا -> بنرجّع الحالة القديمة تاني في الواجهة
+        c.labels = previousLabels;
+        renderConvLabels(c);
+        renderLabelPopoverList();
+        renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
     }
 }
 
