@@ -3,6 +3,7 @@
 
 const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
+const { DAY_KEYS, normalizeSchedule } = require('../utils/welcomeSchedule');
 
 // أي قيمة مسموحة لعدد أيام الـ Auto Resolve — null يعني الخاصية متوقفة
 const ALLOWED_AUTO_RESOLVE_DAYS = [null, 1, 2, 3, 5, 7, 14, 30];
@@ -95,6 +96,9 @@ async function updateAutomationSettings(req, res) {
     auto_assign_agent_id,
     welcome_enabled,
     welcome_message,
+    welcome_schedule_enabled,
+    welcome_offhours_message,
+    welcome_schedule,
     csat_enabled,
     csat_message,
   } = req.body || {};
@@ -130,6 +134,26 @@ async function updateAutomationSettings(req, res) {
     }
     fields.welcomeMessage = trimmed;
   }
+  if (welcome_schedule_enabled !== undefined) {
+    fields.welcomeScheduleEnabled = Boolean(welcome_schedule_enabled);
+  }
+  if (welcome_offhours_message !== undefined) {
+    const trimmed = String(welcome_offhours_message || '').trim();
+    if (trimmed.length > 4000) {
+      return res.status(400).json({ error: 'رسالة خارج أوقات العمل طويلة أوي' });
+    }
+    fields.welcomeOffhoursMessage = trimmed;
+  }
+  if (welcome_schedule !== undefined) {
+    if (welcome_schedule !== null && typeof welcome_schedule !== 'object') {
+      return res.status(400).json({ error: 'شكل جدول أوقات العمل مش صحيح' });
+    }
+    const normalized = normalizeSchedule(welcome_schedule);
+    if (!DAY_KEYS.some((k) => normalized.days[k].enabled)) {
+      return res.status(400).json({ error: 'لازم تحدد يوم واحد على الأقل في جدول أوقات العمل' });
+    }
+    fields.welcomeSchedule = normalized;
+  }
   if (csat_enabled !== undefined) {
     fields.csatEnabled = Boolean(csat_enabled);
   }
@@ -149,6 +173,21 @@ async function updateAutomationSettings(req, res) {
     const finalAgentId = fields.autoAssignAgentId !== undefined ? fields.autoAssignAgentId : existing.auto_assign_agent_id;
     if (!finalAgentId) {
       return res.status(400).json({ error: 'لازم تختار الإيجنت اللي هيتعينله المحادثات الجديدة الأول' });
+    }
+  }
+
+  // لو هتتفعّل خاصية "جدول أوقات العمل" لرسالة الترحيب، لازم تكون رسالة الترحيب
+  // العادية ورسالة خارج أوقات العمل موجودين (سواء اتبعتوا دلوقتي أو كانوا محفوظين قبل كده)
+  const willScheduleBeEnabled = fields.welcomeScheduleEnabled !== undefined ? fields.welcomeScheduleEnabled : undefined;
+  if (willScheduleBeEnabled) {
+    const existing = await companyRepo.getAutomationSettings(company.id);
+    const finalWelcomeMessage = fields.welcomeMessage !== undefined ? fields.welcomeMessage : existing.welcome_message;
+    const finalOffhoursMessage = fields.welcomeOffhoursMessage !== undefined ? fields.welcomeOffhoursMessage : existing.welcome_offhours_message;
+    if (!finalWelcomeMessage) {
+      return res.status(400).json({ error: 'لازم تكتب رسالة الترحيب في أوقات العمل الأول' });
+    }
+    if (!finalOffhoursMessage) {
+      return res.status(400).json({ error: 'لازم تكتب رسالة الترحيب خارج أوقات العمل الأول' });
     }
   }
 

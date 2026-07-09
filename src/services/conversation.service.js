@@ -8,6 +8,7 @@ const userRepo = require('../repositories/user.repo');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
 const logger = require('../utils/logger');
+const { isWithinBusinessHours } = require('../utils/welcomeSchedule');
 
 // بيبعت رد من الإيجنت للعميل عن طريق واتساب، وبيسجله ويحدّث آخر وقت نشاط للمحادثة
 // (النسخة القديمة المتزامنة، بتستنى ميتا كاملة قبل ما ترجع — لسه موجودة لأي حد بيستخدمها مباشرة)
@@ -138,6 +139,18 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
   const settings = await companyRepo.getAutomationSettings();
   if (!settings) return;
 
+  // بتحدد نص رسالة الترحيب اللي هتتبعت فعليًا: لو خاصية الجدول مش مفعّلة
+  // بيبقى فيه رسالة واحدة ثابتة زي الأول، ولو مفعّلة بيتم اختيار الرسالة
+  // المناسبة حسب الوقت الحالي (جوه أوقات العمل ولا برّاها)
+  function resolveWelcomeText() {
+    if (!settings.welcome_enabled) return null;
+    if (!settings.welcome_schedule_enabled) {
+      return settings.welcome_message || null;
+    }
+    const inHours = isWithinBusinessHours(settings.welcome_schedule);
+    return (inHours ? settings.welcome_message : settings.welcome_offhours_message) || null;
+  }
+
   if (settings.auto_assign_enabled && settings.auto_assign_agent_id) {
     try {
       const agent = await userRepo.findUserById(settings.auto_assign_agent_id);
@@ -161,11 +174,12 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
     }
   }
 
-  if (settings.welcome_enabled && settings.welcome_message) {
+  const welcomeText = resolveWelcomeText();
+  if (welcomeText) {
     try {
       const message = await whatsappService.sendTextMessage(
         contactNumber,
-        settings.welcome_message,
+        welcomeText,
         conversationId,
         inboxId,
         { id: null, name: 'Automation' }

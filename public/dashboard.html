@@ -1210,29 +1210,11 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <button class="settings-nav-item" data-settings-nav="labels" onclick="navigateSettingsSection('labels', this)">
                 <i data-lucide="tag" style="width:16px;height:16px"></i> Labels
             </button>
-            <button class="settings-nav-item" data-settings-nav="custom-attributes" onclick="navigateSettingsSection('custom-attributes', this)">
-                <i data-lucide="list-tree" style="width:16px;height:16px"></i> Custom Attributes
-            </button>
             <button class="settings-nav-item" data-settings-nav="automation" onclick="navigateSettingsSection('automation', this)">
                 <i data-lucide="workflow" style="width:16px;height:16px"></i> Automation
             </button>
-            <button class="settings-nav-item" data-settings-nav="macros" onclick="navigateSettingsSection('macros', this)">
-                <i data-lucide="terminal" style="width:16px;height:16px"></i> Macros
-            </button>
-            <button class="settings-nav-item" data-settings-nav="canned-responses" onclick="navigateSettingsSection('canned-responses', this)">
-                <i data-lucide="message-square-text" style="width:16px;height:16px"></i> Canned Responses
-            </button>
             <button class="settings-nav-item" data-settings-nav="integrations" onclick="navigateSettingsSection('integrations', this)">
                 <i data-lucide="plug" style="width:16px;height:16px"></i> Integrations
-            </button>
-            <button class="settings-nav-item" data-settings-nav="audit-logs" onclick="navigateSettingsSection('audit-logs', this)">
-                <i data-lucide="file-clock" style="width:16px;height:16px"></i> Audit Logs
-            </button>
-            <button class="settings-nav-item" data-settings-nav="custom-roles" onclick="navigateSettingsSection('custom-roles', this)">
-                <i data-lucide="shield-check" style="width:16px;height:16px"></i> Custom Roles <span class="beta-tag">BETA</span>
-            </button>
-            <button class="settings-nav-item" data-settings-nav="sla" onclick="navigateSettingsSection('sla', this)">
-                <i data-lucide="gauge" style="width:16px;height:16px"></i> SLA <span class="beta-tag">BETA</span>
             </button>
         </aside>
 
@@ -1364,22 +1346,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             </div>
         </div>
 
-        <!-- ============ 6. CUSTOM ATTRIBUTES ============ -->
-        <div class="settings-content-section" id="settings-sec-custom-attributes">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Custom Attributes</h2><div class="settings-top-desc">Custom fields to track on contacts or conversations</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Attribute</button></div>
-            <table class="settings-table">
-                <thead><tr><th>Attribute</th><th>Applies To</th><th>Type</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><strong>Subscription Plan</strong></td><td><span class="st-pill role-agent">Contact</span></td><td style="color:var(--text-secondary)">List</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Device Serial Number</strong></td><td><span class="st-pill role-admin">Conversation</span></td><td style="color:var(--text-secondary)">Text</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Account ID</strong></td><td><span class="st-pill role-agent">Contact</span></td><td style="color:var(--text-secondary)">Number</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Issue Severity</strong></td><td><span class="st-pill role-admin">Conversation</span></td><td style="color:var(--text-secondary)">List</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
         <!-- ============ 7. AUTOMATION ============ -->
         <div class="settings-content-section" id="settings-sec-automation">
         <div class="page-content">
@@ -1404,32 +1370,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         </div>
         </div>
 
-        <!-- ============ 8. MACROS ============ -->
-        <div class="settings-content-section" id="settings-sec-macros">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Macros</h2><div class="settings-top-desc">Reusable sequences of actions you can run on a conversation</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> New Macro</button></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="terminal" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Close as Resolved + Thank You</div><div class="rule-row-desc">3 actions · Send reply, Add label, Resolve conversation</div></div></div><div class="rule-row-right"><span class="st-pill role-agent">Public</span><button class="st-icon-btn"><i data-lucide="play" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="terminal" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Escalate to Billing Team</div><div class="rule-row-desc">2 actions · Assign team, Add note</div></div></div><div class="rule-row-right"><span class="st-pill role-agent">Public</span><button class="st-icon-btn"><i data-lucide="play" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="terminal" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">My Follow-up Reminder</div><div class="rule-row-desc">1 action · Snooze conversation for 1 day</div></div></div><div class="rule-row-right"><span class="st-pill role-admin">Private</span><button class="st-icon-btn"><i data-lucide="play" style="width:14px;height:14px"></i></button></div></div>
-        </div>
-        </div>
-
-        <!-- ============ 9. CANNED RESPONSES ============ -->
-        <div class="settings-content-section" id="settings-sec-canned-responses">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Canned Responses</h2><div class="settings-top-desc">Saved replies for frequently asked questions</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Canned Response</button></div>
-            <table class="settings-table">
-                <thead><tr><th>Short Code</th><th>Content</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><strong>greeting</strong></td><td style="color:var(--text-secondary)">شكراً لتواصلكم معنا، سنقوم بالرد قريباً</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>transfer</strong></td><td style="color:var(--text-secondary)">تم تحويل طلبكم للقسم المختص</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>ask-sn</strong></td><td style="color:var(--text-secondary)">هل يمكنكم تزويدنا برقم الجهاز؟</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>resolved</strong></td><td style="color:var(--text-secondary)">تم حل المشكلة بنجاح، هل تحتاج مساعدة أخرى؟</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
         <!-- ============ 10. INTEGRATIONS ============ -->
         <div class="settings-content-section" id="settings-sec-integrations">
         <div class="page-content">
@@ -1440,46 +1380,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="settings-card"><div class="settings-card-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="slack" style="width:20px;height:20px"></i></div><div class="settings-card-title">Slack</div><div class="settings-card-desc">Get notified about conversations in Slack</div><div class="settings-card-meta"><span>Not connected</span><span class="settings-card-connect">Connect</span></div></div>
                 <div class="settings-card"><div class="settings-card-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="key-round" style="width:20px;height:20px"></i></div><div class="settings-card-title">API Access Token</div><div class="settings-card-desc">Authenticate requests to the Chatwoot-style API</div><div class="settings-card-meta"><span>Active</span><span class="settings-card-connect">View</span></div></div>
             </div>
-        </div>
-        </div>
-
-        <!-- ============ 11. AUDIT LOGS ============ -->
-        <div class="settings-content-section" id="settings-sec-audit-logs">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Audit Logs</h2><div class="settings-top-desc">A record of administrative actions on this account</div></div></div>
-            <table class="settings-table">
-                <thead><tr><th>Activity</th><th>User</th><th>IP Address</th><th>Time</th></tr></thead>
-                <tbody>
-                    <tr><td>Updated Account Settings</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">Today, 2:14 PM</td></tr>
-                    <tr><td>Added agent Hana Mohamed</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">Today, 11:02 AM</td></tr>
-                    <tr><td>Changed role: Mona Ali → Agent</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">Yesterday, 4:40 PM</td></tr>
-                    <tr><td>Created label "VIP Customer"</td><td>Ahmed Salah</td><td style="color:var(--text-secondary)">156.201.4.19</td><td style="color:var(--text-secondary)">Yesterday, 10:15 AM</td></tr>
-                    <tr><td>Deleted macro "Old Greeting"</td><td>Support Agent</td><td style="color:var(--text-secondary)">41.234.12.8</td><td style="color:var(--text-secondary)">3 days ago</td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
-        <!-- ============ 12. CUSTOM ROLES (BETA) ============ -->
-        <div class="settings-content-section" id="settings-sec-custom-roles">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>Custom Roles <span class="beta-tag" style="margin-right:8px">BETA</span></h2><div class="settings-top-desc">Fine-grained permission sets beyond Administrator and Agent</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Custom Role</button></div>
-            <table class="settings-table">
-                <thead><tr><th>Role</th><th>Permissions</th><th>Agents</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><strong>Reports Viewer</strong></td><td style="color:var(--text-secondary)">View reports, View contacts</td><td>2</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><strong>Billing Specialist</strong></td><td style="color:var(--text-secondary)">Manage contacts, View conversations</td><td>3</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
-            </table>
-        </div>
-        </div>
-
-        <!-- ============ 13. SLA (BETA) ============ -->
-        <div class="settings-content-section" id="settings-sec-sla">
-        <div class="page-content">
-            <div class="settings-top-row"><div><h2>SLA <span class="beta-tag" style="margin-right:8px">BETA</span></h2><div class="settings-top-desc">Service level agreements for response & resolution times</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add SLA Policy</button></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(239,68,68,0.1);color:var(--danger)"><i data-lucide="gauge" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">VIP Response SLA</div><div class="rule-row-desc">First response in 15 min · Resolution in 4 hrs</div></div></div><div class="rule-row-right"><span class="st-pill verified">Active</span><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="gauge" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Standard Support SLA</div><div class="rule-row-desc">First response in 1 hr · Resolution in 24 hrs</div></div></div><div class="rule-row-right"><span class="st-pill verified">Active</span><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
         </div>
         </div>
 
@@ -6473,6 +6373,27 @@ async function saveTeamMembers() {
             <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px" id="automation-message-hint"></div>
         </div>
 
+        <!-- Welcome فقط: جدول أوقات عمل يحدد أي رسالة تتبعت حسب اليوم/الساعة -->
+        <div id="automation-schedule-toggle-field" style="display:none">
+            <div class="setting-row" style="padding:0 0 14px 0;border:none">
+                <div>
+                    <div class="setting-label">استخدام رسالتين حسب الوقت</div>
+                    <div class="setting-desc">فعّل ده لو عايز رسالة مختلفة تتبعت لو المحادثة اتفتحت خارج أوقات العمل</div>
+                </div>
+                <button class="toggle" id="automation-schedule-enable-toggle" onclick="toggleWelcomeScheduleEnable()"></button>
+            </div>
+        </div>
+
+        <div id="automation-schedule-field" style="display:none">
+            <div class="resolve-cats-label">أوقات العمل (يتم اعتبارها "داخل أوقات العمل")</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">التوقيت المحلي المستخدم: القاهرة (Africa/Cairo)</div>
+            <div id="welcome-schedule-days" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px"></div>
+
+            <div class="resolve-cats-label">الرسالة خارج أوقات العمل</div>
+            <textarea class="resolve-notes" id="automation-offhours-message-input" style="min-height:90px;margin-bottom:6px" maxlength="4000" placeholder="مثال: شكراً لتواصلكم! فريقنا خارج أوقات العمل حاليًا وهيتم الرد عليكم أول ما نرجع."></textarea>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">بتتبعت للعميل بدل الرسالة الأساسية لو المحادثة اتفتحت في وقت برّا الجدول اللي فوق.</div>
+        </div>
+
         <div class="resolve-modal-actions">
             <button class="resolve-cancel-btn" onclick="closeAutomationModal()">إلغاء</button>
             <button class="resolve-confirm-btn" id="automation-save-btn" onclick="saveAutomationModal()">
@@ -6499,6 +6420,9 @@ async function saveTeamMembers() {
 let AUTOMATION_SETTINGS_CACHE = null;
 let AUTOMATION_AGENTS_CACHE = [];
 let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat'
+
+const WELCOME_SCHEDULE_DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const WELCOME_SCHEDULE_DAY_LABELS = { sun: 'الأحد', mon: 'الاثنين', tue: 'الثلاثاء', wed: 'الأربعاء', thu: 'الخميس', fri: 'الجمعة', sat: 'السبت' };
 
 const AUTOMATION_RULE_META = {
     auto_assign: {
@@ -6569,9 +6493,13 @@ function renderAutomationSettings() {
 
     const welcomeDesc = document.getElementById('welcome-desc');
     if (welcomeDesc) {
-        welcomeDesc.textContent = s.welcome_enabled && s.welcome_message
-            ? `When conversation is created → Send: "${s.welcome_message.slice(0, 60)}${s.welcome_message.length > 60 ? '…' : ''}"`
-            : 'When conversation is created → Send a fixed auto-reply (disabled)';
+        if (s.welcome_enabled && s.welcome_schedule_enabled && s.welcome_message) {
+            welcomeDesc.textContent = 'When conversation is created → Send message based on business hours schedule (2 messages)';
+        } else if (s.welcome_enabled && s.welcome_message) {
+            welcomeDesc.textContent = `When conversation is created → Send: "${s.welcome_message.slice(0, 60)}${s.welcome_message.length > 60 ? '…' : ''}"`;
+        } else {
+            welcomeDesc.textContent = 'When conversation is created → Send a fixed auto-reply (disabled)';
+        }
     }
 
     const csatDesc = document.getElementById('csat-desc');
@@ -6644,24 +6572,95 @@ async function openAutomationModal(type) {
     const agentField = document.getElementById('automation-agent-field');
     const messageField = document.getElementById('automation-message-field');
     const messageInput = document.getElementById('automation-message-input');
+    const scheduleToggleField = document.getElementById('automation-schedule-toggle-field');
 
     if (type === 'auto_assign') {
         enableToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
         agentField.style.display = '';
         messageField.style.display = 'none';
+        scheduleToggleField.style.display = 'none';
+        document.getElementById('automation-schedule-field').style.display = 'none';
         await populateAutomationAgentSelect(s.auto_assign_agent_id);
     } else {
         enableToggle.classList.toggle('on', Boolean(type === 'welcome' ? s.welcome_enabled : s.csat_enabled));
         agentField.style.display = 'none';
         messageField.style.display = '';
-        document.getElementById('automation-message-label').textContent = meta.messageLabel;
-        document.getElementById('automation-message-hint').textContent = meta.messageHint;
         messageInput.placeholder = meta.placeholder;
         messageInput.value = (type === 'welcome' ? s.welcome_message : s.csat_message) || '';
+
+        if (type === 'welcome') {
+            scheduleToggleField.style.display = '';
+            document.getElementById('automation-schedule-enable-toggle').classList.toggle('on', Boolean(s.welcome_schedule_enabled));
+            renderWelcomeScheduleDays(s.welcome_schedule);
+            document.getElementById('automation-offhours-message-input').value = s.welcome_offhours_message || '';
+            syncWelcomeScheduleUI();
+        } else {
+            scheduleToggleField.style.display = 'none';
+            document.getElementById('automation-schedule-field').style.display = 'none';
+            document.getElementById('automation-message-label').textContent = meta.messageLabel;
+            document.getElementById('automation-message-hint').textContent = meta.messageHint;
+        }
     }
 
     document.getElementById('automation-overlay').classList.add('show');
     lucide.createIcons();
+}
+
+// بترسم صفوف الأيام (تشيك بوكس تفعيل + من/لحد) في مودال جدول رسالة الترحيب
+function renderWelcomeScheduleDays(schedule) {
+    const container = document.getElementById('welcome-schedule-days');
+    const days = (schedule && schedule.days) || {};
+    container.innerHTML = WELCOME_SCHEDULE_DAY_ORDER.map((key) => {
+        const d = days[key] || { enabled: false, start: '09:00', end: '17:00' };
+        return `
+            <div class="setting-row" style="padding:6px 0;border:none;flex-wrap:wrap;gap:8px" data-wsched-day="${key}">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;min-width:90px;cursor:pointer">
+                    <input type="checkbox" data-wsched-enabled ${d.enabled ? 'checked' : ''} style="width:16px;height:16px">
+                    ${WELCOME_SCHEDULE_DAY_LABELS[key]}
+                </label>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <input type="time" class="iw-input" data-wsched-start value="${d.start}" style="width:auto;padding:6px 8px;font-size:12.5px">
+                    <span style="font-size:12px;color:var(--text-secondary)">إلى</span>
+                    <input type="time" class="iw-input" data-wsched-end value="${d.end}" style="width:auto;padding:6px 8px;font-size:12.5px">
+                </div>
+            </div>`;
+    }).join('');
+}
+
+// بيجمع قيم صفوف الأيام اللي اليوزر عدّلها في مودال جدول رسالة الترحيب
+function collectWelcomeScheduleFromModal() {
+    const days = {};
+    document.querySelectorAll('#welcome-schedule-days [data-wsched-day]').forEach((row) => {
+        const key = row.getAttribute('data-wsched-day');
+        days[key] = {
+            enabled: row.querySelector('[data-wsched-enabled]').checked,
+            start: row.querySelector('[data-wsched-start]').value || '09:00',
+            end: row.querySelector('[data-wsched-end]').value || '17:00',
+        };
+    });
+    return { timezone: 'Africa/Cairo', days };
+}
+
+// onclick هنا فعلاً بيقلب حالة التوجل، وبعدين يزامن باقي الواجهة معاه
+function toggleWelcomeScheduleEnable() {
+    document.getElementById('automation-schedule-enable-toggle').classList.toggle('on');
+    syncWelcomeScheduleUI();
+}
+
+// بتتحكم في إظهار/إخفاء جدول الأيام ورسالة "خارج أوقات العمل"، وتغيّر عنوان
+// حقل الرسالة الأساسية حسب حالة توجل "استخدام رسالتين حسب الوقت" — من غير
+// ما تلمس حالة التوجل نفسه (بتقرأها بس)
+function syncWelcomeScheduleUI() {
+    const useSchedule = document.getElementById('automation-schedule-enable-toggle').classList.contains('on');
+    document.getElementById('automation-schedule-field').style.display = useSchedule ? '' : 'none';
+
+    const meta = AUTOMATION_RULE_META.welcome;
+    document.getElementById('automation-message-label').textContent = useSchedule
+        ? 'رسالة الترحيب في أوقات العمل'
+        : meta.messageLabel;
+    document.getElementById('automation-message-hint').textContent = useSchedule
+        ? 'بتتبعت للعميل لو المحادثة الجديدة اتفتحت داخل الجدول المحدد تحت.'
+        : meta.messageHint;
 }
 
 async function populateAutomationAgentSelect(selectedAgentId) {
@@ -6713,6 +6712,24 @@ async function saveAutomationModal() {
         if (automationModalType === 'welcome') {
             body.welcome_enabled = enabled;
             body.welcome_message = text;
+
+            const useSchedule = document.getElementById('automation-schedule-enable-toggle').classList.contains('on');
+            body.welcome_schedule_enabled = useSchedule;
+            if (useSchedule) {
+                const offhoursText = document.getElementById('automation-offhours-message-input').value.trim();
+                if (enabled && !offhoursText) {
+                    errorBox.textContent = 'لازم تكتب رسالة "خارج أوقات العمل" الأول';
+                    return;
+                }
+                const schedule = collectWelcomeScheduleFromModal();
+                const hasEnabledDay = WELCOME_SCHEDULE_DAY_ORDER.some((k) => schedule.days[k].enabled);
+                if (enabled && !hasEnabledDay) {
+                    errorBox.textContent = 'لازم تفعّل يوم واحد على الأقل في جدول أوقات العمل';
+                    return;
+                }
+                body.welcome_offhours_message = offhoursText;
+                body.welcome_schedule = schedule;
+            }
         } else {
             body.csat_enabled = enabled;
             body.csat_message = text;

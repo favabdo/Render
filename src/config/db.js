@@ -673,6 +673,13 @@ async function ensureCompaniesHaveAutomationColumns() {
     { name: 'automation_auto_assign_agent_id', def: 'BIGINT NULL' },
     { name: 'automation_welcome_enabled', def: 'BIT NOT NULL DEFAULT 0' },
     { name: 'automation_welcome_message', def: 'NVARCHAR(MAX) NULL' },
+    // جدول رسالة الترحيب: لو مفعّل، بيبقى في رسالتين بدل واحدة — رسالة أثناء
+    // أوقات العمل (automation_welcome_message) ورسالة تانية برا أوقات العمل
+    // (automation_welcome_offhours_message)، والجدول نفسه (أيام + ساعات لكل
+    // يوم + التايم زون) متخزن كـ JSON في automation_welcome_schedule
+    { name: 'automation_welcome_schedule_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_welcome_offhours_message', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'automation_welcome_schedule', def: 'NVARCHAR(MAX) NULL' },
     { name: 'automation_csat_enabled', def: 'BIT NOT NULL DEFAULT 0' },
     { name: 'automation_csat_message', def: 'NVARCHAR(MAX) NULL' },
   ];

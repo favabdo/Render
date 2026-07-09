@@ -2,6 +2,7 @@
 // إدارة بيانات الشركة (Account): الاسم، الكود، وعدد أيام الـ Auto Resolve
 
 const { getPool, sql, generateCompanyCode } = require('../config/db');
+const { parseScheduleJson } = require('../utils/welcomeSchedule');
 
 async function getCompanyById(id) {
   const pool = await getPool();
@@ -89,6 +90,9 @@ function mapAutomationSettings(company) {
     auto_assign_agent_id: company.automation_auto_assign_agent_id || null,
     welcome_enabled: Boolean(company.automation_welcome_enabled),
     welcome_message: company.automation_welcome_message || '',
+    welcome_schedule_enabled: Boolean(company.automation_welcome_schedule_enabled),
+    welcome_offhours_message: company.automation_welcome_offhours_message || '',
+    welcome_schedule: parseScheduleJson(company.automation_welcome_schedule),
     csat_enabled: Boolean(company.automation_csat_enabled),
     csat_message: company.automation_csat_message || '',
   };
@@ -119,6 +123,18 @@ async function updateAutomationSettings(companyId, fields = {}) {
   if (fields.welcomeMessage !== undefined) {
     req.input('welcomeMessage', sql.NVarChar(sql.MAX), fields.welcomeMessage);
     sets.push('automation_welcome_message = @welcomeMessage');
+  }
+  if (fields.welcomeScheduleEnabled !== undefined) {
+    req.input('welcomeScheduleEnabled', sql.Bit, fields.welcomeScheduleEnabled ? 1 : 0);
+    sets.push('automation_welcome_schedule_enabled = @welcomeScheduleEnabled');
+  }
+  if (fields.welcomeOffhoursMessage !== undefined) {
+    req.input('welcomeOffhoursMessage', sql.NVarChar(sql.MAX), fields.welcomeOffhoursMessage);
+    sets.push('automation_welcome_offhours_message = @welcomeOffhoursMessage');
+  }
+  if (fields.welcomeSchedule !== undefined) {
+    req.input('welcomeSchedule', sql.NVarChar(sql.MAX), JSON.stringify(fields.welcomeSchedule));
+    sets.push('automation_welcome_schedule = @welcomeSchedule');
   }
   if (fields.csatEnabled !== undefined) {
     req.input('csatEnabled', sql.Bit, fields.csatEnabled ? 1 : 0);
