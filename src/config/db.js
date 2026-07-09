@@ -483,6 +483,47 @@ async function ensureResolveCategoriesTableExists() {
   logger.info('✅ جدول Resolve Categories جاهز.');
 }
 
+// جدول الليبلز (Labels) — بتتعمل من صفحة الإعدادات أو من جوه كارت العميل نفسه،
+// وبتتفلتر/تتعرض لكل الإيجنتس على المحادثة (زي فكرة Chatwoot Labels بالظبط)
+async function ensureLabelsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Labels_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Labels_byA] (
+        id          BIGINT IDENTITY(1,1) PRIMARY KEY,
+        name        NVARCHAR(100) NOT NULL,
+        color       NVARCHAR(20)  NULL,
+        description NVARCHAR(300) NULL,
+        created_by  BIGINT NULL,
+        created_at  DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+    END
+  `);
+  logger.info('✅ جدول Labels جاهز.');
+}
+
+// جدول الربط بين المحادثات والليبلز (many-to-many) — كل صف يعني إن الليبل ده
+// متحط على المحادثة دي، ومحمي بـ UNIQUE عشان نفس الليبل ميتكررش على نفس المحادثة
+async function ensureConversationLabelsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_ConversationLabels_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_ConversationLabels_byA] (
+        id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+        conversation_id BIGINT NOT NULL,
+        label_id        BIGINT NOT NULL,
+        created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT UQ_NileChat_ConversationLabels_byA UNIQUE (conversation_id, label_id)
+      );
+      CREATE INDEX IX_NileChat_ConversationLabels_byA_conversation_id
+        ON [dbo].[NileChat_ConversationLabels_byA](conversation_id);
+    END
+  `);
+  logger.info('✅ جدول Conversation Labels جاهز.');
+}
+
 // جدول الشركات (Accounts) — كل شركة ليها كود مميز (خليط حروف/أرقام) واسم يتعرض
 // في صفحة الإعدادات لكل الإيجنتس اللي تابعين لها. أول شركة بتتعمل تلقائيًا هي
 // "Nile Techno Support" (أول عميل استخدم النظام)، وأي يوزر جديد من غيرها بيتربط
@@ -579,6 +620,8 @@ async function ensureSchema() {
   await ensureScheduledTasksTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
+  await ensureLabelsTableExists();
+  await ensureConversationLabelsTableExists();
   await ensureCompaniesTableExists();
   await ensureUsersHaveCompanyAssigned();
 }
@@ -606,6 +649,8 @@ module.exports = {
   ensureScheduledTasksTableExists,
   ensureCannedResponsesTableExists,
   ensureResolveCategoriesTableExists,
+  ensureLabelsTableExists,
+  ensureConversationLabelsTableExists,
   ensureCompaniesTableExists,
   ensureUsersHaveCompanyAssigned,
   generateCompanyCode,

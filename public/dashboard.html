@@ -336,6 +336,45 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .cp-section-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .cp-section-title-row .cp-section-title{margin-bottom:0}
 .st-count-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+/* أقسام قابلة للطي/الفرد في كارت العميل (Label / Previous Conversations) */
+.cp-section-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.cp-section-header .cp-section-title{margin-bottom:0}
+.cp-section-header-right{display:flex;align-items:center;gap:8px}
+.cp-collapse-chevron{width:16px;height:16px;color:var(--text-secondary);transition:transform .2s}
+.cp-section.collapsed .cp-collapse-chevron{transform:rotate(-90deg)}
+.cp-section-body{margin-top:10px;overflow:hidden}
+.cp-section.collapsed .cp-section-body{display:none}
+
+/* Label section جوه كارت العميل */
+.conv-label-list{display:flex;flex-wrap:wrap;gap:6px}
+.conv-label-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 9px 5px 6px;border-radius:8px;font-size:12px;font-weight:600}
+.conv-label-chip .conv-label-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.conv-label-chip .conv-label-remove{width:15px;height:15px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;opacity:.7}
+.conv-label-chip .conv-label-remove:hover{opacity:1;background:rgba(0,0,0,0.18)}
+.conv-label-empty{font-size:12.5px;color:var(--text-secondary)}
+.conv-label-add-btn{width:26px;height:26px;border-radius:8px;border:1.5px dashed var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.conv-label-add-btn:hover{border-color:var(--primary);color:var(--primary);background:rgba(108,92,231,0.06)}
+.conv-label-add-wrap{position:relative;display:inline-block}
+.label-popover{position:absolute;top:calc(100% + 6px);right:0;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:30;display:none;overflow:hidden}
+.label-popover.open{display:block}
+.label-popover-list{max-height:220px;overflow-y:auto;padding:6px}
+.label-popover-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
+.label-popover-option{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .1s}
+.label-popover-option:hover{background:rgba(108,92,231,0.06)}
+.label-popover-check{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.label-popover-option.selected .label-popover-check{background:var(--primary);border-color:var(--primary);color:#fff}
+.label-popover-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.label-popover-footer{border-top:1px solid var(--border);padding:8px}
+.label-popover-new-btn{width:100%;padding:8px;border-radius:8px;border:none;background:transparent;color:var(--primary);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+.label-popover-new-btn:hover{background:rgba(108,92,231,0.08)}
+.label-popover-new-form{padding:10px;display:none;flex-direction:column;gap:8px}
+.label-popover-new-form.show{display:flex}
+.label-popover-new-form input{padding:8px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:12.5px;font-family:inherit;outline:none}
+.label-popover-new-form input:focus{border-color:var(--primary)}
+.label-color-swatches{display:flex;flex-wrap:wrap;gap:6px}
+.label-color-swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.label-color-swatch.selected{border-color:var(--text)}
 .sched-subhead{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px;display:flex;align-items:center;gap:6px;cursor:default}
 .sched-subhead .sched-subhead-count{color:var(--text-secondary);font-weight:600;text-transform:none;letter-spacing:0}
 .sched-task-card{padding:11px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:8px;min-width:0;box-sizing:border-box}
@@ -820,10 +859,53 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     </button>
                 </div>
 
+                <!-- Label -->
+                <div class="cp-section" id="cp-section-label">
+                    <div class="cp-section-header" onclick="toggleCpSection('cp-section-label')">
+                        <div class="cp-section-title">Label</div>
+                        <div class="cp-section-header-right">
+                            <i data-lucide="chevron-down" class="cp-collapse-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="cp-section-body">
+                        <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+                            <div class="conv-label-list" id="conv-label-list"></div>
+                            <div class="conv-label-add-wrap">
+                                <button class="conv-label-add-btn" id="conv-label-add-btn" onclick="toggleLabelPopover(event)" title="Add label">
+                                    <i data-lucide="plus" style="width:14px;height:14px"></i>
+                                </button>
+                                <div class="label-popover" id="label-popover">
+                                    <div class="label-popover-list" id="label-popover-list"></div>
+                                    <div class="label-popover-footer">
+                                        <button class="label-popover-new-btn" onclick="toggleNewLabelForm()">
+                                            <i data-lucide="plus" style="width:13px;height:13px"></i> New Label
+                                        </button>
+                                        <div class="label-popover-new-form" id="label-popover-new-form">
+                                            <input type="text" id="new-label-name" placeholder="Label name">
+                                            <div class="label-color-swatches" id="new-label-swatches"></div>
+                                            <div class="add-form-actions">
+                                                <button class="add-confirm" onclick="createNewLabel()">Add</button>
+                                                <button class="add-cancel" onclick="toggleNewLabelForm()">Cancel</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Previous Conversations -->
-                <div class="cp-section">
-                    <div class="cp-section-title">Previous Conversations</div>
-                    <div class="prev-conv-list" id="prev-conv-list"></div>
+                <div class="cp-section" id="cp-section-prevconv">
+                    <div class="cp-section-header" onclick="toggleCpSection('cp-section-prevconv')">
+                        <div class="cp-section-title">Previous Conversations</div>
+                        <div class="cp-section-header-right">
+                            <i data-lucide="chevron-down" class="cp-collapse-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="cp-section-body">
+                        <div class="prev-conv-list" id="prev-conv-list"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1179,15 +1261,36 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <!-- ============ 5. LABELS ============ -->
         <div class="settings-content-section" id="settings-sec-labels">
         <div class="page-content">
-            <div class="settings-top-row"><div><h2>Labels</h2><div class="settings-top-desc">Categorize conversations and contacts</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Label</button></div>
+            <div class="settings-top-row"><div><h2>Labels</h2><div class="settings-top-desc">Categorize conversations and contacts</div></div><button class="page-btn" onclick="showAddLabelSetting()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Label</button></div>
+
+            <!-- Add Label Form -->
+            <div id="add-label-setting-form" style="display:none;background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px;border:1.5px solid rgba(108,92,231,0.4)">
+                <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">ليبل جديد</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                    <div>
+                        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">اسم الليبل</label>
+                        <input id="label-setting-new-name" type="text" placeholder="مثال: Urgent" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;outline:none">
+                    </div>
+                    <div>
+                        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">اللون</label>
+                        <div class="label-color-swatches" id="label-setting-new-swatches" style="padding-top:6px"></div>
+                    </div>
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">وصف مختصر</label>
+                    <input id="label-setting-new-desc" type="text" placeholder="مثال: يحتاج رد فوري" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;outline:none">
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                    <button class="page-btn" style="padding:8px 16px;font-size:12px" onclick="addLabelSetting()">
+                        <i data-lucide="check" style="width:14px;height:14px"></i> حفظ
+                    </button>
+                    <button onclick="hideAddLabelSetting()" style="padding:8px 16px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">إلغاء</button>
+                </div>
+            </div>
+
             <table class="settings-table">
                 <thead><tr><th>Label</th><th>Description</th><th>Conversations</th><th style="width:90px"></th></tr></thead>
-                <tbody>
-                    <tr><td><span class="label-chip" style="background:rgba(239,68,68,0.1);color:#ef4444"><span class="label-chip-dot" style="background:#ef4444"></span>Urgent</span></td><td style="color:var(--text-secondary)">Needs immediate attention</td><td>12</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><span class="label-chip" style="background:rgba(245,158,11,0.1);color:#f59e0b"><span class="label-chip-dot" style="background:#f59e0b"></span>Billing</span></td><td style="color:var(--text-secondary)">Payment or invoice related</td><td>27</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><span class="label-chip" style="background:rgba(108,92,231,0.1);color:#6C5CE7"><span class="label-chip-dot" style="background:#6C5CE7"></span>Technical</span></td><td style="color:var(--text-secondary)">Device or connectivity issues</td><td>45</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                    <tr><td><span class="label-chip" style="background:rgba(16,185,129,0.1);color:#10b981"><span class="label-chip-dot" style="background:#10b981"></span>VIP Customer</span></td><td style="color:var(--text-secondary)">High-value account</td><td>8</td><td><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button><button class="st-icon-btn danger"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td></tr>
-                </tbody>
+                <tbody id="labels-settings-tbody"></tbody>
             </table>
         </div>
         </div>
@@ -1470,6 +1573,8 @@ function mapApiConversation(row) {
         phones: [{ number: row.contact_number, label: null }], // ده بس fallback فوري — بيتحدث بالأرقام الحقيقية كلها لما نفتح لوحة العميل
         devices: [],
         prevConvs: [],
+        labels: [],
+        _labelsLoaded: false,
         _messagesLoaded: false,
         _contactLoaded: false,
         // بنخزن الخام (raw) بتاع آخر رسالة عشان نقدر نكتشف "فيه رسالة جديدة"
@@ -1951,6 +2056,17 @@ function initSocket() {
             } else {
                 loadConversationsFromAPI();
             }
+        });
+
+        /* لما أي إيجنت يحط/يشيل ليبل على محادثة، بنحدّث نفس المحادثة عند كل
+           الإيجنتس المتصلين فورًا (شرط الطلب: الليبل يظهر لكل الإيجنتس) */
+        socket.on('conversation_labels_updated', ({ conversationId, labels } = {}) => {
+            if (!conversationId) return;
+            const c = conversations.find(x => String(x.id) === String(conversationId));
+            if (!c) return;
+            c.labels = labels || [];
+            c._labelsLoaded = true;
+            if (selectedChatId === c.id) renderConvLabels(c);
         });
 
         /* السيرفر بيبعتها لما أي إيجنت يتعمله deactivate أو حذف نهائي (شوف
@@ -2692,6 +2808,8 @@ function selectChat(id) {
         updateAssignUI(c);
 
         renderPrevConvs(c);
+        renderConvLabels(c);
+        if (!c._labelsLoaded) loadLabelsForConversation(c);
         renderPhones(c);
         if (!c._contactLoaded) loadContactDetails(c);
         renderDevices(c);
@@ -3237,6 +3355,291 @@ function openPrevConversation(conversationId) {
     }
     navigateTo('chats');
     setTimeout(() => selectChat(target.id), 50);
+}
+
+/* ===== أقسام كارت العميل القابلة للطي (Label / Previous Conversations) =====
+   بنخزن حالة الطي في الذاكرة بس (مش محتاجة تتحفظ بعد الريفريش) — افتراضيًا مفتوحة */
+const cpCollapsedSections = {};
+function toggleCpSection(sectionId) {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+    const collapsed = el.classList.toggle('collapsed');
+    cpCollapsedSections[sectionId] = collapsed;
+    lucide.createIcons();
+}
+
+/* ===== الليبلز المتاحة في الشركة (بتتعبى من /api/labels) ===== */
+let allLabels = []; // {id, name, color, description, conversation_count}
+const LABEL_COLOR_PRESETS = ['#ef4444', '#f59e0b', '#10b981', '#6C5CE7', '#00D2FF', '#ec4899', '#64748b'];
+
+function hexToRgba(hex, alpha) {
+    const h = (hex || '#6C5CE7').replace('#', '');
+    const bigint = parseInt(h.length === 3 ? h.split('').map(x => x + x).join('') : h, 16);
+    const r = (bigint >> 16) & 255, g = (bigint >> 8) & 255, b = bigint & 255;
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+async function loadLabelsFromAPI() {
+    try {
+        const res = await apiFetch('/api/labels');
+        allLabels = await res.json();
+        renderLabelsSettingsTable();
+    } catch (err) {
+        console.error('[API] loadLabelsFromAPI error:', err);
+    }
+}
+
+/* ===== الليبلز المتحطة على المحادثة المفتوحة حاليًا ===== */
+async function loadLabelsForConversation(c) {
+    try {
+        const res = await apiFetch(`/api/conversations/${c.id}/labels`);
+        const rows = await res.json();
+        c.labels = rows;
+        c._labelsLoaded = true;
+        if (selectedChatId === c.id) renderConvLabels(c);
+    } catch (err) {
+        console.error('[API] loadLabelsForConversation error:', err);
+    }
+}
+
+function renderConvLabels(c) {
+    const list = document.getElementById('conv-label-list');
+    if (!list) return;
+    if (!c.labels || c.labels.length === 0) {
+        list.innerHTML = '<span class="conv-label-empty">No labels yet</span>';
+    } else {
+        list.innerHTML = c.labels.map(l => `
+            <span class="conv-label-chip" style="background:${hexToRgba(l.color, 0.12)};color:${l.color || '#6C5CE7'}">
+                <span class="conv-label-dot" style="background:${l.color || '#6C5CE7'}"></span>
+                ${escapeHtml(l.name)}
+                <button class="conv-label-remove" onclick="removeLabelFromConv(${l.id})" title="Remove"><i data-lucide="x" style="width:9px;height:9px"></i></button>
+            </span>
+        `).join('');
+    }
+    lucide.createIcons();
+}
+
+function toggleLabelPopover(e) {
+    e.stopPropagation();
+    const pop = document.getElementById('label-popover');
+    const opening = !pop.classList.contains('open');
+    pop.classList.toggle('open');
+    if (opening) {
+        document.getElementById('label-popover-new-form').classList.remove('show');
+        renderLabelPopoverList();
+    }
+}
+document.addEventListener('click', e => {
+    if (!e.target.closest('.conv-label-add-wrap')) {
+        const pop = document.getElementById('label-popover');
+        if (pop) pop.classList.remove('open');
+    }
+});
+
+function renderLabelPopoverList() {
+    const c = conversations.find(x => x.id === selectedChatId);
+    const container = document.getElementById('label-popover-list');
+    if (!container) return;
+    if (allLabels.length === 0) {
+        container.innerHTML = '<div class="label-popover-empty">No labels yet — create one below</div>';
+        return;
+    }
+    const appliedIds = (c && c.labels ? c.labels : []).map(l => Number(l.id));
+    container.innerHTML = allLabels.map(l => `
+        <div class="label-popover-option ${appliedIds.includes(Number(l.id)) ? 'selected' : ''}" onclick="toggleLabelOnConv(${l.id})">
+            <span class="label-popover-check">${appliedIds.includes(Number(l.id)) ? '<i data-lucide="check" style="width:11px;height:11px"></i>' : ''}</span>
+            <span class="label-popover-dot" style="background:${l.color || '#6C5CE7'}"></span>
+            <span>${escapeHtml(l.name)}</span>
+        </div>
+    `).join('');
+    lucide.createIcons();
+}
+
+async function toggleLabelOnConv(labelId) {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c) return;
+    const applied = (c.labels || []).some(l => Number(l.id) === Number(labelId));
+    try {
+        if (applied) {
+            const res = await apiFetch(`/api/conversations/${c.id}/labels/${labelId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'فشل شيل الليبل');
+            c.labels = data.labels;
+        } else {
+            const res = await apiFetch(`/api/conversations/${c.id}/labels`, {
+                method: 'POST',
+                body: JSON.stringify({ labelId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'فشل إضافة الليبل');
+            c.labels = data.labels;
+        }
+        renderConvLabels(c);
+        renderLabelPopoverList();
+    } catch (err) {
+        console.error('[API] toggleLabelOnConv error:', err);
+        showToast(err.message || 'حصل خطأ', 'error');
+    }
+}
+
+async function removeLabelFromConv(labelId) {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c) return;
+    try {
+        const res = await apiFetch(`/api/conversations/${c.id}/labels/${labelId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل شيل الليبل');
+        c.labels = data.labels;
+        renderConvLabels(c);
+    } catch (err) {
+        console.error('[API] removeLabelFromConv error:', err);
+        showToast(err.message || 'حصل خطأ', 'error');
+    }
+}
+
+function toggleNewLabelForm() {
+    const form = document.getElementById('label-popover-new-form');
+    form.classList.toggle('show');
+    if (form.classList.contains('show')) {
+        renderColorSwatches('new-label-swatches', LABEL_COLOR_PRESETS[0]);
+        document.getElementById('new-label-name').value = '';
+        document.getElementById('new-label-name').focus();
+    }
+}
+
+function renderColorSwatches(containerId, selectedColor) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.dataset.selected = selectedColor;
+    container.innerHTML = LABEL_COLOR_PRESETS.map(color => `
+        <span class="label-color-swatch ${color === selectedColor ? 'selected' : ''}" style="background:${color}" onclick="selectColorSwatch('${containerId}', '${color}')"></span>
+    `).join('');
+}
+function selectColorSwatch(containerId, color) {
+    const container = document.getElementById(containerId);
+    container.dataset.selected = color;
+    container.querySelectorAll('.label-color-swatch').forEach(sw => sw.classList.remove('selected'));
+    container.querySelector(`.label-color-swatch[style*="${color}"]`)?.classList.add('selected');
+}
+
+/* بيضيف ليبل جديد من جوه كارت العميل نفسه (popover) وبيحطه على المحادثة المفتوحة فورًا */
+async function createNewLabel() {
+    const name = document.getElementById('new-label-name').value.trim();
+    const color = document.getElementById('new-label-swatches').dataset.selected || LABEL_COLOR_PRESETS[0];
+    if (!name) return showToast('اكتب اسم الليبل أولاً', 'error');
+    try {
+        const res = await apiFetch('/api/labels', {
+            method: 'POST',
+            body: JSON.stringify({ name, color }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الليبل');
+        allLabels.push(data);
+        renderLabelsSettingsTable();
+        toggleNewLabelForm();
+        await toggleLabelOnConv(data.id);
+        showToast('تم إضافة الليبل', 'success');
+    } catch (err) {
+        console.error('[API] createNewLabel error:', err);
+        showToast(err.message || 'فشل إضافة الليبل', 'error');
+    }
+}
+
+/* ===== إدارة الليبلز من صفحة الإعدادات (Settings > Labels) ===== */
+function renderLabelsSettingsTable() {
+    const tbody = document.getElementById('labels-settings-tbody');
+    if (!tbody) return;
+    if (allLabels.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-secondary);padding:20px">لسه مفيش ليبلز — دوس "Add Label" عشان تضيف واحد</td></tr>';
+        return;
+    }
+    tbody.innerHTML = allLabels.map(l => `
+        <tr>
+            <td><span class="label-chip" style="background:${hexToRgba(l.color, 0.1)};color:${l.color || '#6C5CE7'}"><span class="label-chip-dot" style="background:${l.color || '#6C5CE7'}"></span>${escapeHtml(l.name)}</span></td>
+            <td style="color:var(--text-secondary)">${escapeHtml(l.description || '')}</td>
+            <td>${l.conversation_count || 0}</td>
+            <td>
+                <button class="st-icon-btn" onclick="editLabelSettingPrompt(${l.id})"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
+                <button class="st-icon-btn danger" onclick="deleteLabelSetting(${l.id})"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+            </td>
+        </tr>
+    `).join('');
+    lucide.createIcons();
+}
+
+function showAddLabelSetting() {
+    document.getElementById('add-label-setting-form').style.display = 'block';
+    renderColorSwatches('label-setting-new-swatches', LABEL_COLOR_PRESETS[0]);
+    document.getElementById('label-setting-new-name').focus();
+}
+function hideAddLabelSetting() {
+    document.getElementById('add-label-setting-form').style.display = 'none';
+    document.getElementById('label-setting-new-name').value = '';
+    document.getElementById('label-setting-new-desc').value = '';
+}
+async function addLabelSetting() {
+    const name = document.getElementById('label-setting-new-name').value.trim();
+    const desc = document.getElementById('label-setting-new-desc').value.trim();
+    const color = document.getElementById('label-setting-new-swatches').dataset.selected || LABEL_COLOR_PRESETS[0];
+    if (!name) return showToast('اكتب اسم الليبل أولاً', 'error');
+    try {
+        const res = await apiFetch('/api/labels', {
+            method: 'POST',
+            body: JSON.stringify({ name, color, description: desc }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الليبل');
+        allLabels.push(data);
+        hideAddLabelSetting();
+        renderLabelsSettingsTable();
+        showToast('تم إضافة الليبل', 'success');
+    } catch (err) {
+        console.error('[API] addLabelSetting error:', err);
+        showToast(err.message || 'فشل إضافة الليبل', 'error');
+    }
+}
+async function editLabelSettingPrompt(id) {
+    const l = allLabels.find(x => x.id === id);
+    if (!l) return;
+    const newName = prompt('اسم الليبل:', l.name);
+    if (newName === null) return;
+    const newDesc = prompt('الوصف:', l.description || '');
+    if (newDesc === null) return;
+    try {
+        const res = await apiFetch(`/api/labels/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name: newName.trim() || l.name, color: l.color, description: newDesc.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل الليبل');
+        Object.assign(l, data);
+        renderLabelsSettingsTable();
+        showToast('تم تعديل الليبل', 'success');
+    } catch (err) {
+        console.error('[API] editLabelSettingPrompt error:', err);
+        showToast(err.message || 'فشل تعديل الليبل', 'error');
+    }
+}
+async function deleteLabelSetting(id) {
+    const idx = allLabels.findIndex(x => x.id === id);
+    if (idx === -1) return;
+    if (!confirm('متأكد إنك عايز تحذف الليبل ده؟ هيتشال من كل المحادثات اللي متحط عليها.')) return;
+    try {
+        const res = await apiFetch(`/api/labels/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error((data && data.error) || 'فشل حذف الليبل');
+        }
+        allLabels.splice(idx, 1);
+        renderLabelsSettingsTable();
+        conversations.forEach(c => { if (c.labels) c.labels = c.labels.filter(l => Number(l.id) !== Number(id)); });
+        const current = conversations.find(x => x.id === selectedChatId);
+        if (current) renderConvLabels(current);
+        showToast('تم حذف الليبل', 'info');
+    } catch (err) {
+        console.error('[API] deleteLabelSetting error:', err);
+        showToast(err.message || 'فشل حذف الليبل', 'error');
+    }
 }
 
 /* ===== أرقام الهاتف الحقيقية المرتبطة بالكونتاكت =====
@@ -4335,6 +4738,7 @@ function init() {
     loadAgentsFromAPI();
     loadCannedResponsesFromAPI();
     loadResolveCategoriesFromAPI();
+    loadLabelsFromAPI();
     loadScheduledTasksBadge();
     refreshCurrentUser();
     initSocket();
