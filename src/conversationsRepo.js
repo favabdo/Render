@@ -104,17 +104,7 @@ async function listConversations() {
         SELECT COUNT(*)
         FROM [dbo].[${TABLE_NAME}] m
         WHERE m.conversation_id = c.id
-      ) AS message_count,
-      (
-        -- الليبلز المحطوطة على المحادثة دي (كـ JSON عشان نجيبهم في نفس الكويري
-        -- من غير ما نعمل استعلام منفصل لكل محادثة في القايمة)
-        SELECT l.id, l.name, l.color
-        FROM [dbo].[NileChat_ConversationLabels_byA] cl
-        JOIN [dbo].[NileChat_Labels_byA] l ON l.id = cl.label_id
-        WHERE cl.conversation_id = c.id
-        ORDER BY cl.created_at ASC
-        FOR JSON PATH
-      ) AS labels_json
+      ) AS message_count
     FROM [dbo].[NileChat_Conversations_byA] c
     LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
     LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id

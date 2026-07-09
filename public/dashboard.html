@@ -363,17 +363,19 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .conv-label-add-wrap{position:relative;display:inline-block;z-index:5}
 /* position:fixed (بدل absolute) عشان الپوب أب يهرب من الـ overflow:auto بتاع
    الكونتينر اللي حواليه (.cp-tab-content) واللي كان بيقصّه/يخليه يظهر تحت العناصر التانية.
-   الإحداثيات (top/left) بتتحسب وبتتحط inline في toggleLabelPopover() وقت الفتح */
-.label-popover{position:fixed;width:240px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:2000;display:none;overflow:hidden}
-.label-popover.open{display:block}
-.label-popover-list{max-height:220px;overflow-y:auto;padding:6px}
+   الإحداثيات (top/left) بتتحسب وبتتحط inline في toggleLabelPopover() وقت الفتح.
+   max-height + flex column: عشان طول الپوب أب ككل عمره ما يعدي حدود الشاشة، وأي زيادة
+   في عدد الليبلز تتاكل من scroll القايمة الداخلية (label-popover-list) مش من طول الصندوق نفسه */
+.label-popover{position:fixed;width:240px;max-height:calc(100vh - 24px);flex-direction:column;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.14);z-index:2000;display:none;overflow:hidden}
+.label-popover.open{display:flex}
+.label-popover-list{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px}
 .label-popover-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
 .label-popover-option{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .1s}
 .label-popover-option:hover{background:rgba(108,92,231,0.06)}
 .label-popover-check{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .label-popover-option.selected .label-popover-check{background:var(--primary);border-color:var(--primary);color:#fff}
 .label-popover-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.label-popover-footer{border-top:1px solid var(--border);padding:8px}
+.label-popover-footer{border-top:1px solid var(--border);padding:8px;flex-shrink:0}
 .label-popover-new-btn{width:100%;padding:8px;border-radius:8px;border:none;background:transparent;color:var(--primary);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
 .label-popover-new-btn:hover{background:rgba(108,92,231,0.08)}
 .label-popover-new-form{padding:10px;display:none;flex-direction:column;gap:8px}
@@ -3493,10 +3495,16 @@ function toggleLabelPopover(e) {
     const opening = !pop.classList.contains('open');
     pop.classList.toggle('open');
     if (opening) {
-        positionLabelPopover(e.currentTarget);
+        const anchorBtn = e.currentTarget;
         document.getElementById('label-popover-new-form').classList.remove('show');
         renderLabelPopoverList();
-        loadLabelsFromAPI().then(renderLabelPopoverList); // تأكيد إن القايمة أحدث نسخة من السيرفر
+        // بنحسب المكان بعد ما المحتوى الحالي يترسم عشان الطول المستخدم في الحساب يكون حقيقي
+        positionLabelPopover(anchorBtn);
+        loadLabelsFromAPI().then(() => {
+            renderLabelPopoverList();
+            // ولو عدد الليبلز اتغيّر بعد التحديث من السيرفر، بنعيد الحساب تاني
+            positionLabelPopover(anchorBtn);
+        });
     }
 }
 
@@ -3508,15 +3516,25 @@ function positionLabelPopover(anchorBtn) {
     const rect = anchorBtn.getBoundingClientRect();
     const popWidth = 240;
     const margin = 8;
+    const viewportH = window.innerHeight;
 
     let left = rect.right - popWidth; // محاذاة لليمين مع الزرار (زي ما كانت right:0 قبل كدا)
     left = Math.max(margin, Math.min(left, window.innerWidth - popWidth - margin));
 
-    let top = rect.bottom + 6;
-    // لو مفيش مساحة تحت، بنفتحه فوق الزرار بدل ما يطلع برا الشاشة
-    const estimatedHeight = Math.min(pop.scrollHeight || 320, window.innerHeight - margin * 2);
-    if (top + estimatedHeight > window.innerHeight - margin && rect.top - estimatedHeight - 6 > margin) {
-        top = rect.top - estimatedHeight - 6;
+    // أقصى طول ممكن يظهر بيه الپوب أب تحت الزرار من غير ما يعدي حدود الشاشة
+    const spaceBelow = viewportH - rect.bottom - 6 - margin;
+    const spaceAbove = rect.top - 6 - margin;
+    const neededHeight = Math.min(pop.scrollHeight, viewportH - margin * 2);
+
+    let top;
+    if (neededHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+        // بيفتح تحت الزرار (الوضع العادي)
+        top = rect.bottom + 6;
+        pop.style.maxHeight = Math.max(120, Math.min(viewportH - margin * 2, spaceBelow)) + 'px';
+    } else {
+        // مفيش مساحة كفاية تحت، فبيفتح فوق الزرار بدل ما ينزل تحت حدود الشاشة
+        pop.style.maxHeight = Math.max(120, Math.min(viewportH - margin * 2, spaceAbove)) + 'px';
+        top = Math.max(margin, rect.top - 6 - parseFloat(pop.style.maxHeight));
     }
 
     pop.style.left = left + 'px';
@@ -3535,6 +3553,12 @@ window.addEventListener('scroll', () => {
     const pop = document.getElementById('label-popover');
     if (pop && pop.classList.contains('open')) pop.classList.remove('open');
 }, true);
+// لو المستخدم غيّر حجم الشاشة والپوب أب مفتوح، بنعيد حساب مكانه/طوله عشان يفضل جوه الشاشة
+window.addEventListener('resize', () => {
+    const pop = document.getElementById('label-popover');
+    const btn = document.getElementById('conv-label-add-btn');
+    if (pop && pop.classList.contains('open') && btn) positionLabelPopover(btn);
+});
 
 function renderLabelPopoverList() {
     const c = conversations.find(x => x.id === selectedChatId);
