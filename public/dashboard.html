@@ -1278,9 +1278,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <div class="page-content">
             <div class="settings-top-row"><div><h2>Labels</h2><div class="settings-top-desc">Categorize conversations and contacts</div></div><button class="page-btn" onclick="showAddLabelSetting()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Label</button></div>
 
-            <!-- Add Label Form -->
+            <!-- Add/Edit Label Form (نفس الفورم بيتغير عنوانه وسلوكه حسب اللي بنعمله) -->
             <div id="add-label-setting-form" style="display:none;background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px;border:1.5px solid rgba(108,92,231,0.4)">
-                <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">ليبل جديد</div>
+                <div id="label-setting-form-title" style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">ليبل جديد</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
                     <div>
                         <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">اسم الليبل</label>
@@ -1296,8 +1296,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     <input id="label-setting-new-desc" type="text" placeholder="مثال: يحتاج رد فوري" style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:inherit;outline:none">
                 </div>
                 <div style="display:flex;gap:8px;margin-top:12px">
-                    <button class="page-btn" style="padding:8px 16px;font-size:12px" onclick="addLabelSetting()">
-                        <i data-lucide="check" style="width:14px;height:14px"></i> حفظ
+                    <button class="page-btn" style="padding:8px 16px;font-size:12px" onclick="saveLabelSetting()">
+                        <i data-lucide="check" style="width:14px;height:14px"></i> <span id="label-setting-form-save-text">حفظ</span>
                     </button>
                     <button onclick="hideAddLabelSetting()" style="padding:8px 16px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">إلغاء</button>
                 </div>
@@ -1308,6 +1308,18 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <tbody id="labels-settings-tbody"></tbody>
             </table>
         </div>
+        </div>
+
+        <!-- Confirm delete modal بتاع الليبلز — بديل عن window.confirm عشان يشتغل صح جوه أي إمبيد/iframe -->
+        <div id="label-confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;align-items:center;justify-content:center">
+            <div style="background:var(--surface);border-radius:14px;padding:20px;width:320px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.25)">
+                <div style="font-size:14.5px;font-weight:700;margin-bottom:8px">حذف الليبل</div>
+                <div id="label-confirm-text" style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px">متأكد إنك عايز تحذف الليبل ده؟</div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button onclick="closeLabelConfirmModal()" style="padding:8px 16px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">إلغاء</button>
+                    <button id="label-confirm-ok-btn" style="padding:8px 16px;border-radius:10px;border:none;background:var(--danger);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">حذف</button>
+                </div>
+            </div>
         </div>
 
         <!-- ============ 6. CUSTOM ATTRIBUTES ============ -->
@@ -3584,71 +3596,114 @@ function renderLabelsSettingsTable() {
             <td style="color:var(--text-secondary)">${escapeHtml(l.description || '')}</td>
             <td>${l.conversation_count || 0}</td>
             <td>
-                <button class="st-icon-btn" onclick="editLabelSettingPrompt(${l.id})"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
-                <button class="st-icon-btn danger" onclick="deleteLabelSetting(${l.id})"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+                <button class="st-icon-btn" onclick="openEditLabelSetting(${l.id})" title="تعديل"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
+                <button class="st-icon-btn danger" onclick="confirmDeleteLabelSetting(${l.id})" title="حذف"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
             </td>
         </tr>
     `).join('');
     lucide.createIcons();
 }
 
+let editingLabelSettingId = null; // null = وضع "إضافة"، غير كده = بنعدّل على الليبل ده
+
 function showAddLabelSetting() {
+    editingLabelSettingId = null;
+    document.getElementById('label-setting-form-title').textContent = 'ليبل جديد';
+    document.getElementById('label-setting-form-save-text').textContent = 'حفظ';
+    document.getElementById('label-setting-new-name').value = '';
+    document.getElementById('label-setting-new-desc').value = '';
     document.getElementById('add-label-setting-form').style.display = 'block';
     renderColorSwatches('label-setting-new-swatches', LABEL_COLOR_PRESETS[0]);
     document.getElementById('label-setting-new-name').focus();
 }
 function hideAddLabelSetting() {
+    editingLabelSettingId = null;
     document.getElementById('add-label-setting-form').style.display = 'none';
     document.getElementById('label-setting-new-name').value = '';
     document.getElementById('label-setting-new-desc').value = '';
 }
-async function addLabelSetting() {
+
+/* بتفتح نفس الفورم بتاع "ليبل جديد" لكن معبّى ببيانات الليبل الحالي، وبتحول
+   الحفظ لتحديث (PUT) بدل إضافة (POST) — بديل عن الـ window.prompt القديم اللي
+   ممكن يترفض بصمت جوه أي صفحة معمولة embed (iframe) */
+function openEditLabelSetting(id) {
+    const l = allLabels.find(x => Number(x.id) === Number(id));
+    if (!l) return;
+    editingLabelSettingId = id;
+    document.getElementById('label-setting-form-title').textContent = 'تعديل الليبل';
+    document.getElementById('label-setting-form-save-text').textContent = 'حفظ التعديلات';
+    document.getElementById('label-setting-new-name').value = l.name || '';
+    document.getElementById('label-setting-new-desc').value = l.description || '';
+    document.getElementById('add-label-setting-form').style.display = 'block';
+    renderColorSwatches('label-setting-new-swatches', l.color || LABEL_COLOR_PRESETS[0]);
+    document.getElementById('label-setting-new-name').focus();
+}
+
+/* بتحفظ الفورم — لو إحنا في وضع تعديل بتبعت PUT، غير كده بتبعت POST زي ما كانت */
+async function saveLabelSetting() {
     const name = document.getElementById('label-setting-new-name').value.trim();
     const desc = document.getElementById('label-setting-new-desc').value.trim();
     const color = document.getElementById('label-setting-new-swatches').dataset.selected || LABEL_COLOR_PRESETS[0];
     if (!name) return showToast('اكتب اسم الليبل أولاً', 'error');
+
+    const isEditing = editingLabelSettingId !== null;
     try {
-        const res = await apiFetch('/api/labels', {
-            method: 'POST',
+        const res = await apiFetch(isEditing ? `/api/labels/${editingLabelSettingId}` : '/api/labels', {
+            method: isEditing ? 'PUT' : 'POST',
             body: JSON.stringify({ name, color, description: desc }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'فشل إضافة الليبل');
-        allLabels.push(data);
+        if (!res.ok) throw new Error(data.error || (isEditing ? 'فشل تعديل الليبل' : 'فشل إضافة الليبل'));
+
+        if (isEditing) {
+            const l = allLabels.find(x => Number(x.id) === Number(editingLabelSettingId));
+            if (l) Object.assign(l, data);
+            // لو الليبل ده متحط على المحادثة المفتوحة حاليًا، حدث شكله فورًا في كارت العميل
+            conversations.forEach(c => {
+                if (!c.labels) return;
+                const applied = c.labels.find(x => Number(x.id) === Number(editingLabelSettingId));
+                if (applied) Object.assign(applied, data);
+            });
+            const current = conversations.find(x => x.id === selectedChatId);
+            if (current) renderConvLabels(current);
+        } else {
+            allLabels.push(data);
+        }
+
         hideAddLabelSetting();
         renderLabelsSettingsTable();
-        showToast('تم إضافة الليبل', 'success');
+        showToast(isEditing ? 'تم تعديل الليبل' : 'تم إضافة الليبل', 'success');
     } catch (err) {
-        console.error('[API] addLabelSetting error:', err);
-        showToast(err.message || 'فشل إضافة الليبل', 'error');
+        console.error('[API] saveLabelSetting error:', err);
+        showToast(err.message || 'حصل خطأ', 'error');
     }
 }
-async function editLabelSettingPrompt(id) {
-    const l = allLabels.find(x => x.id === id);
+
+/* ===== تأكيد الحذف — مودال بسيط بدل window.confirm =====
+   window.confirm ممكن يترفض بصمت (يرجع false على طول) جوه صفحات معمولة embed
+   داخل iframe من غير allow="modals"، فبنستخدم مودال مبني بنفس تصميم الصفحة */
+let pendingDeleteLabelId = null;
+function confirmDeleteLabelSetting(id) {
+    const l = allLabels.find(x => Number(x.id) === Number(id));
     if (!l) return;
-    const newName = prompt('اسم الليبل:', l.name);
-    if (newName === null) return;
-    const newDesc = prompt('الوصف:', l.description || '');
-    if (newDesc === null) return;
-    try {
-        const res = await apiFetch(`/api/labels/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ name: newName.trim() || l.name, color: l.color, description: newDesc.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'فشل تعديل الليبل');
-        Object.assign(l, data);
-        renderLabelsSettingsTable();
-        showToast('تم تعديل الليبل', 'success');
-    } catch (err) {
-        console.error('[API] editLabelSettingPrompt error:', err);
-        showToast(err.message || 'فشل تعديل الليبل', 'error');
-    }
+    pendingDeleteLabelId = id;
+    document.getElementById('label-confirm-text').textContent =
+        `متأكد إنك عايز تحذف ليبل "${l.name}"؟ هيتشال من كل المحادثات اللي متحط عليها.`;
+    const overlay = document.getElementById('label-confirm-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('label-confirm-ok-btn').onclick = () => executeDeleteLabelSetting(id);
 }
-async function deleteLabelSetting(id) {
-    const idx = allLabels.findIndex(x => x.id === id);
-    if (idx === -1) return;
-    if (!confirm('متأكد إنك عايز تحذف الليبل ده؟ هيتشال من كل المحادثات اللي متحط عليها.')) return;
+function closeLabelConfirmModal() {
+    pendingDeleteLabelId = null;
+    document.getElementById('label-confirm-overlay').style.display = 'none';
+}
+document.getElementById('label-confirm-overlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'label-confirm-overlay') closeLabelConfirmModal();
+});
+
+async function executeDeleteLabelSetting(id) {
+    const idx = allLabels.findIndex(x => Number(x.id) === Number(id));
+    if (idx === -1) return closeLabelConfirmModal();
     try {
         const res = await apiFetch(`/api/labels/${id}`, { method: 'DELETE' });
         if (!res.ok) {
@@ -3662,8 +3717,10 @@ async function deleteLabelSetting(id) {
         if (current) renderConvLabels(current);
         showToast('تم حذف الليبل', 'info');
     } catch (err) {
-        console.error('[API] deleteLabelSetting error:', err);
+        console.error('[API] executeDeleteLabelSetting error:', err);
         showToast(err.message || 'فشل حذف الليبل', 'error');
+    } finally {
+        closeLabelConfirmModal();
     }
 }
 
