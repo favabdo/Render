@@ -458,11 +458,22 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .settings-top-row h2{font-size:22px;font-weight:700}
 .settings-top-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
 .settings-top-row .page-btn{flex-shrink:0;white-space:nowrap}
-/* على الشاشات الصغيرة الزرار (زي Add Agent) كان بيتزنق جنب العنوان الطويل وينزاح بره
-   حدود الشاشة فيختفي فعليًا؛ هنا بنخليه ياخد سطر لوحده بعرض كامل عشان يفضل ظاهر وسهل الضغط عليه */
-@media (max-width:860px){
-    .settings-top-row{flex-direction:column;align-items:stretch}
-    .settings-top-row .page-btn{width:100%;justify-content:center}
+/* على الموبايل والشاشات الصغيرة: زرار زي "Add Agent" لازم ينزل تحت العنوان/الوصف
+   (Agents / Manage agents and what they can access) مش جمبهم — مش بس يعمل wrap.
+   بنستخدم !important هنا عشان نضمن إن الترتيب العمودي ده بيغلب أي display مظبوط
+   بالجافاسكريبت (زي addBtn.style.display='flex') على نفس العنصر. */
+@media (max-width:900px){
+    .settings-top-row{flex-direction:column !important;align-items:stretch !important}
+    .settings-top-row>div:first-child{width:100%;flex-basis:100%}
+    .settings-top-row .page-btn{width:100% !important;justify-content:center;order:2;margin-top:4px}
+}
+/* Safety net مخصص لزرار Add Agent بالذات، منفصل عن القاعدة العامة فوق، عشان
+   يفضل شغال حتى لو أي كود تاني غيّر كلاس الصف أو الترتيب.
+   ملحوظة: مش بنحط display هنا لأن الظهور/الاختفاء بتاعه بيتحدد بالجافاسكريبت
+   حسب صلاحية المستخدم (أونر/أدمن) — إحنا هنا بس بنظبط شكله لو ظاهر أصلاً */
+@media (max-width:900px){
+    #settings-sec-agents .settings-top-row{flex-direction:column !important}
+    #add-agent-btn{width:100% !important;justify-content:center !important;margin-top:8px !important}
 }
 
 /* Generic data table used across settings pages */
