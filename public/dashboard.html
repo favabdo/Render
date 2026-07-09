@@ -658,6 +658,14 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .iw-btn-ghost:hover{background:var(--bg)}
 .iw-spin{width:14px;height:14px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:iw-spin .7s linear infinite}
 @keyframes iw-spin{to{transform:rotate(360deg)}}
+
+/* Team modal: icon/color pickers (باقي الشكل بيستخدم كلاسات resolve-modal / iw-input الموجودة أصلاً) */
+.team-icon-grid,.team-color-grid{display:flex;flex-wrap:wrap;gap:8px}
+.team-icon-opt{width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all .15s}
+.team-icon-opt:hover{border-color:var(--primary-light)}
+.team-icon-opt.selected{border-color:var(--primary);background:rgba(108,92,231,0.1);color:var(--primary)}
+.team-color-opt{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.team-color-opt.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--surface)}
 .iw-empty{text-align:center;padding:40px 20px;color:var(--text-secondary)}
 
 /* ===== Page Loader (يظهر فورًا لحد ما كل حاجة تخلص تحميل) ===== */
@@ -1264,12 +1272,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <!-- ============ 3. TEAMS ============ -->
         <div class="settings-content-section" id="settings-sec-teams">
         <div class="page-content">
-            <div class="settings-top-row"><div><h2>Teams</h2><div class="settings-top-desc">Group agents into teams for conversation routing</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Team</button></div>
-            <div class="settings-card-grid">
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="headset" style="width:20px;height:20px"></i></div><div class="settings-card-title">Tech Support</div><div class="settings-card-desc">Handles device & connectivity issues</div><div class="settings-card-meta"><span>5 agents</span><span>Round Robin</span></div></div>
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="credit-card" style="width:20px;height:20px"></i></div><div class="settings-card-title">Billing</div><div class="settings-card-desc">Payments, invoices & subscriptions</div><div class="settings-card-meta"><span>3 agents</span><span>Balanced</span></div></div>
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="sparkles" style="width:20px;height:20px"></i></div><div class="settings-card-title">Onboarding</div><div class="settings-card-desc">New customer setup & activation</div><div class="settings-card-meta"><span>2 agents</span><span>Manual</span></div></div>
-                <div class="settings-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;border-style:dashed;color:var(--text-secondary);cursor:pointer"><i data-lucide="plus-circle" style="width:26px;height:26px;margin-bottom:8px"></i><span style="font-size:13px;font-weight:600">New Team</span></div>
+            <div class="settings-top-row"><div><h2>Teams</h2><div class="settings-top-desc">Group agents into teams for conversation routing</div></div><button class="page-btn" id="add-team-btn" onclick="openTeamModal()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Team</button></div>
+            <div class="settings-card-grid" id="teams-grid">
+                <div class="settings-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;border-style:dashed;color:var(--text-secondary);cursor:pointer" onclick="openTeamModal()"><i data-lucide="plus-circle" style="width:26px;height:26px;margin-bottom:8px"></i><span style="font-size:13px;font-weight:600">New Team</span></div>
             </div>
         </div>
         </div>
@@ -2119,6 +2124,15 @@ function initSocket() {
             if (pop && pop.classList.contains('open')) renderLabelPopoverList();
         });
 
+        /* أي تيم يتضاف/يتعدل/يتمسح أو تتغير أعضاؤه (عند أي إيجنت) بيوصل هنا فورًا،
+           عشان صفحة Teams تفضل محدّثة عند كل الإيجنتس من غير ما تحتاج ريفريش */
+        socket.on('teams_updated', (teams) => {
+            TEAMS_CACHE = teams || [];
+            if (document.getElementById('settings-sec-teams')?.classList.contains('active')) {
+                renderTeamsGrid();
+            }
+        });
+
         /* لما أي إيجنت يحط/يشيل ليبل على محادثة، بنحدّث نفس المحادثة عند كل
            الإيجنتس المتصلين فورًا (شرط الطلب: الليبل يظهر لكل الإيجنتس) */
         socket.on('conversation_labels_updated', ({ conversationId, labels } = {}) => {
@@ -2769,6 +2783,7 @@ function navigateSettingsSection(section, el) {
     if (section === 'inboxes') loadInboxesFromAPI();
     if (section === 'agents') loadAgentsSettings();
     if (section === 'general') loadAccountSettings();
+    if (section === 'teams') loadTeams();
     if (section === 'profile' || section === 'general') renderProfileSection();
 }
 
@@ -2891,7 +2906,14 @@ function selectChat(id) {
         /* رجّع التاب لـ card */
         switchCpTab('card');
 
-        /* اللوحة مش بتفتح تلقائي — بس لما يدوس على أيقونة البروفايل */
+        /* اللوحة بتفتح تلقائي مع كل محادثة جديدة، بس في نسخة الويب (مش الموبايل) —
+           والمستخدم برضه يقدر يقفلها بنفسه لو عايز */
+        if (!isMobileLayout()) {
+            customerPanelOpen = true;
+            document.getElementById('customer-panel').classList.remove('hidden');
+            document.getElementById('panel-toggle-btn').classList.add('panel-open');
+        }
+
         renderChatList(currentFilter, document.querySelector('.cl-search').value);
         lucide.createIcons();
     } catch (err) {
@@ -5773,6 +5795,341 @@ async function confirmResolve() {
     } finally {
         confirmBtn.disabled = false;
         confirmBtn.textContent = originalText;
+    }
+}
+</script>
+
+<!-- ===== Team Modal (Add / Edit Team) ===== -->
+<div class="resolve-overlay" id="team-overlay" onclick="closeTeamModal(event)">
+    <div class="resolve-modal" id="team-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" id="team-modal-icon-preview">
+                <i data-lucide="users-round" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title" id="team-modal-title">Add Team</div>
+        </div>
+
+        <div class="resolve-cats-label">Team Name</div>
+        <input type="text" class="iw-input" id="team-name-input" placeholder="e.g. Tech Support" maxlength="150" style="margin-bottom:14px">
+
+        <div class="resolve-cats-label">Description</div>
+        <textarea class="resolve-notes" id="team-desc-input" placeholder="What does this team handle?" maxlength="300" style="margin-bottom:14px"></textarea>
+
+        <div class="resolve-cats-label">Icon</div>
+        <div class="team-icon-grid" id="team-icon-grid" style="margin-bottom:14px"></div>
+
+        <div class="resolve-cats-label">Color</div>
+        <div class="team-color-grid" id="team-color-grid" style="margin-bottom:14px"></div>
+
+        <div class="resolve-cats-label">Routing Strategy</div>
+        <select class="iw-input" id="team-strategy-input">
+            <option value="manual">Manual</option>
+            <option value="round_robin">Round Robin</option>
+            <option value="balanced">Balanced</option>
+        </select>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeTeamModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="team-save-btn" onclick="saveTeam()">
+                <i data-lucide="check" style="width:16px;height:16px"></i>
+                Save Team
+            </button>
+        </div>
+
+        <div class="login-error" id="team-modal-error" style="color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center"></div>
+    </div>
+</div>
+
+<!-- ===== Team Members Modal (إضافة إيجنتس حقيقيين مسجلين فعليًا) ===== -->
+<div class="resolve-overlay" id="team-members-overlay" onclick="closeTeamMembersModal(event)">
+    <div class="resolve-modal" id="team-members-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon">
+                <i data-lucide="users" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title" id="team-members-modal-title">Manage Agents</div>
+        </div>
+
+        <div class="iw-agent-list" id="team-members-list"><div class="iw-empty">جارِ تحميل الموظفين...</div></div>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeTeamMembersModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="team-members-save-btn" onclick="saveTeamMembers()">
+                <i data-lucide="check" style="width:16px;height:16px"></i>
+                Save Agents
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ============================================================
+   TEAMS — إدارة حقيقية متصلة بالباك إند (مش mock data تاني)
+   كل تيم بيتضاف/يتعدل/يتمسح فعليًا في قاعدة البيانات، وأعضاؤه
+   إيجنتس حقيقيين مسجلين في النظام (من /api/agents-list)
+============================================================ */
+let TEAMS_CACHE = [];
+let editingTeamId = null;
+let selectedTeamIcon = 'users-round';
+let selectedTeamColor = '#6C5CE7';
+
+let teamMembersModalTeamId = null;
+let teamMembersAvailableAgents = [];
+let teamMembersSelectedIds = new Set();
+
+const TEAM_ICON_OPTIONS = ['users-round', 'headset', 'credit-card', 'sparkles', 'shield', 'globe', 'wrench', 'star'];
+const TEAM_COLOR_OPTIONS = ['#6C5CE7', '#f59e0b', '#10b981', '#00D2FF', '#ef4444', '#64748b'];
+const TEAM_STRATEGY_LABELS = { manual: 'Manual', round_robin: 'Round Robin', balanced: 'Balanced' };
+
+/* hexToRgba موجودة أصلاً فوق (تستخدمها صفحة Labels) — بنعيد استخدامها هنا بدل ما نكررها */
+
+/* ===== جلب وعرض التيمز الحقيقية ===== */
+async function loadTeams() {
+    const grid = document.getElementById('teams-grid');
+    if (!grid) return;
+
+    const addBtn = document.getElementById('add-team-btn');
+    if (addBtn) addBtn.style.display = isOwnerOrAdmin() ? 'flex' : 'none';
+
+    try {
+        const res = await apiFetch('/api/teams');
+        if (!res.ok) throw new Error('Failed to fetch teams');
+        TEAMS_CACHE = await res.json();
+        renderTeamsGrid();
+    } catch (err) {
+        console.error('[API] loadTeams error:', err);
+        showToast('تعذر تحميل التيمز — تأكد إن الباك إند شغال', 'error');
+    }
+}
+
+function renderTeamsGrid() {
+    const grid = document.getElementById('teams-grid');
+    if (!grid) return;
+    const canManage = isOwnerOrAdmin();
+
+    const cards = TEAMS_CACHE.map((t) => `
+        <div class="settings-card">
+            <div class="settings-card-icon" style="background:${hexToRgba(t.color, 0.1)};color:${escapeHtml(t.color)}">
+                <i data-lucide="${escapeHtml(t.icon)}" style="width:20px;height:20px"></i>
+            </div>
+            <div class="settings-card-title">${escapeHtml(t.name)}</div>
+            <div class="settings-card-desc">${escapeHtml(t.description || '')}</div>
+            <div class="settings-card-meta">
+                <span>${t.members_count} agent${t.members_count === 1 ? '' : 's'}</span>
+                <span>${TEAM_STRATEGY_LABELS[t.routing_strategy] || 'Manual'}</span>
+            </div>
+            ${canManage ? `
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+                <button class="team-card-manage-btn" style="font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;background:none;border:none;font-family:inherit;padding:0" onclick="openTeamMembersModal(${t.id})">Manage Agents</button>
+                <div style="display:flex;gap:8px">
+                    <button class="st-icon-btn" onclick="openTeamModal(${t.id})" title="Edit team"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
+                    <button class="st-icon-btn" style="color:var(--danger)" onclick="deleteTeamConfirm(${t.id})" title="Delete team"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+                </div>
+            </div>` : ''}
+        </div>
+    `).join('');
+
+    grid.innerHTML = cards + (canManage ? `
+        <div class="settings-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;border-style:dashed;color:var(--text-secondary);cursor:pointer" onclick="openTeamModal()">
+            <i data-lucide="plus-circle" style="width:26px;height:26px;margin-bottom:8px"></i>
+            <span style="font-size:13px;font-weight:600">New Team</span>
+        </div>
+    ` : '');
+    lucide.createIcons();
+}
+
+/* ===== Modal إضافة / تعديل تيم ===== */
+function renderTeamIconGrid() {
+    const wrap = document.getElementById('team-icon-grid');
+    wrap.innerHTML = TEAM_ICON_OPTIONS.map((icon) => `
+        <div class="team-icon-opt ${icon === selectedTeamIcon ? 'selected' : ''}" onclick="selectTeamIcon('${icon}')">
+            <i data-lucide="${icon}" style="width:17px;height:17px"></i>
+        </div>
+    `).join('');
+    document.getElementById('team-modal-icon-preview').innerHTML = `<i data-lucide="${selectedTeamIcon}" style="width:22px;height:22px"></i>`;
+    lucide.createIcons();
+}
+
+function selectTeamIcon(icon) {
+    selectedTeamIcon = icon;
+    renderTeamIconGrid();
+}
+
+function renderTeamColorGrid() {
+    const wrap = document.getElementById('team-color-grid');
+    wrap.innerHTML = TEAM_COLOR_OPTIONS.map((color) => `
+        <div class="team-color-opt ${color === selectedTeamColor ? 'selected' : ''}" style="background:${color}" onclick="selectTeamColor('${color}')"></div>
+    `).join('');
+    const preview = document.getElementById('team-modal-icon-preview');
+    preview.style.background = hexToRgba(selectedTeamColor, 0.12);
+    preview.style.color = selectedTeamColor;
+}
+
+function selectTeamColor(color) {
+    selectedTeamColor = color;
+    renderTeamColorGrid();
+}
+
+function openTeamModal(teamId = null) {
+    editingTeamId = teamId || null;
+    const team = teamId ? TEAMS_CACHE.find((t) => t.id === teamId) : null;
+
+    document.getElementById('team-modal-title').textContent = team ? 'Edit Team' : 'Add Team';
+    document.getElementById('team-name-input').value = team ? team.name : '';
+    document.getElementById('team-desc-input').value = team ? (team.description || '') : '';
+    document.getElementById('team-strategy-input').value = team ? team.routing_strategy : 'manual';
+    document.getElementById('team-modal-error').textContent = '';
+    selectedTeamIcon = team ? team.icon : 'users-round';
+    selectedTeamColor = team ? team.color : '#6C5CE7';
+
+    renderTeamIconGrid();
+    renderTeamColorGrid();
+
+    document.getElementById('team-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+function closeTeamModal(e) {
+    if (e && e.target !== document.getElementById('team-overlay')) return;
+    document.getElementById('team-overlay').classList.remove('show');
+}
+
+async function saveTeam() {
+    const errorBox = document.getElementById('team-modal-error');
+    errorBox.textContent = '';
+
+    const name = document.getElementById('team-name-input').value.trim();
+    if (!name) { errorBox.textContent = 'لازم تكتب اسم التيم'; return; }
+
+    const payload = {
+        name,
+        description: document.getElementById('team-desc-input').value.trim() || null,
+        icon: selectedTeamIcon,
+        color: selectedTeamColor,
+        routingStrategy: document.getElementById('team-strategy-input').value,
+    };
+
+    const saveBtn = document.getElementById('team-save-btn');
+    saveBtn.disabled = true;
+
+    try {
+        const url = editingTeamId ? `/api/teams/${editingTeamId}` : '/api/teams';
+        const method = editingTeamId ? 'PUT' : 'POST';
+        const res = await apiFetch(url, { method, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ التيم');
+
+        closeTeamModal();
+        showToast(editingTeamId ? 'اتحدّث التيم بنجاح' : 'اتضاف التيم بنجاح', 'success');
+        await loadTeams();
+    } catch (err) {
+        console.error('[API] saveTeam error:', err);
+        errorBox.textContent = err.message || 'فشل حفظ التيم';
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+async function deleteTeamConfirm(teamId) {
+    const team = TEAMS_CACHE.find((t) => t.id === teamId);
+    if (!team) return;
+    if (!confirm(`متأكد إنك عايز تمسح تيم "${team.name}"؟`)) return;
+
+    try {
+        const res = await apiFetch(`/api/teams/${teamId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل مسح التيم');
+        showToast('اتمسح التيم بنجاح', 'success');
+        await loadTeams();
+    } catch (err) {
+        console.error('[API] deleteTeam error:', err);
+        showToast(err.message || 'فشل مسح التيم', 'error');
+    }
+}
+
+/* ===== Modal إضافة إيجنتس حقيقيين مسجلين للتيم ===== */
+async function openTeamMembersModal(teamId) {
+    teamMembersModalTeamId = teamId;
+    const team = TEAMS_CACHE.find((t) => t.id === teamId);
+    document.getElementById('team-members-modal-title').textContent = team ? `Manage Agents — ${team.name}` : 'Manage Agents';
+
+    const list = document.getElementById('team-members-list');
+    list.innerHTML = '<div class="iw-empty">جارِ تحميل الموظفين...</div>';
+    document.getElementById('team-members-overlay').classList.add('show');
+
+    try {
+        const [agentsRes, membersRes] = await Promise.all([
+            apiFetch('/api/agents-list'),
+            apiFetch(`/api/teams/${teamId}/members`),
+        ]);
+        if (!agentsRes.ok) throw new Error('Failed to fetch agents');
+        if (!membersRes.ok) throw new Error('Failed to fetch team members');
+
+        teamMembersAvailableAgents = await agentsRes.json();
+        const members = await membersRes.json();
+        teamMembersSelectedIds = new Set(members.map((m) => String(m.id)));
+        renderTeamMembersList();
+    } catch (err) {
+        console.error('[API] openTeamMembersModal error:', err);
+        list.innerHTML = '<div class="iw-empty">تعذر تحميل الموظفين</div>';
+    }
+}
+
+function closeTeamMembersModal(e) {
+    if (e && e.target !== document.getElementById('team-members-overlay')) return;
+    document.getElementById('team-members-overlay').classList.remove('show');
+}
+
+function renderTeamMembersList() {
+    const list = document.getElementById('team-members-list');
+    if (!teamMembersAvailableAgents.length) {
+        list.innerHTML = '<div class="iw-empty">مفيش إيجنتس متسجلين لسه — ضيف إيجنت من صفحة Agents الأول</div>';
+        return;
+    }
+
+    list.innerHTML = teamMembersAvailableAgents.map((a) => {
+        const idStr = String(a.id);
+        const isSelected = teamMembersSelectedIds.has(idStr);
+        return `
+        <div class="iw-agent-row ${isSelected ? 'selected' : ''}" data-agent-id="${idStr}">
+            <div class="iw-agent-check">${isSelected ? '<i data-lucide="check" style="width:12px;height:12px"></i>' : ''}</div>
+            <div class="iw-agent-name">${escapeHtml(a.display_name || a.email)}</div>
+            <div class="iw-agent-role">${roleLabel(a.role)}</div>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+document.getElementById('team-members-list').addEventListener('click', (e) => {
+    const row = e.target.closest('.iw-agent-row');
+    if (!row) return;
+    const idStr = row.dataset.agentId;
+    if (teamMembersSelectedIds.has(idStr)) teamMembersSelectedIds.delete(idStr);
+    else teamMembersSelectedIds.add(idStr);
+    renderTeamMembersList();
+});
+
+async function saveTeamMembers() {
+    if (!teamMembersModalTeamId) return;
+    const saveBtn = document.getElementById('team-members-save-btn');
+    saveBtn.disabled = true;
+
+    try {
+        const res = await apiFetch(`/api/teams/${teamMembersModalTeamId}/members`, {
+            method: 'POST',
+            body: JSON.stringify({ agentIds: Array.from(teamMembersSelectedIds).map(Number) }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ الأعضاء');
+
+        closeTeamMembersModal();
+        showToast('اتحدّثت أعضاء التيم بنجاح', 'success');
+        await loadTeams();
+    } catch (err) {
+        console.error('[API] saveTeamMembers error:', err);
+        showToast(err.message || 'فشل حفظ الأعضاء', 'error');
+    } finally {
+        saveBtn.disabled = false;
     }
 }
 </script>
