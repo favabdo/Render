@@ -227,6 +227,23 @@ async function getConversationsForContact(contactId, excludeConversationId = nul
   return result.recordset;
 }
 
+// بيرجع المحادثات المفتوحة (مش مقفولة نهائيًا) اللي معداش عليها نشاط (last_message_at)
+// من عدد الأيام ده — مرشحة إنها تتعمللها Resolve تلقائي بسبب عدم التفاعل
+async function findConversationsInactiveSince(days) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('days', sql.Int, days)
+    .query(`
+      SELECT id FROM [dbo].[NileChat_Conversations_byA]
+      WHERE locked_at IS NULL
+        AND status != 'closed'
+        AND last_message_at IS NOT NULL
+        AND last_message_at <= DATEADD(DAY, -@days, SYSUTCDATETIME())
+    `);
+  return result.recordset;
+}
+
 async function getMessagesForConversation(conversationId) {
   const pool = await getPool();
   const result = await pool
@@ -412,6 +429,7 @@ module.exports = {
   resolveConversation,
   reopenConversation,
   getMessagesForConversation,
+  findConversationsInactiveSince,
   getConversationsForContact,
   saveMessage,
   saveStatusUpdate,

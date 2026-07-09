@@ -16,6 +16,7 @@ const devicesRoutes = require('./routes/devices.routes');
 const scheduledTasksRoutes = require('./routes/scheduledTasks.routes');
 const cannedResponsesRoutes = require('./routes/cannedResponses.routes');
 const resolveCategoriesRoutes = require('./routes/resolveCategories.routes');
+const companyRoutes = require('./routes/company.routes');
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use('/', scheduledTasksRoutes);
 // الردود المحفوظة (Quick Replies / Canned Responses) وتصنيفات الـ Resolve
 app.use('/', cannedResponsesRoutes);
 app.use('/', resolveCategoriesRoutes);
+app.use('/', companyRoutes);
 
 // أي Error يوصل هنا (عن طريق asyncHandler أو next(err)) بيتحول لرد JSON موحد
 app.use(errorHandler);

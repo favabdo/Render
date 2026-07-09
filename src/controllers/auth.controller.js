@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const env = require('../config/env');
 const userRepo = require('../repositories/user.repo');
+const companyRepo = require('../repositories/company.repo');
 const mailer = require('../services/mailer.service');
 const { invalidateUserStatusCache } = require('../middlewares/auth');
 
@@ -80,7 +81,18 @@ async function createFirstUser(req, res) {
     return res.status(409).json({ error: 'فيه يوزر بنفس الإيميل ده بالفعل' });
   }
 
-  const user = await userRepo.createUser({ email, password, role, status: 'active' });
+  // بنربطه تلقائيًا بأول شركة موجودة في النظام (Nile Techno Support) — كل الإيجنتس
+  // اللي هيتضافوا بعد كده هيتربطوا بنفس الشركة دي (لحد ما يتعمل فعليًا اختيار
+  // شركة مختلفة وقت التسجيل)
+  const company = await companyRepo.getFirstCompany();
+  const user = await userRepo.createUser({
+    email,
+    password,
+    role,
+    status: 'active',
+    company_id: company ? company.id : null,
+    company_code: company ? company.code : null,
+  });
   res.status(201).json({ ok: true, user });
 }
 
@@ -142,9 +154,21 @@ async function createUserAccount(req, res) {
     return res.status(409).json({ error: 'فيه يوزر بنفس الإيميل ده بالفعل' });
   }
 
+  // بنربط الإيجنت الجديد بنفس شركة الأدمن اللي بيدعوه (كل الإيجنتس على نفس
+  // الشركة بيشوفوا نفس اسم الحساب في صفحة الإعدادات)
+  const actingAdmin = await userRepo.findUserById(req.user.userId);
+  const company = await companyRepo.getCompanyForUser(actingAdmin);
+
   // باسورد وهمي مؤقت، مفيش حد يعرفه — الإيجنت هيحدد كلمة سره الحقيقية من لينك الدعوة
   const placeholderPassword = crypto.randomBytes(24).toString('hex');
-  const user = await userRepo.createUser({ email, password: placeholderPassword, role, status: 'invited' });
+  const user = await userRepo.createUser({
+    email,
+    password: placeholderPassword,
+    role,
+    status: 'invited',
+    company_id: company ? company.id : null,
+    company_code: company ? company.code : null,
+  });
 
   const inviteToken = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);

@@ -483,6 +483,81 @@ async function ensureResolveCategoriesTableExists() {
   logger.info('✅ جدول Resolve Categories جاهز.');
 }
 
+// جدول الشركات (Accounts) — كل شركة ليها كود مميز (خليط حروف/أرقام) واسم يتعرض
+// في صفحة الإعدادات لكل الإيجنتس اللي تابعين لها. أول شركة بتتعمل تلقائيًا هي
+// "Nile Techno Support" (أول عميل استخدم النظام)، وأي يوزر جديد من غيرها بيتربط
+// بيها تلقائيًا لحد ما نضيف واجهة فعلية لإنشاء/اختيار شركات تانية.
+async function ensureCompaniesTableExists() {
+  const pool = await getPool();
+  const existsResult = await pool.request().query(`
+    SELECT CASE WHEN EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Companies_byA') THEN 1 ELSE 0 END AS tableExists
+  `);
+  const alreadyExists = Boolean(existsResult.recordset[0].tableExists);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Companies_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Companies_byA] (
+        id                BIGINT IDENTITY(1,1) PRIMARY KEY,
+        name              NVARCHAR(200) NOT NULL,
+        code              NVARCHAR(50)  NOT NULL UNIQUE,
+        auto_resolve_days INT           NULL,
+        created_at        DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+    END
+  `);
+
+  // أول مرة يتعمل فيها الجدول بس، بنزرع أول شركة (Nile Techno Support) بكود
+  // عشوائي خليط حروف وأرقام — نفس فكرة أي حساب أول (Owner Account) بيتعمل تلقائي
+  if (!alreadyExists) {
+    const code = generateCompanyCode();
+    await pool
+      .request()
+      .input('name', sql.NVarChar(200), 'Nile Techno Support')
+      .input('code', sql.NVarChar(50), code)
+      .input('autoResolveDays', sql.Int, 7)
+      .query(`
+        INSERT INTO [dbo].[NileChat_Companies_byA] (name, code, auto_resolve_days)
+        VALUES (@name, @code, @autoResolveDays)
+      `);
+    logger.info(`✅ اتزرعت أول شركة (Nile Techno Support) بكود: ${code}`);
+  }
+  logger.info('✅ جدول Companies جاهز.');
+}
+
+// كود الشركة: خليط حروف كبيرة وأرقام (10 خانات) عشان يبقى فريد وسهل التوزيع
+// على الإيجنتس الجداد وقت التسجيل (زي "NTX7K2Q9PL")
+function generateCompanyCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // من غير حروف/أرقام بتتلخبط بصريًا (O/0, I/1)
+  let code = '';
+  for (let i = 0; i < 10; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+// أي يوزر قديم أو جديد لسه ملوش company_id (لسه معملهوش ربط بشركة)، بنربطه
+// تلقائيًا بأول شركة موجودة في النظام (Nile Techno Support) — لحد ما يتعمل
+// فعليًا فلو multi-company كامل (اختيار/إنشاء شركة وقت التسجيل)
+async function ensureUsersHaveCompanyAssigned() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Companies_byA')
+       AND EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Users_byA')
+    BEGIN
+      DECLARE @firstCompanyId BIGINT = (SELECT TOP 1 id FROM [dbo].[NileChat_Companies_byA] ORDER BY id ASC);
+      DECLARE @firstCompanyCode NVARCHAR(50) = (SELECT TOP 1 code FROM [dbo].[NileChat_Companies_byA] ORDER BY id ASC);
+      IF @firstCompanyId IS NOT NULL
+      BEGIN
+        UPDATE [dbo].[NileChat_Users_byA]
+        SET company_id = @firstCompanyId,
+            company_code = COALESCE(company_code, @firstCompanyCode)
+        WHERE company_id IS NULL;
+      END
+    END
+  `);
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -504,6 +579,8 @@ async function ensureSchema() {
   await ensureScheduledTasksTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
+  await ensureCompaniesTableExists();
+  await ensureUsersHaveCompanyAssigned();
 }
 
 module.exports = {
@@ -529,6 +606,9 @@ module.exports = {
   ensureScheduledTasksTableExists,
   ensureCannedResponsesTableExists,
   ensureResolveCategoriesTableExists,
+  ensureCompaniesTableExists,
+  ensureUsersHaveCompanyAssigned,
+  generateCompanyCode,
   ensureSchema,
   TABLE_NAME,
 };

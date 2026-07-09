@@ -14,7 +14,7 @@ async function findUserById(id) {
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
-    .query(`SELECT id, email, role, status, display_name FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
+    .query(`SELECT id, email, role, status, display_name, company_id, company_code FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
   return result.recordset[0] || null;
 }
 
