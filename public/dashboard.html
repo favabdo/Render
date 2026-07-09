@@ -372,7 +372,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .label-popover-empty{padding:14px;text-align:center;font-size:12.5px;color:var(--text-secondary)}
 .label-popover-option{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .1s}
 .label-popover-option:hover{background:rgba(108,92,231,0.06)}
-.label-popover-check{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.label-popover-check{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .label-popover-option.selected .label-popover-check{background:var(--primary);border-color:var(--primary);color:#fff}
 .label-popover-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .label-popover-footer{border-top:1px solid var(--border);padding:8px;flex-shrink:0}
@@ -3521,6 +3521,9 @@ function positionLabelPopover(anchorBtn) {
     let left = rect.right - popWidth; // محاذاة لليمين مع الزرار (زي ما كانت right:0 قبل كدا)
     left = Math.max(margin, Math.min(left, window.innerWidth - popWidth - margin));
 
+    // بنشيل أي سقف طول اتحط قبل كدا (من محاولة فتح سابقة) قبل ما نقيس، عشان القياس
+    // يعكس طول المحتوى الطبيعي مش الطول المقصوص من المرة اللي فاتت
+    pop.style.maxHeight = 'none';
     // أقصى طول ممكن يظهر بيه الپوب أب تحت الزرار من غير ما يعدي حدود الشاشة
     const spaceBelow = viewportH - rect.bottom - 6 - margin;
     const spaceAbove = rect.top - 6 - margin;
@@ -3532,9 +3535,13 @@ function positionLabelPopover(anchorBtn) {
         top = rect.bottom + 6;
         pop.style.maxHeight = Math.max(120, Math.min(viewportH - margin * 2, spaceBelow)) + 'px';
     } else {
-        // مفيش مساحة كفاية تحت، فبيفتح فوق الزرار بدل ما ينزل تحت حدود الشاشة
-        pop.style.maxHeight = Math.max(120, Math.min(viewportH - margin * 2, spaceAbove)) + 'px';
-        top = Math.max(margin, rect.top - 6 - parseFloat(pop.style.maxHeight));
+        // مفيش مساحة كفاية تحت، فبيفتح فوق الزرار بدل ما ينزل تحت حدود الشاشة.
+        // مهم: بنستخدم طول المحتوى الفعلي (neededHeight) في حساب top مش سقف المساحة
+        // المتاحة (spaceAbove) نفسه، لأن المحتوى ممكن يكون أقصر بكتير من المساحة دي —
+        // لو استخدمنا المساحة كاملة كان بيطلع فجوة كبيرة بين الپوب أب والزرار (البوب أب يروح فوق أوي)
+        const cap = Math.max(120, Math.min(viewportH - margin * 2, spaceAbove));
+        pop.style.maxHeight = cap + 'px';
+        top = Math.max(margin, rect.top - 6 - Math.min(neededHeight, cap));
     }
 
     pop.style.left = left + 'px';
@@ -3570,8 +3577,8 @@ function renderLabelPopoverList() {
     }
     const appliedIds = (c && c.labels ? c.labels : []).map(l => Number(l.id));
     container.innerHTML = allLabels.map(l => `
-        <div class="label-popover-option ${appliedIds.includes(Number(l.id)) ? 'selected' : ''}" onclick="toggleLabelOnConv(${l.id})">
-            <span class="label-popover-check">${appliedIds.includes(Number(l.id)) ? '<i data-lucide="check" style="width:11px;height:11px"></i>' : ''}</span>
+        <div class="label-popover-option ${appliedIds.includes(Number(l.id)) ? 'selected' : ''}" onclick="selectLabelForConv(${l.id})">
+            <span class="label-popover-check">${appliedIds.includes(Number(l.id)) ? '<span style="width:7px;height:7px;border-radius:50%;background:currentColor"></span>' : ''}</span>
             <span class="label-popover-dot" style="background:${l.color || '#6C5CE7'}"></span>
             <span>${escapeHtml(l.name)}</span>
         </div>
@@ -3579,7 +3586,10 @@ function renderLabelPopoverList() {
     lucide.createIcons();
 }
 
-async function toggleLabelOnConv(labelId) {
+// الليبل بيبقى واحد بس في المرة الواحدة للمحادثة (زي radio button مش checkbox):
+// - لو ضغطت على اللي مختار أصلاً: بيتشال (تفضل المحادثة من غير ليبل)
+// - لو ضغطت على ليبل تاني: أي ليبل قديم بيتشال الأول وبعدين الجديد بيتحط
+async function selectLabelForConv(labelId) {
     const c = conversations.find(x => x.id === selectedChatId);
     if (!c) return;
     const applied = (c.labels || []).some(l => Number(l.id) === Number(labelId));
@@ -3590,6 +3600,15 @@ async function toggleLabelOnConv(labelId) {
             if (!res.ok) throw new Error(data.error || 'فشل شيل الليبل');
             c.labels = data.labels;
         } else {
+            // بنشيل أي ليبلز قديمة متحطة على المحادثة الأول عشان يفضل ليبل واحد بس
+            const existingIds = (c.labels || []).map(l => l.id);
+            for (const oldId of existingIds) {
+                const delRes = await apiFetch(`/api/conversations/${c.id}/labels/${oldId}`, { method: 'DELETE' });
+                if (delRes.ok) {
+                    const delData = await delRes.json();
+                    c.labels = delData.labels;
+                }
+            }
             const res = await apiFetch(`/api/conversations/${c.id}/labels`, {
                 method: 'POST',
                 body: JSON.stringify({ labelId }),
@@ -3601,7 +3620,7 @@ async function toggleLabelOnConv(labelId) {
         renderConvLabels(c);
         renderLabelPopoverList();
     } catch (err) {
-        console.error('[API] toggleLabelOnConv error:', err);
+        console.error('[API] selectLabelForConv error:', err);
         showToast(err.message || 'حصل خطأ', 'error');
     }
 }
@@ -3661,7 +3680,7 @@ async function createNewLabel() {
         allLabels.push(data);
         renderLabelsSettingsTable();
         toggleNewLabelForm();
-        await toggleLabelOnConv(data.id);
+        await selectLabelForConv(data.id);
         showToast('تم إضافة الليبل', 'success');
     } catch (err) {
         console.error('[API] createNewLabel error:', err);
