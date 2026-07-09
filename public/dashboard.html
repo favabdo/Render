@@ -675,11 +675,19 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     .qr-drag-handle{flex-basis:100%;order:-1;padding:2px 0 6px;border-bottom:1px dashed var(--border)}
 }
 
+.app-footer{
+    position:fixed;bottom:6px;left:0;right:0;
+    text-align:center;font-size:10.5px;color:var(--text-secondary);
+    opacity:.55;pointer-events:none;z-index:5;
+}
+
 </style>
 </head>
 <body>
 
 <div id="page-loader"><img src="/assets/logo-icon.png" alt="NileChat"></div>
+
+<div class="app-footer">Copyright © Nile Techno Designed by Abdullah Elsawy 2026</div>
 
 <div id="app" class="flex" style="flex:1;overflow:hidden">
 
@@ -852,11 +860,18 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 </div>
 
                 <!-- Scheduled Tasks -->
-                <div class="cp-section">
-                    <div class="cp-section-title">Scheduled Tasks</div>
-                    <button class="add-btn" id="sched-add-btn" onclick="openScheduledTaskModal()">
-                        <i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Adding scheduled tasks
-                    </button>
+                <div class="cp-section" id="cp-section-sched">
+                    <div class="cp-section-header" onclick="toggleCpSection('cp-section-sched')">
+                        <div class="cp-section-title">Scheduled Tasks</div>
+                        <div class="cp-section-header-right">
+                            <i data-lucide="chevron-down" class="cp-collapse-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="cp-section-body">
+                        <button class="add-btn" id="sched-add-btn" onclick="openScheduledTaskModal()">
+                            <i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Adding scheduled tasks
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Label -->
@@ -2056,6 +2071,15 @@ function initSocket() {
             } else {
                 loadConversationsFromAPI();
             }
+        });
+
+        /* أي ليبل يتضاف/يتعدل/يتمسح من صفحة الإعدادات (عند أي إيجنت) بيوصل هنا فورًا،
+           عشان قايمة الليبلز في كارت العميل تفضل محدّثة من غير ما تحتاج ريفريش */
+        socket.on('labels_updated', (labels) => {
+            allLabels = labels || [];
+            renderLabelsSettingsTable();
+            const pop = document.getElementById('label-popover');
+            if (pop && pop.classList.contains('open')) renderLabelPopoverList();
         });
 
         /* لما أي إيجنت يحط/يشيل ليبل على محادثة، بنحدّث نفس المحادثة عند كل
@@ -3427,6 +3451,7 @@ function toggleLabelPopover(e) {
     if (opening) {
         document.getElementById('label-popover-new-form').classList.remove('show');
         renderLabelPopoverList();
+        loadLabelsFromAPI().then(renderLabelPopoverList); // تأكيد إن القايمة أحدث نسخة من السيرفر
     }
 }
 document.addEventListener('click', e => {

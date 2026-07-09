@@ -21,6 +21,8 @@ async function create(req, res) {
     createdBy: req.user.userId,
   });
   res.status(201).json(created);
+
+  broadcastLabelsList(req);
 }
 
 async function update(req, res) {
@@ -34,11 +36,26 @@ async function update(req, res) {
   });
   if (!updated) return res.status(404).json({ error: 'الليبل ده مش موجود' });
   res.json(updated);
+
+  broadcastLabelsList(req);
 }
 
 async function remove(req, res) {
   await repo.deleteLabel(req.params.id);
   res.json({ ok: true });
+
+  broadcastLabelsList(req);
+}
+
+// بتبعت كل قايمة الليبلز المحدّثة لكل الإيجنتس المتصلين — عشان أي ليبل يتضاف/يتعدل/
+// يتمسح من صفحة الإعدادات يظهر فورًا عند كل واحد فاتح كارت العميل (من غير ريفريش)
+function broadcastLabelsList(req) {
+  const io = req.app.get('io');
+  if (!io) return;
+  repo
+    .listLabels()
+    .then((labels) => io.emit('labels_updated', labels))
+    .catch((err) => logger.error('❌ فشل بث تحديث الليبلز:', err.message));
 }
 
 // ===== ربط الليبلز بمحادثة معينة =====
