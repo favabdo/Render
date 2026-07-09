@@ -18,6 +18,7 @@ const cannedResponsesRoutes = require('./routes/cannedResponses.routes');
 const resolveCategoriesRoutes = require('./routes/resolveCategories.routes');
 const labelsRoutes = require('./routes/labels.routes');
 const companyRoutes = require('./routes/company.routes');
+const teamsRoutes = require('./routes/teams.routes');
 
 const app = express();
 
@@ -77,6 +78,7 @@ app.use('/', cannedResponsesRoutes);
 app.use('/', resolveCategoriesRoutes);
 app.use('/', labelsRoutes);
 app.use('/', companyRoutes);
+app.use('/', teamsRoutes);
 
 // أي Error يوصل هنا (عن طريق asyncHandler أو next(err)) بيتحول لرد JSON موحد
 app.use(errorHandler);

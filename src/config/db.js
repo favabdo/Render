@@ -599,6 +599,48 @@ async function ensureUsersHaveCompanyAssigned() {
   `);
 }
 
+// جدول التيمز (Teams) — بيتجمع فيه شوية إيجنتس تحت مسمى واحد لتسهيل التوزيع
+// (زي "Tech Support" أو "Billing")، وكل تيم ليه استراتيجية توزيع اختيارية
+async function ensureTeamsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Teams_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Teams_byA] (
+        id                BIGINT IDENTITY(1,1) PRIMARY KEY,
+        name              NVARCHAR(150) NOT NULL,
+        description       NVARCHAR(300) NULL,
+        icon              NVARCHAR(50)  NOT NULL DEFAULT 'users-round',
+        color             NVARCHAR(20)  NOT NULL DEFAULT '#6C5CE7',
+        routing_strategy  NVARCHAR(20)  NOT NULL DEFAULT 'manual',
+        created_by        BIGINT NULL,
+        created_at        DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+    END
+  `);
+  logger.info('✅ جدول Teams جاهز.');
+}
+
+// جدول الربط بين التيمز والإيجنتس (many-to-many) — نفس فكرة NileChat_InboxAgents_byA بالظبط
+async function ensureTeamMembersTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_TeamMembers_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_TeamMembers_byA] (
+        id         BIGINT IDENTITY(1,1) PRIMARY KEY,
+        team_id    BIGINT NOT NULL,
+        user_id    BIGINT NOT NULL,
+        created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT UQ_NileChat_TeamMembers_byA UNIQUE (team_id, user_id)
+      );
+      CREATE INDEX IX_NileChat_TeamMembers_byA_team_id
+        ON [dbo].[NileChat_TeamMembers_byA](team_id);
+    END
+  `);
+  logger.info('✅ جدول Team Members جاهز.');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -624,6 +666,8 @@ async function ensureSchema() {
   await ensureConversationLabelsTableExists();
   await ensureCompaniesTableExists();
   await ensureUsersHaveCompanyAssigned();
+  await ensureTeamsTableExists();
+  await ensureTeamMembersTableExists();
 }
 
 module.exports = {
@@ -654,6 +698,8 @@ module.exports = {
   ensureCompaniesTableExists,
   ensureUsersHaveCompanyAssigned,
   generateCompanyCode,
+  ensureTeamsTableExists,
+  ensureTeamMembersTableExists,
   ensureSchema,
   TABLE_NAME,
 };
