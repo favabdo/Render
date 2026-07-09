@@ -360,7 +360,13 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .sched-filters-bar{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .sched-filter-group{display:flex;flex-direction:column;gap:5px;min-width:180px}
 .sched-filter-group label{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:5px}
-.sched-filter-group select{cursor:pointer}
+.sched-filter-group input{cursor:text}
+#page-scheduled-tasks .page-header{flex-wrap:wrap;row-gap:12px}
+.sched-header-actions{display:flex;gap:8px}
+@media (max-width:860px){
+    .sched-header-actions{flex-direction:column-reverse;width:100%}
+    .sched-header-actions .page-btn{width:100%;justify-content:center}
+}
 .sched-page-tabs{display:flex;gap:6px;border-bottom:1.5px solid var(--border);margin-bottom:16px}
 .sched-page-tab{display:flex;align-items:center;gap:7px;padding:10px 16px;border:none;background:none;font-size:13.5px;font-weight:700;color:var(--text-secondary);cursor:pointer;font-family:inherit;position:relative;transition:color .15s}
 .sched-page-tab:hover{color:var(--primary)}
@@ -1064,24 +1070,22 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     <div style="font-size:12px;color:var(--text-secondary);font-weight:500;margin-top:2px">Tasks agents scheduled from customer cards</div>
                 </div>
             </div>
-            <div style="display:flex;gap:8px">
-                <button class="page-btn" onclick="openScheduledTaskModalFromPage()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Add Task</button>
+            <div class="sched-header-actions">
                 <button class="page-btn" onclick="loadScheduledTasksPage()"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh</button>
+                <button class="page-btn" onclick="openScheduledTaskModalFromPage()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> Add Task</button>
             </div>
         </div>
 
         <div class="sched-filters-bar">
             <div class="sched-filter-group">
                 <label for="sched-filter-agent"><i data-lucide="user-round" style="width:13px;height:13px"></i> Agent</label>
-                <select class="iw-input" id="sched-filter-agent" onchange="applySchedFilters()">
-                    <option value="">All Agents</option>
-                </select>
+                <input type="text" class="iw-input" id="sched-filter-agent" list="sched-agents-list" placeholder="كل الايجنتس..." autocomplete="off" oninput="applySchedFilters()">
+                <datalist id="sched-agents-list"></datalist>
             </div>
             <div class="sched-filter-group">
                 <label for="sched-filter-customer"><i data-lucide="user-round-search" style="width:13px;height:13px"></i> Customer</label>
-                <select class="iw-input" id="sched-filter-customer" onchange="applySchedFilters()">
-                    <option value="">All Customers</option>
-                </select>
+                <input type="text" class="iw-input" id="sched-filter-customer" list="sched-customers-list" placeholder="كل العملاء..." autocomplete="off" oninput="applySchedFilters()">
+                <datalist id="sched-customers-list"></datalist>
             </div>
         </div>
 
@@ -3655,6 +3659,7 @@ async function submitScheduledTask() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل إضافة التاسك');
         scheduledTasks.unshift(data.task);
+        updateSchedBadgeCount();
         // لو صفحة Scheduled Tasks كانت متفتحة قبل كده، حدّثها كمان
         if (currentPage === 'scheduled-tasks') drawScheduledTasksPage();
         closeScheduledTaskModal();
@@ -3712,27 +3717,21 @@ function scheduledTaskCardHtml(t, ended) {
 }
 
 function populateSchedFilters() {
-    const agentSel = document.getElementById('sched-filter-agent');
-    const customerSel = document.getElementById('sched-filter-customer');
-    if (!agentSel || !customerSel) return;
-
-    const prevAgent = schedFilterAgent;
-    const prevCustomer = schedFilterCustomer;
+    const agentsList = document.getElementById('sched-agents-list');
+    const customersList = document.getElementById('sched-customers-list');
+    if (!agentsList || !customersList) return;
 
     const agents = [...new Set(scheduledTasks.map(t => t.agent_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const customers = [...new Set(scheduledTasks.map(t => t.customer_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
-    agentSel.innerHTML = '<option value="">All Agents</option>' + agents.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
-    customerSel.innerHTML = '<option value="">All Customers</option>' + customers.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-
-    // استرجاع القيم المختارة قبل كده لو لسه موجودة في القايمة
-    if (agents.includes(prevAgent)) agentSel.value = prevAgent; else schedFilterAgent = '';
-    if (customers.includes(prevCustomer)) customerSel.value = prevCustomer; else schedFilterCustomer = '';
+    // بنعبي الـ datalist بس (اقتراحات) من غير ما نلمس القيمة اللي المستخدم كاتبها دلوقتي
+    agentsList.innerHTML = agents.map(a => `<option value="${escapeHtml(a)}"></option>`).join('');
+    customersList.innerHTML = customers.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
 }
 
 function applySchedFilters() {
-    schedFilterAgent = document.getElementById('sched-filter-agent').value;
-    schedFilterCustomer = document.getElementById('sched-filter-customer').value;
+    schedFilterAgent = document.getElementById('sched-filter-agent').value.trim();
+    schedFilterCustomer = document.getElementById('sched-filter-customer').value.trim();
     drawScheduledTasksPage(false);
 }
 
@@ -3743,12 +3742,37 @@ function switchSchedTab(tab) {
     document.getElementById('sched-page-ended-list').style.display = tab === 'ended' ? '' : 'none';
 }
 
+function updateSchedBadgeCount() {
+    const sidebarBadge = document.getElementById('sidebar-sched-badge');
+    if (!sidebarBadge) return;
+    const totalOpen = scheduledTasks.filter(t => t.status === 'open').length;
+    sidebarBadge.style.display = totalOpen > 0 ? 'flex' : 'none';
+    sidebarBadge.textContent = totalOpen;
+}
+
+/* بتتنادى مرة واحدة عند فتح التطبيق (وكل ريفريش) عشان رقم التاسكات المفتوحة
+   يظهر على أيقونة Scheduled Tasks في السايد بار من غير ما تدخل الصفحة نفسها */
+async function loadScheduledTasksBadge() {
+    try {
+        const res = await apiFetch('/api/scheduled-tasks');
+        if (!res.ok) return;
+        scheduledTasks = await res.json();
+        updateSchedBadgeCount();
+        // لو المستخدم فاتح صفحة Scheduled Tasks بالفعل، حدّث العرض كمان
+        if (currentPage === 'scheduled-tasks') drawScheduledTasksPage();
+    } catch (err) {
+        console.error('[API] loadScheduledTasksBadge error:', err);
+    }
+}
+
 function drawScheduledTasksPage(refreshFilters = true) {
     if (refreshFilters) populateSchedFilters();
 
+    const agentQuery = schedFilterAgent.toLowerCase();
+    const customerQuery = schedFilterCustomer.toLowerCase();
     const filtered = scheduledTasks.filter(t =>
-        (!schedFilterAgent || t.agent_name === schedFilterAgent) &&
-        (!schedFilterCustomer || t.customer_name === schedFilterCustomer)
+        (!agentQuery || (t.agent_name || '').toLowerCase().includes(agentQuery)) &&
+        (!customerQuery || (t.customer_name || '').toLowerCase().includes(customerQuery))
     );
 
     const open = filtered.filter(t => t.status === 'open');
@@ -3756,12 +3780,7 @@ function drawScheduledTasksPage(refreshFilters = true) {
 
     document.getElementById('sched-page-open-count').textContent = `(${open.length})`;
     document.getElementById('sched-page-ended-count').textContent = `(${ended.length})`;
-    const sidebarBadge = document.getElementById('sidebar-sched-badge');
-    if (sidebarBadge) {
-        const totalOpen = scheduledTasks.filter(t => t.status === 'open').length;
-        sidebarBadge.style.display = totalOpen > 0 ? 'flex' : 'none';
-        sidebarBadge.textContent = totalOpen;
-    }
+    updateSchedBadgeCount();
 
     document.getElementById('sched-page-open-list').innerHTML = open.length === 0
         ? '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">No open tasks</div>'
@@ -4273,6 +4292,7 @@ function init() {
     loadAgentsFromAPI();
     loadCannedResponsesFromAPI();
     loadResolveCategoriesFromAPI();
+    loadScheduledTasksBadge();
     refreshCurrentUser();
     initSocket();
     // الـ polling الدوري (كل 3 ثواني) اتشال عشان كان بيعمل حمل زيادة على السيرفر والجت.
