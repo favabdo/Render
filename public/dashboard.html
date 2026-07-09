@@ -357,6 +357,16 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .sched-end-btn{padding:6px 12px;border-radius:8px;border:none;background:var(--success);color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px;transition:all .15s}
 .sched-end-btn:hover{background:#059669}
 .sched-ended-tag{font-size:10.5px;font-weight:700;color:var(--success);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:4px}
+.sched-filters-bar{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.sched-filter-group{display:flex;flex-direction:column;gap:5px;min-width:180px}
+.sched-filter-group label{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:5px}
+.sched-filter-group select{cursor:pointer}
+.sched-page-tabs{display:flex;gap:6px;border-bottom:1.5px solid var(--border);margin-bottom:16px}
+.sched-page-tab{display:flex;align-items:center;gap:7px;padding:10px 16px;border:none;background:none;font-size:13.5px;font-weight:700;color:var(--text-secondary);cursor:pointer;font-family:inherit;position:relative;transition:color .15s}
+.sched-page-tab:hover{color:var(--primary)}
+.sched-page-tab.active{color:var(--primary)}
+.sched-page-tab.active::after{content:'';position:absolute;bottom:-1.5px;left:0;right:0;height:2.5px;background:var(--primary);border-radius:2px 2px 0 0}
+.sched-page-tab .sched-subhead-count{color:inherit;font-weight:600}
 .st-modal-readonly-row{display:flex;gap:8px;margin-bottom:14px}
 .st-modal-readonly{flex:1;padding:9px 11px;border-radius:9px;background:var(--bg);border:1.5px solid var(--border)}
 .st-modal-readonly-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
@@ -1057,14 +1067,33 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <button class="page-btn" onclick="loadScheduledTasksPage()"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh</button>
         </div>
 
-        <div class="chart-container">
-            <div class="sched-subhead" style="margin-top:0"><i data-lucide="circle-dot" style="width:13px;height:13px"></i> Open Tasks <span class="sched-subhead-count" id="sched-page-open-count">(0)</span></div>
-            <div class="sched-tasks-grid" id="sched-page-open-list"></div>
+        <div class="sched-filters-bar">
+            <div class="sched-filter-group">
+                <label for="sched-filter-agent"><i data-lucide="user-round" style="width:13px;height:13px"></i> Agent</label>
+                <select class="iw-input" id="sched-filter-agent" onchange="applySchedFilters()">
+                    <option value="">All Agents</option>
+                </select>
+            </div>
+            <div class="sched-filter-group">
+                <label for="sched-filter-customer"><i data-lucide="user-round-search" style="width:13px;height:13px"></i> Customer</label>
+                <select class="iw-input" id="sched-filter-customer" onchange="applySchedFilters()">
+                    <option value="">All Customers</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="sched-page-tabs">
+            <button class="sched-page-tab active" data-schedtab="open" onclick="switchSchedTab('open')">
+                <i data-lucide="circle-dot" style="width:14px;height:14px"></i> Open Tasks <span class="sched-subhead-count" id="sched-page-open-count">(0)</span>
+            </button>
+            <button class="sched-page-tab" data-schedtab="ended" onclick="switchSchedTab('ended')">
+                <i data-lucide="check-circle" style="width:14px;height:14px"></i> Ended Tasks <span class="sched-subhead-count" id="sched-page-ended-count">(0)</span>
+            </button>
         </div>
 
         <div class="chart-container">
-            <div class="sched-subhead" style="margin-top:0"><i data-lucide="check-circle" style="width:13px;height:13px"></i> Ended Tasks <span class="sched-subhead-count" id="sched-page-ended-count">(0)</span></div>
-            <div class="sched-tasks-grid" id="sched-page-ended-list"></div>
+            <div class="sched-tasks-grid" id="sched-page-open-list"></div>
+            <div class="sched-tasks-grid" id="sched-page-ended-list" style="display:none"></div>
         </div>
     </div>
 </div>
@@ -2432,6 +2461,9 @@ let selectedAgentIdx = -1;
 let customerPanelOpen = false;
 let devices = [];
 let scheduledTasks = [];
+let schedActiveTab = 'open';
+let schedFilterAgent = '';
+let schedFilterCustomer = '';
 let generatedReply = '';
 
 /* ===== التنقل ===== */
@@ -3630,16 +3662,56 @@ function scheduledTaskCardHtml(t, ended) {
     `;
 }
 
-function drawScheduledTasksPage() {
-    const open = scheduledTasks.filter(t => t.status === 'open');
-    const ended = scheduledTasks.filter(t => t.status === 'ended');
+function populateSchedFilters() {
+    const agentSel = document.getElementById('sched-filter-agent');
+    const customerSel = document.getElementById('sched-filter-customer');
+    if (!agentSel || !customerSel) return;
+
+    const prevAgent = schedFilterAgent;
+    const prevCustomer = schedFilterCustomer;
+
+    const agents = [...new Set(scheduledTasks.map(t => t.agent_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const customers = [...new Set(scheduledTasks.map(t => t.customer_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+    agentSel.innerHTML = '<option value="">All Agents</option>' + agents.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+    customerSel.innerHTML = '<option value="">All Customers</option>' + customers.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+    // استرجاع القيم المختارة قبل كده لو لسه موجودة في القايمة
+    if (agents.includes(prevAgent)) agentSel.value = prevAgent; else schedFilterAgent = '';
+    if (customers.includes(prevCustomer)) customerSel.value = prevCustomer; else schedFilterCustomer = '';
+}
+
+function applySchedFilters() {
+    schedFilterAgent = document.getElementById('sched-filter-agent').value;
+    schedFilterCustomer = document.getElementById('sched-filter-customer').value;
+    drawScheduledTasksPage(false);
+}
+
+function switchSchedTab(tab) {
+    schedActiveTab = tab;
+    document.querySelectorAll('.sched-page-tab').forEach(b => b.classList.toggle('active', b.dataset.schedtab === tab));
+    document.getElementById('sched-page-open-list').style.display = tab === 'open' ? '' : 'none';
+    document.getElementById('sched-page-ended-list').style.display = tab === 'ended' ? '' : 'none';
+}
+
+function drawScheduledTasksPage(refreshFilters = true) {
+    if (refreshFilters) populateSchedFilters();
+
+    const filtered = scheduledTasks.filter(t =>
+        (!schedFilterAgent || t.agent_name === schedFilterAgent) &&
+        (!schedFilterCustomer || t.customer_name === schedFilterCustomer)
+    );
+
+    const open = filtered.filter(t => t.status === 'open');
+    const ended = filtered.filter(t => t.status === 'ended');
 
     document.getElementById('sched-page-open-count').textContent = `(${open.length})`;
     document.getElementById('sched-page-ended-count').textContent = `(${ended.length})`;
     const sidebarBadge = document.getElementById('sidebar-sched-badge');
     if (sidebarBadge) {
-        sidebarBadge.style.display = open.length > 0 ? 'flex' : 'none';
-        sidebarBadge.textContent = open.length;
+        const totalOpen = scheduledTasks.filter(t => t.status === 'open').length;
+        sidebarBadge.style.display = totalOpen > 0 ? 'flex' : 'none';
+        sidebarBadge.textContent = totalOpen;
     }
 
     document.getElementById('sched-page-open-list').innerHTML = open.length === 0
@@ -3649,6 +3721,10 @@ function drawScheduledTasksPage() {
     document.getElementById('sched-page-ended-list').innerHTML = ended.length === 0
         ? '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">No ended tasks</div>'
         : ended.map(t => scheduledTaskCardHtml(t, true)).join('');
+
+    // الحفاظ على التاب الحالي ظاهر بس
+    document.getElementById('sched-page-open-list').style.display = schedActiveTab === 'open' ? '' : 'none';
+    document.getElementById('sched-page-ended-list').style.display = schedActiveTab === 'ended' ? '' : 'none';
 
     lucide.createIcons();
 }
