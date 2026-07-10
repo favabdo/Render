@@ -148,7 +148,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 /* Resolve Popup Overlay */
 .resolve-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
 .resolve-overlay.show{opacity:1;pointer-events:all}
-.resolve-modal{background:var(--surface);border-radius:20px;padding:28px 28px 24px;width:440px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,0.3);transform:translateY(16px) scale(0.97);transition:transform .25s,opacity .25s;opacity:0;border:1px solid var(--border)}
+.resolve-modal{background:var(--surface);border-radius:20px;padding:28px 28px 24px;width:440px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);transform:translateY(16px) scale(0.97);transition:transform .25s,opacity .25s;opacity:0;border:1px solid var(--border)}
 .resolve-overlay.show .resolve-modal{transform:translateY(0) scale(1);opacity:1}
 .resolve-modal-header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .resolve-modal-icon{width:44px;height:44px;border-radius:12px;background:rgba(16,185,129,0.12);display:flex;align-items:center;justify-content:center;color:var(--success);flex-shrink:0}
@@ -187,7 +187,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     .chart-container{padding:14px;overflow:hidden}
     .sched-tasks-grid{grid-template-columns:1fr}
 }
-.resolve-modal-actions{display:flex;gap:10px;margin-top:18px}
+.resolve-modal-actions{display:flex;gap:10px;margin-top:18px;position:sticky;bottom:0;background:var(--surface);padding-top:12px}
 .resolve-cancel-btn{flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
 .resolve-cancel-btn:hover{border-color:var(--danger);color:var(--danger)}
 .resolve-confirm-btn{flex:2;padding:11px;border-radius:10px;border:none;background:var(--success);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px}
