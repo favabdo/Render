@@ -697,9 +697,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 }
 
 .app-footer{
-    position:fixed;bottom:6px;left:0;right:0;
+    flex-shrink:0;padding:5px 0;
     text-align:center;font-size:10.5px;color:var(--text-secondary);
-    opacity:.55;pointer-events:none;z-index:5;
+    opacity:.55;pointer-events:none;
 }
 
 </style>
@@ -708,9 +708,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
 <div id="page-loader"><img src="/assets/logo-icon.png" alt="NileChat"></div>
 
-<div class="app-footer">Copyright © Nile Techno Designed by Abdullah Elsawy 2026</div>
-
-<div id="app" class="flex" style="flex:1;overflow:hidden">
+<div id="app" class="flex" style="flex:1;overflow:hidden;min-height:0">
 
 <aside id="sidebar">
     <img src="/assets/logo-icon.png" alt="NileChat" class="sidebar-logo">
@@ -1417,6 +1415,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 </div>
 
 </div></div>
+<div class="app-footer">Copyright © Nile Techno Designed by Abdullah Elsawy 2026</div>
 <div id="toast-container"></div>
 
 <script>
@@ -1561,7 +1560,9 @@ function mapApiConversation(row) {
         rawStatus: row.status, // 'open' | 'assigned' | 'closed' زي ما هو في السيرفر
         assignedTo: row.assigned_agent_name || null,
         lastMsg: row.last_message_text || '',
-        time: row.last_message_at ? formatTime(row.last_message_at) : '',
+        // الوقت المعروض بجانب اسم العميل في القايمة = وقت أول رسالة بعتها العميل
+        // في المحادثة دي (created_at)، مش وقت آخر رسالة (last_message_at)
+        time: row.created_at ? formatTime(row.created_at) : '',
         unread: 0,
         messages: [], // هتتجاب لحظة فتح المحادثة
         phones: [{ number: row.contact_number, label: null }], // ده بس fallback فوري — بيتحدث بالأرقام الحقيقية كلها لما نفتح لوحة العميل
@@ -1680,7 +1681,7 @@ async function pollConversationsSilently() {
 
             if (hasNewMessage) {
                 c.lastMsg = row.last_message_text || '';
-                c.time = row.last_message_at ? formatTime(row.last_message_at) : c.time;
+                // c.time بيفضل ثابت على وقت أول رسالة من العميل (created_at)، مش بيتحدث مع كل رسالة جديدة
                 c._lastMessageAtRaw = rawTime;
                 c._lastMessageDirection = row.last_message_direction || null;
                 listChanged = true;
@@ -1977,7 +1978,6 @@ function initSocket() {
                         delete pending._pending;
                         pending.id = message.id || null;
                         c.lastMsg = message.message_text;
-                        c.time = formatTime(message.created_at);
                         if (selectedChatId === c.id) renderMessages(c);
                         renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
                         return;
@@ -1995,7 +1995,6 @@ function initSocket() {
 
                 c.messages.push(newMsg);
                 c.lastMsg = message.message_text || '';
-                c.time = formatTime(message.created_at);
                 // بنسجل الـ raw timestamp/direction عشان الـ polling الاحتياطي متزودش
                 // العداد تاني على نفس الرسالة اللي الـ socket وصلها فعلاً
                 c._lastMessageAtRaw = message.created_at || c._lastMessageAtRaw;
@@ -3178,7 +3177,6 @@ async function sendMessage() {
     const timeStr = new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
     c.messages.push({from:'agent', text, time:timeStr, senderName: AUTH_USER.display_name || AUTH_USER.email, _pending:true});
     c.lastMsg = text;
-    c.time = timeStr;
     renderMessages(c);
     renderChatList(currentFilter, document.querySelector('.cl-search').value);
 
