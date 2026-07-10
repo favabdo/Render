@@ -23,9 +23,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{
     font-family:'DM Sans',sans-serif;
-    background:var(--sidebar-bg);
-    background-image:radial-gradient(ellipse at 15% 20%, rgba(108,92,231,0.25) 0%, transparent 55%),
-                      radial-gradient(ellipse at 85% 80%, rgba(0,210,255,0.18) 0%, transparent 55%);
+    background:#081B2D;
     color:var(--text);
     min-height:100vh;
     display:flex;
@@ -34,6 +32,8 @@ body{
     overflow-x:hidden;
 }
 .page-center{
+    position:relative;
+    z-index:1;
     flex:1;
     display:flex;
     align-items:center;
@@ -102,9 +102,359 @@ h1,h2{font-family:'Space Grotesk','DM Sans',sans-serif}
     opacity:.75;
     font-family:'DM Sans',sans-serif;
 }
+
+/* ==== Animated glass/aurora background (Nile Chat) ==== */
+:root {
+    --deep-navy: #081B2D;
+    --royal-blue: #1E88E5;
+    --cyan: #38BDF8;
+    --teal: #14B8A6;
+    --purple-accent: #7C3AED;
+}
+
+.background-container {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.base-gradient {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 120% 80% at 15% 20%, rgba(30, 136, 229, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 100% 70% at 85% 75%, rgba(20, 184, 166, 0.1) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 60% at 70% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 90% 90% at 50% 50%, rgba(124, 58, 237, 0.03) 0%, transparent 70%),
+      linear-gradient(175deg, #081B2D 0%, #0A2240 40%, #081B2D 70%, #061524 100%);
+}
+
+.aurora-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0.4;
+    filter: blur(80px);
+    animation: auroraShift 20s ease-in-out infinite;
+}
+
+.aurora-band {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+}
+
+.aurora-band-1 {
+    width: 60vw;
+    height: 30vh;
+    top: -5%;
+    left: -10%;
+    background: linear-gradient(135deg, rgba(30, 136, 229, 0.25), rgba(56, 189, 248, 0.15), transparent);
+    animation: auroraFloat1 18s ease-in-out infinite;
+}
+
+.aurora-band-2 {
+    width: 50vw;
+    height: 25vh;
+    bottom: -5%;
+    right: -8%;
+    background: linear-gradient(315deg, rgba(20, 184, 166, 0.2), rgba(56, 189, 248, 0.1), transparent);
+    animation: auroraFloat2 22s ease-in-out infinite;
+}
+
+.aurora-band-3 {
+    width: 40vw;
+    height: 20vh;
+    top: 30%;
+    right: -5%;
+    background: linear-gradient(225deg, rgba(124, 58, 237, 0.08), rgba(30, 136, 229, 0.12), transparent);
+    animation: auroraFloat3 25s ease-in-out infinite;
+}
+
+@keyframes auroraShift {
+    0%, 100% { transform: translateX(0) scale(1); }
+    33% { transform: translateX(2%) scale(1.02); }
+    66% { transform: translateX(-1%) scale(0.98); }
+}
+
+@keyframes auroraFloat1 {
+    0%, 100% { transform: translate(0, 0) rotate(-5deg); opacity: 0.6; }
+    50% { transform: translate(3vw, 2vh) rotate(0deg); opacity: 0.9; }
+}
+
+@keyframes auroraFloat2 {
+    0%, 100% { transform: translate(0, 0) rotate(5deg); opacity: 0.5; }
+    50% { transform: translate(-2vw, -3vh) rotate(0deg); opacity: 0.8; }
+}
+
+@keyframes auroraFloat3 {
+    0%, 100% { transform: translate(0, 0) rotate(-3deg); opacity: 0.4; }
+    50% { transform: translate(-3vw, 2vh) rotate(2deg); opacity: 0.7; }
+}
+
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(1px);
+}
+
+.orb::after {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    border-radius: 50%;
+    filter: blur(40px);
+    z-index: -1;
+}
+
+.orb-1 {
+    width: 6px; height: 6px; top: 12%; left: 8%;
+    background: rgba(56, 189, 248, 0.8);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.4), 0 0 60px rgba(56, 189, 248, 0.15);
+    animation: orbPulse1 6s ease-in-out infinite, orbDrift1 30s ease-in-out infinite;
+}
+.orb-2 {
+    width: 4px; height: 4px; top: 18%; right: 12%;
+    background: rgba(20, 184, 166, 0.8);
+    box-shadow: 0 0 15px rgba(20, 184, 166, 0.4), 0 0 50px rgba(20, 184, 166, 0.15);
+    animation: orbPulse2 8s ease-in-out infinite, orbDrift2 35s ease-in-out infinite;
+}
+.orb-3 {
+    width: 5px; height: 5px; bottom: 15%; left: 15%;
+    background: rgba(30, 136, 229, 0.8);
+    box-shadow: 0 0 18px rgba(30, 136, 229, 0.4), 0 0 55px rgba(30, 136, 229, 0.15);
+    animation: orbPulse1 7s ease-in-out infinite 2s, orbDrift3 28s ease-in-out infinite;
+}
+.orb-4 {
+    width: 3px; height: 3px; bottom: 20%; right: 8%;
+    background: rgba(124, 58, 237, 0.6);
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.3), 0 0 40px rgba(124, 58, 237, 0.1);
+    animation: orbPulse2 9s ease-in-out infinite 1s, orbDrift4 32s ease-in-out infinite;
+}
+.orb-5 {
+    width: 4px; height: 4px; top: 45%; left: 5%;
+    background: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.3), 0 0 45px rgba(56, 189, 248, 0.1);
+    animation: orbPulse1 10s ease-in-out infinite 3s, orbDrift5 27s ease-in-out infinite;
+}
+.orb-6 {
+    width: 3px; height: 3px; top: 40%; right: 6%;
+    background: rgba(20, 184, 166, 0.7);
+    box-shadow: 0 0 12px rgba(20, 184, 166, 0.3), 0 0 40px rgba(20, 184, 166, 0.1);
+    animation: orbPulse2 7s ease-in-out infinite 4s, orbDrift6 33s ease-in-out infinite;
+}
+
+@keyframes orbPulse1 { 0%,100%{opacity:.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.4)} }
+@keyframes orbPulse2 { 0%,100%{opacity:.5;transform:scale(1)} 50%{opacity:.9;transform:scale(1.3)} }
+@keyframes orbDrift1 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(15px,-10px)} 50%{transform:translate(5px,20px)} 75%{transform:translate(-10px,8px)} }
+@keyframes orbDrift2 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-12px,15px)} 50%{transform:translate(-20px,-5px)} 75%{transform:translate(8px,-12px)} }
+@keyframes orbDrift3 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(10px,12px)} 50%{transform:translate(-8px,-15px)} 75%{transform:translate(18px,-5px)} }
+@keyframes orbDrift4 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-15px,-8px)} 50%{transform:translate(12px,10px)} 75%{transform:translate(-5px,15px)} }
+@keyframes orbDrift5 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(8px,15px)} 50%{transform:translate(15px,-8px)} 75%{transform:translate(-12px,-10px)} }
+@keyframes orbDrift6 { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-10px,-12px)} 50%{transform:translate(-8px,18px)} 75%{transform:translate(12px,5px)} }
+
+.light-source { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+.light-1 { width: 35vw; height: 35vw; top: -15%; left: -10%; background: radial-gradient(circle, rgba(30, 136, 229, 0.08) 0%, transparent 70%); animation: lightBreath1 15s ease-in-out infinite; }
+.light-2 { width: 30vw; height: 30vw; bottom: -12%; right: -8%; background: radial-gradient(circle, rgba(20, 184, 166, 0.07) 0%, transparent 70%); animation: lightBreath2 18s ease-in-out infinite; }
+.light-3 { width: 25vw; height: 25vw; top: 20%; right: -5%; background: radial-gradient(circle, rgba(56, 189, 248, 0.05) 0%, transparent 70%); animation: lightBreath1 20s ease-in-out infinite 5s; }
+.light-4 { width: 20vw; height: 20vw; bottom: 10%; left: -3%; background: radial-gradient(circle, rgba(124, 58, 237, 0.04) 0%, transparent 70%); animation: lightBreath2 22s ease-in-out infinite 3s; }
+
+@keyframes lightBreath1 { 0%,100%{opacity:.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
+@keyframes lightBreath2 { 0%,100%{opacity:.5;transform:scale(1)} 50%{opacity:.9;transform:scale(1.05)} }
+
+.chat-bubble {
+    position: absolute;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+    overflow: hidden;
+}
+.chat-bubble::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%);
+    border-radius: 18px 18px 0 0;
+    pointer-events: none;
+}
+
+.bubble-line { position: absolute; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
+
+.bubble-1 { width: 120px; height: 70px; top: 8%; left: 5%; animation: bubbleFloat1 24s ease-in-out infinite; transform: rotate(-3deg); }
+.bubble-1 .bubble-line:nth-child(1) { width: 60%; height: 4px; top: 18px; left: 14px; }
+.bubble-1 .bubble-line:nth-child(2) { width: 80%; height: 4px; top: 30px; left: 14px; background: rgba(255,255,255,0.04); }
+.bubble-1 .bubble-line:nth-child(3) { width: 40%; height: 4px; top: 42px; left: 14px; background: rgba(255,255,255,0.03); }
+
+.bubble-2 { width: 90px; height: 55px; top: 14%; right: 7%; animation: bubbleFloat2 28s ease-in-out infinite; transform: rotate(2deg); }
+.bubble-2 .bubble-line:nth-child(1) { width: 55%; height: 3px; top: 14px; left: 12px; }
+.bubble-2 .bubble-line:nth-child(2) { width: 70%; height: 3px; top: 24px; left: 12px; background: rgba(255,255,255,0.04); }
+.bubble-2 .bubble-line:nth-child(3) { width: 35%; height: 3px; top: 34px; left: 12px; background: rgba(255,255,255,0.03); }
+
+.bubble-3 { width: 100px; height: 60px; bottom: 10%; left: 7%; animation: bubbleFloat3 26s ease-in-out infinite; transform: rotate(2deg); }
+.bubble-3 .bubble-line:nth-child(1) { width: 50%; height: 3px; top: 15px; left: 13px; }
+.bubble-3 .bubble-line:nth-child(2) { width: 75%; height: 3px; top: 26px; left: 13px; background: rgba(255,255,255,0.04); }
+.bubble-3 .bubble-line:nth-child(3) { width: 45%; height: 3px; top: 37px; left: 13px; background: rgba(255,255,255,0.03); }
+
+.bubble-4 { width: 80px; height: 50px; bottom: 8%; right: 10%; animation: bubbleFloat4 30s ease-in-out infinite; transform: rotate(-2deg); }
+.bubble-4 .bubble-line:nth-child(1) { width: 60%; height: 3px; top: 12px; left: 11px; }
+.bubble-4 .bubble-line:nth-child(2) { width: 45%; height: 3px; top: 22px; left: 11px; background: rgba(255,255,255,0.04); }
+.bubble-4 .bubble-line:nth-child(3) { width: 70%; height: 3px; top: 32px; left: 11px; background: rgba(255,255,255,0.03); }
+
+.bubble-5 { width: 70px; height: 45px; top: 55%; left: 3%; animation: bubbleFloat5 22s ease-in-out infinite; transform: rotate(1deg); opacity: 0.7; }
+.bubble-5 .bubble-line:nth-child(1) { width: 55%; height: 3px; top: 11px; left: 10px; }
+.bubble-5 .bubble-line:nth-child(2) { width: 65%; height: 3px; top: 21px; left: 10px; background: rgba(255,255,255,0.04); }
+
+.bubble-6 { width: 65px; height: 42px; top: 50%; right: 4%; animation: bubbleFloat6 25s ease-in-out infinite; transform: rotate(-1deg); opacity: 0.6; }
+.bubble-6 .bubble-line:nth-child(1) { width: 50%; height: 3px; top: 10px; left: 9px; }
+.bubble-6 .bubble-line:nth-child(2) { width: 60%; height: 3px; top: 20px; left: 9px; background: rgba(255,255,255,0.04); }
+
+@keyframes bubbleFloat1 { 0%,100%{transform:translate(0,0) rotate(-3deg)} 25%{transform:translate(10px,-8px) rotate(-1deg)} 50%{transform:translate(-5px,12px) rotate(-4deg)} 75%{transform:translate(8px,5px) rotate(-2deg)} }
+@keyframes bubbleFloat2 { 0%,100%{transform:translate(0,0) rotate(2deg)} 25%{transform:translate(-8px,10px) rotate(4deg)} 50%{transform:translate(12px,-5px) rotate(1deg)} 75%{transform:translate(-5px,-8px) rotate(3deg)} }
+@keyframes bubbleFloat3 { 0%,100%{transform:translate(0,0) rotate(2deg)} 25%{transform:translate(12px,8px) rotate(0deg)} 50%{transform:translate(-8px,-10px) rotate(3deg)} 75%{transform:translate(5px,-5px) rotate(1deg)} }
+@keyframes bubbleFloat4 { 0%,100%{transform:translate(0,0) rotate(-2deg)} 25%{transform:translate(-10px,-8px) rotate(0deg)} 50%{transform:translate(8px,10px) rotate(-3deg)} 75%{transform:translate(-5px,5px) rotate(-1deg)} }
+@keyframes bubbleFloat5 { 0%,100%{transform:translate(0,0) rotate(1deg)} 33%{transform:translate(8px,-6px) rotate(-1deg)} 66%{transform:translate(-6px,8px) rotate(2deg)} }
+@keyframes bubbleFloat6 { 0%,100%{transform:translate(0,0) rotate(-1deg)} 33%{transform:translate(-6px,8px) rotate(1deg)} 66%{transform:translate(8px,-5px) rotate(-2deg)} }
+
+.glass-surface {
+    position: absolute;
+    border-radius: 24px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+    border: 1px solid rgba(255,255,255,0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.glass-1 { width: 200px; height: 200px; top: 3%; left: 2%; border-radius: 32px; animation: glassShift1 30s ease-in-out infinite; }
+.glass-2 { width: 160px; height: 160px; bottom: 3%; right: 2%; border-radius: 28px; animation: glassShift2 35s ease-in-out infinite; }
+.glass-3 { width: 120px; height: 120px; top: 60%; left: 1%; border-radius: 24px; opacity: 0.5; animation: glassShift1 28s ease-in-out infinite 5s; }
+.glass-4 { width: 140px; height: 140px; top: 5%; right: 1%; border-radius: 26px; opacity: 0.5; animation: glassShift2 32s ease-in-out infinite 3s; }
+
+@keyframes glassShift1 { 0%,100%{transform:translate(0,0) rotate(0deg);opacity:.4} 50%{transform:translate(10px,8px) rotate(1deg);opacity:.6} }
+@keyframes glassShift2 { 0%,100%{transform:translate(0,0) rotate(0deg);opacity:.4} 50%{transform:translate(-8px,-10px) rotate(-1deg);opacity:.6} }
+
+#particleCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.center-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 50% 50% at 50% 50%, transparent 30%, rgba(8, 27, 45, 0.3) 70%, rgba(8, 27, 45, 0.6) 100%);
+    pointer-events: none;
+}
+
+.noise-overlay {
+    position: absolute;
+    inset: 0;
+    opacity: 0.015;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+}
+
+.edge-glow { position: absolute; pointer-events: none; }
+.edge-glow-top { top: 0; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.15), rgba(30, 136, 229, 0.2), rgba(56, 189, 248, 0.15), transparent); animation: edgeGlowPulse 8s ease-in-out infinite; }
+.edge-glow-bottom { bottom: 0; left: 15%; right: 15%; height: 1px; background: linear-gradient(90deg, transparent, rgba(20, 184, 166, 0.12), rgba(30, 136, 229, 0.15), rgba(20, 184, 166, 0.12), transparent); animation: edgeGlowPulse 10s ease-in-out infinite 3s; }
+.edge-glow-left { left: 0; top: 15%; bottom: 15%; width: 1px; background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.1), rgba(20, 184, 166, 0.12), rgba(56, 189, 248, 0.1), transparent); animation: edgeGlowPulse 9s ease-in-out infinite 1s; }
+.edge-glow-right { right: 0; top: 10%; bottom: 10%; width: 1px; background: linear-gradient(180deg, transparent, rgba(30, 136, 229, 0.1), rgba(56, 189, 248, 0.12), rgba(30, 136, 229, 0.1), transparent); animation: edgeGlowPulse 11s ease-in-out infinite 2s; }
+
+@keyframes edgeGlowPulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+#waveCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.35; }
+
+@media (prefers-reduced-motion: reduce) {
+    .background-container *, .background-container *::before, .background-container *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .glass-1, .glass-2, .glass-3, .glass-4 { display: none; }
+    .bubble-5, .bubble-6 { display: none; }
+    .bubble-1 { width: 90px; height: 55px; }
+    .bubble-2 { width: 70px; height: 45px; }
+    .bubble-3 { width: 80px; height: 50px; }
+    .bubble-4 { width: 60px; height: 40px; }
+}
+/* ==== end animated background ==== */
+
 </style>
 </head>
 <body>
+
+<div class="background-container">
+  <div class="base-gradient"></div>
+
+  <div class="aurora-layer">
+    <div class="aurora-band aurora-band-1"></div>
+    <div class="aurora-band aurora-band-2"></div>
+    <div class="aurora-band aurora-band-3"></div>
+  </div>
+
+  <div class="light-source light-1"></div>
+  <div class="light-source light-2"></div>
+  <div class="light-source light-3"></div>
+  <div class="light-source light-4"></div>
+
+  <div class="glass-surface glass-1"></div>
+  <div class="glass-surface glass-2"></div>
+  <div class="glass-surface glass-3"></div>
+  <div class="glass-surface glass-4"></div>
+
+  <div class="chat-bubble bubble-1">
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+  </div>
+  <div class="chat-bubble bubble-2">
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+  </div>
+  <div class="chat-bubble bubble-3">
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+  </div>
+  <div class="chat-bubble bubble-4">
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+  </div>
+  <div class="chat-bubble bubble-5">
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+  </div>
+  <div class="chat-bubble bubble-6">
+    <div class="bubble-line"></div>
+    <div class="bubble-line"></div>
+  </div>
+
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+  <div class="orb orb-4"></div>
+  <div class="orb orb-5"></div>
+  <div class="orb orb-6"></div>
+
+  <canvas id="waveCanvas"></canvas>
+  <canvas id="particleCanvas"></canvas>
+
+  <div class="center-vignette"></div>
+
+  <div class="edge-glow edge-glow-top"></div>
+  <div class="edge-glow edge-glow-bottom"></div>
+  <div class="edge-glow edge-glow-left"></div>
+  <div class="edge-glow edge-glow-right"></div>
+
+  <div class="noise-overlay"></div>
+</div>
 
 <div class="page-center">
 <div class="login-card">
@@ -184,5 +534,159 @@ form.addEventListener('submit', async (e) => {
     }
 });
 </script>
+<script>
+/* ===== Animated background: waves + particles ===== */
+(function() {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
+  let w, h;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const waves = [
+    { yBase: 0.15, amplitude: 30, frequency: 0.003, speed: 0.0004, color: 'rgba(56, 189, 248, 0.12)', width: 1 },
+    { yBase: 0.18, amplitude: 20, frequency: 0.004, speed: 0.0005, color: 'rgba(30, 136, 229, 0.08)', width: 0.8 },
+    { yBase: 0.82, amplitude: 25, frequency: 0.0035, speed: -0.0004, color: 'rgba(20, 184, 166, 0.1)', width: 1 },
+    { yBase: 0.85, amplitude: 18, frequency: 0.0045, speed: -0.0005, color: 'rgba(56, 189, 248, 0.07)', width: 0.8 },
+    { yBase: 0.5, amplitude: 15, frequency: 0.002, speed: 0.0003, color: 'rgba(124, 58, 237, 0.04)', width: 0.6 },
+  ];
+
+  function drawWaves(time) {
+    ctx.clearRect(0, 0, w, h);
+    waves.forEach(wave => {
+      ctx.beginPath();
+      ctx.strokeStyle = wave.color;
+      ctx.lineWidth = wave.width;
+      const baseY = h * wave.yBase;
+      for (let x = 0; x <= w; x += 2) {
+        const y = baseY +
+          Math.sin(x * wave.frequency + time * wave.speed) * wave.amplitude +
+          Math.sin(x * wave.frequency * 0.5 + time * wave.speed * 1.3) * wave.amplitude * 0.5;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+  }
+
+  const pCanvas = document.getElementById('particleCanvas');
+  const pCtx = pCanvas.getContext('2d');
+  let pw, ph;
+
+  function resizeP() {
+    pw = pCanvas.width = window.innerWidth;
+    ph = pCanvas.height = window.innerHeight;
+  }
+  resizeP();
+  window.addEventListener('resize', resizeP);
+
+  class Particle {
+    constructor() { this.reset(); }
+    reset() {
+      const angle = Math.random() * Math.PI * 2;
+      const minDist = Math.min(pw, ph) * 0.2;
+      const maxDist = Math.min(pw, ph) * 0.55;
+      const dist = minDist + Math.random() * (maxDist - minDist);
+      this.x = pw / 2 + Math.cos(angle) * dist * (0.8 + Math.random() * 0.4);
+      this.y = ph / 2 + Math.sin(angle) * dist * (0.8 + Math.random() * 0.4);
+      this.x = Math.max(10, Math.min(pw - 10, this.x));
+      this.y = Math.max(10, Math.min(ph - 10, this.y));
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.radius = Math.max(0.5, Math.random() * 1.8);
+      this.opacity = 0.1 + Math.random() * 0.4;
+      const colorChoice = Math.random();
+      if (colorChoice < 0.35) this.color = { r: 56, g: 189, b: 248 };
+      else if (colorChoice < 0.65) this.color = { r: 30, g: 136, b: 229 };
+      else if (colorChoice < 0.85) this.color = { r: 20, g: 184, b: 166 };
+      else this.color = { r: 124, g: 58, b: 237 };
+      this.pulseSpeed = 0.001 + Math.random() * 0.002;
+      this.pulseOffset = Math.random() * Math.PI * 2;
+    }
+    update(time) {
+      this.x += this.vx;
+      this.y += this.vy;
+      const dx = this.x - pw / 2;
+      const dy = this.y - ph / 2;
+      const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+      const minAllowedDist = Math.min(pw, ph) * 0.15;
+      if (distFromCenter < minAllowedDist) {
+        const pushStrength = 0.02;
+        this.vx += (dx / Math.max(1, distFromCenter)) * pushStrength;
+        this.vy += (dy / Math.max(1, distFromCenter)) * pushStrength;
+      }
+      if (this.x < -20 || this.x > pw + 20 || this.y < -20 || this.y > ph + 20) this.reset();
+      this.vx *= 0.999;
+      this.vy *= 0.999;
+      this.currentOpacity = this.opacity * (0.6 + 0.4 * Math.sin(time * this.pulseSpeed + this.pulseOffset));
+    }
+    draw() {
+      const { r, g, b } = this.color;
+      const op = this.currentOpacity;
+      pCtx.beginPath();
+      pCtx.arc(this.x, this.y, this.radius * 4, 0, Math.PI * 2);
+      pCtx.fillStyle = `rgba(${r},${g},${b},${op * 0.1})`;
+      pCtx.fill();
+      pCtx.beginPath();
+      pCtx.arc(this.x, this.y, Math.max(0.3, this.radius), 0, Math.PI * 2);
+      pCtx.fillStyle = `rgba(${r},${g},${b},${op})`;
+      pCtx.fill();
+    }
+  }
+
+  const particleCount = Math.min(80, Math.floor((window.innerWidth * window.innerHeight) / 20000));
+  const particles = [];
+  for (let i = 0; i < particleCount; i++) particles.push(new Particle());
+
+  const maxConnectionDist = 180;
+
+  function drawConnections() {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < maxConnectionDist) {
+          const alpha = (1 - dist / maxConnectionDist) * 0.08;
+          const c1 = particles[i].color;
+          const c2 = particles[j].color;
+          const mr = Math.round((c1.r + c2.r) / 2);
+          const mg = Math.round((c1.g + c2.g) / 2);
+          const mb = Math.round((c1.b + c2.b) / 2);
+          pCtx.beginPath();
+          pCtx.moveTo(particles[i].x, particles[i].y);
+          pCtx.lineTo(particles[j].x, particles[j].y);
+          pCtx.strokeStyle = `rgba(${mr},${mg},${mb},${alpha})`;
+          pCtx.lineWidth = 0.5;
+          pCtx.stroke();
+        }
+      }
+    }
+  }
+
+  let startTime = null;
+  function animate(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const time = timestamp - startTime;
+    drawWaves(time);
+    pCtx.clearRect(0, 0, pw, ph);
+    particles.forEach(p => p.update(time));
+    drawConnections();
+    particles.forEach(p => p.draw());
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  window.addEventListener('resize', () => {
+    particles.forEach(p => p.reset());
+  });
+})();
+</script>
+
 </body>
 </html>
