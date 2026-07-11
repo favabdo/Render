@@ -4,13 +4,21 @@
 const { getPool, sql, generateCompanyCode } = require('../config/db');
 const { parseScheduleJson } = require('../utils/welcomeSchedule');
 
-// بيحاول يفك الـ JSON بتاع كلمات الـ Keyword Routing؛ لو مفيش قيمة أو الـ JSON
-// باظ بيرجع array فاضية بدل ما يرمي استثناء (زي parseScheduleJson بالظبط)
-function parseKeywordsJson(raw) {
+// بيحاول يفك الـ JSON بتاع قواعد الـ Keyword Routing (array من { team_id, keywords }).
+// لو مفيش قيمة أو الـ JSON باظ بيرجع array فاضية بدل ما يرمي استثناء
+function parseKeywordRoutingRules(raw) {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string' && k.trim()) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((rule) => ({
+        team_id: rule && rule.team_id ? Number(rule.team_id) : null,
+        keywords: rule && Array.isArray(rule.keywords)
+          ? rule.keywords.filter((k) => typeof k === 'string' && k.trim())
+          : [],
+      }))
+      .filter((rule) => rule.team_id && rule.keywords.length);
   } catch {
     return [];
   }
@@ -108,8 +116,7 @@ function mapAutomationSettings(company) {
     csat_enabled: Boolean(company.automation_csat_enabled),
     csat_message: company.automation_csat_message || '',
     keyword_routing_enabled: Boolean(company.automation_keyword_routing_enabled),
-    keyword_routing_team_id: company.automation_keyword_routing_team_id || null,
-    keyword_routing_keywords: parseKeywordsJson(company.automation_keyword_routing_keywords),
+    keyword_routing_rules: parseKeywordRoutingRules(company.automation_keyword_routing_rules),
   };
 }
 
@@ -163,13 +170,9 @@ async function updateAutomationSettings(companyId, fields = {}) {
     req.input('keywordRoutingEnabled', sql.Bit, fields.keywordRoutingEnabled ? 1 : 0);
     sets.push('automation_keyword_routing_enabled = @keywordRoutingEnabled');
   }
-  if (fields.keywordRoutingTeamId !== undefined) {
-    req.input('keywordRoutingTeamId', sql.BigInt, fields.keywordRoutingTeamId);
-    sets.push('automation_keyword_routing_team_id = @keywordRoutingTeamId');
-  }
-  if (fields.keywordRoutingKeywords !== undefined) {
-    req.input('keywordRoutingKeywords', sql.NVarChar(sql.MAX), JSON.stringify(fields.keywordRoutingKeywords));
-    sets.push('automation_keyword_routing_keywords = @keywordRoutingKeywords');
+  if (fields.keywordRoutingRules !== undefined) {
+    req.input('keywordRoutingRules', sql.NVarChar(sql.MAX), JSON.stringify(fields.keywordRoutingRules));
+    sets.push('automation_keyword_routing_rules = @keywordRoutingRules');
   }
 
   if (sets.length === 0) return getAutomationSettings(companyId);

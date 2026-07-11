@@ -204,44 +204,69 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
   }
 }
 
-// قاعدة أتمتة "التوجيه بالكلمات المفتاحية" (Keyword Routing): لو نص رسالة
-// العميل فيه أي واحدة من الكلمات المحددة في الإعدادات، بتتحط المحادثة على
-// التيم المختار فورًا (بحث بسيط بالـ substring، case-insensitive، ومفيش فرق
-// لو الكلمة عربي أو إنجليزي). بتشتغل مع كل رسالة نصية جاية، مش أول رسالة بس،
-// وبتتجاهل بهدوء لو التيم متحط على المحادثة بالفعل عشان متكررش نفس رسالة
-// النظام مع كل رسالة جديدة على نفس المحادثة
+// قاعدة أتمتة "التوجيه بالكلمات المفتاحية" (Keyword Routing): بتدعم أكتر من
+// قاعدة مستقلة، كل واحدة فيها مجموعة كلمات + تيم مختلف. لو نص رسالة العميل فيه
+// أي واحدة من كلمات قاعدة معينة، بتتحط المحادثة على تيم القاعدة دي فورًا —
+// بحث بسيط بالـ substring، case-insensitive. بتشتغل مع كل رسالة نصية جاية، مش
+// أول رسالة بس. لو أكتر من قاعدة اتحققت في نفس الرسالة، كل التيمز المطابقة
+// بتتحط على المحادثة. وبتتم بنفس الطريقة بالظبط اللي بتحصل بيها لو اليوزر حط
+// التيم يدويًا من كارت العميل (نفس الـ repo function ونفس حدث الـ socket
+// conversation_teams_updated)، عشان تظهر فورًا في كارت العميل وكارت المحادثة
+// من برا بالظبط زي ما لو كانت اتحطت يدوي
 async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
   const settings = await companyRepo.getAutomationSettings();
   if (!settings || !settings.keyword_routing_enabled) return;
-  if (!settings.keyword_routing_team_id) return;
 
-  const keywords = settings.keyword_routing_keywords || [];
-  if (!keywords.length) return;
+  const rules = settings.keyword_routing_rules || [];
+  if (!rules.length) return;
 
   const normalizedText = String(messageText).toLocaleLowerCase();
-  const matchedKeyword = keywords.find((k) => normalizedText.includes(String(k).toLocaleLowerCase()));
-  if (!matchedKeyword) return;
+
+  // بنجمع كل التيمز اللي قواعدهم اتحققت في الرسالة دي (ممكن يكون أكتر من تيم واحد)
+  const matches = []; // [{ teamId, matchedKeyword }]
+  for (const rule of rules) {
+    if (!rule.team_id || !rule.keywords || !rule.keywords.length) continue;
+    const matchedKeyword = rule.keywords.find((k) => normalizedText.includes(String(k).toLocaleLowerCase()));
+    if (matchedKeyword) matches.push({ teamId: rule.team_id, matchedKeyword });
+  }
+  if (!matches.length) return;
 
   try {
-    // لو التيم متحط بالفعل على المحادثة من قبل، متبقاش نعيد نفس الخطوة تاني
     const existingTeams = await teamRepo.listTeamsForConversation(conversationId);
-    if (existingTeams.some((t) => String(t.id) === String(settings.keyword_routing_team_id))) return;
+    const existingTeamIds = new Set(existingTeams.map((t) => String(t.id)));
 
-    const team = await teamRepo.getTeamById(settings.keyword_routing_team_id);
-    if (!team) return;
+    // لو التيم متحط بالفعل على المحادثة من قبل، متبقاش نعيد نفس الخطوة تاني ليه
+    const newMatches = matches.filter((m) => !existingTeamIds.has(String(m.teamId)));
+    if (!newMatches.length) return;
 
-    const [, systemMessage] = await Promise.all([
-      teamRepo.addTeamToConversation(conversationId, settings.keyword_routing_team_id),
-      conversationRepo.addSystemMessage(
-        conversationId,
-        `Routed to team ${team.name} (Automation rule: Route conversations by keyword — matched "${matchedKeyword}")`
-      ),
-    ]);
+    // بنشيل أي تكرار لنفس التيم لو أكتر من قاعدة بتوجه له (كفاية مرة واحدة)
+    const seenTeamIds = new Set();
+    let latestTeams = existingTeams;
+    for (const { teamId, matchedKeyword } of newMatches) {
+      if (seenTeamIds.has(String(teamId))) continue;
+      seenTeamIds.add(String(teamId));
 
-    const updated = await conversationRepo.getConversationById(conversationId);
-    if (io) {
-      if (updated) io.emit('conversation_updated', updated);
-      if (systemMessage) io.emit('new_message', { conversationId, message: systemMessage });
+      const team = await teamRepo.getTeamById(teamId);
+      if (!team) continue;
+
+      // نفس الـ repo function المستخدمة بالظبط لما اليوزر يحط تيم يدويًا على
+      // محادثة من كارت العميل (شوف team.controller.js -> addToConversation)
+      const [teams, systemMessage] = await Promise.all([
+        teamRepo.addTeamToConversation(conversationId, teamId),
+        conversationRepo.addSystemMessage(
+          conversationId,
+          `Routed to team ${team.name} (Automation rule: Route conversations by keyword — matched "${matchedKeyword}")`
+        ),
+      ]);
+      latestTeams = teams;
+
+      if (io) {
+        // نفس حدث الـ socket بالظبط اللي بيتبعت لما التيم يتحط يدويًا، عشان
+        // كارت العميل وكارت المحادثة في القايمة الجانبية يتحدّثوا فورًا بنفس
+        // الطريقة تمامًا من غير أي فرق محسوس عن الإضافة اليدوية
+        io.emit('conversation_teams_updated', { conversationId, teams: latestTeams });
+        if (systemMessage) io.emit('new_message', { conversationId, message: systemMessage });
+      }
     }
   } catch (err) {
     logger.error('❌ فشل تنفيذ قاعدة الـ Keyword Routing على المحادثة:', err.message);

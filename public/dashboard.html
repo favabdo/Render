@@ -217,6 +217,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .note-time{font-size:10px;margin-top:4px;opacity:.65;color:#8a6d1a;text-align:left}
 .msg-row.system-row{justify-content:center;margin:8px 0}
 .system-bubble{display:inline-block;width:auto;max-width:80%;background:rgba(0,0,0,0.06);color:var(--text-secondary);font-size:11.5px;line-height:1.4;padding:5px 12px;border-radius:14px;text-align:center;white-space:normal;word-wrap:break-word}
+.system-time{font-size:9.5px;color:var(--text-secondary);opacity:.65;margin-top:3px;text-align:center}
 .chat-item-agent{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);margin-top:2px}
 .chat-item-agent.unassigned{opacity:.6;font-style:italic}
 .chat-item-labels{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
@@ -2937,7 +2938,10 @@ function buildMessageRow(m, c) {
     } else if (m.from === 'system') {
         html = `
             <div class="msg-row system-row fade-in">
-                <div class="system-bubble">${escapeHtml(m.text)}</div>
+                <div style="display:flex;flex-direction:column;align-items:center;max-width:80%">
+                    <div class="system-bubble">${escapeHtml(m.text)}</div>
+                    <div class="system-time">${m.time}</div>
+                </div>
             </div>`;
     } else {
         html = `
@@ -6379,20 +6383,15 @@ async function saveTeamMembers() {
             </select>
         </div>
 
-        <!-- Keyword Routing: اختيار تيم من ليستة التيمز الحقيقية -->
-        <div id="automation-team-field" style="display:none">
-            <div class="resolve-cats-label">Route matching conversations to</div>
-            <select class="iw-input" id="automation-team-select" style="margin-bottom:14px">
-                <option value="">Select a team…</option>
-            </select>
-        </div>
-
-        <!-- Keyword Routing: كلمات مفتاحية متعددة، تتضاف كـ chips -->
-        <div id="automation-keywords-field" style="display:none">
-            <div class="resolve-cats-label">Keywords to match (in any customer message)</div>
-            <div id="automation-keywords-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-            <input class="iw-input" id="automation-keywords-input" style="margin-bottom:6px" placeholder="اكتب كلمة واضغط Enter عشان تضيفها" onkeydown="handleKeywordInputKeydown(event)">
-            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">تقدر تضيف أكتر من كلمة. لو أي رسالة من العميل فيها أي واحدة منهم، المحادثة هتتحول أوتوماتيك للتيم المختار فوق.</div>
+        <!-- Keyword Routing: كذا قاعدة مستقلة (تيم + كلماته)، كل قاعدة بتتحول
+             لتيم مختلف، عشان تقدر تعمل أكتر من مجموعة كلمات لأكتر من تيم -->
+        <div id="automation-rules-field" style="display:none">
+            <div class="resolve-cats-label">Routing rules</div>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:10px">كل قاعدة = تيم + مجموعة كلمات خاصة بيه. لو أي رسالة من العميل فيها أي كلمة من كلمات القاعدة، المحادثة هتتحول أوتوماتيك لتيم القاعدة دي. تقدر تضيف أكتر من قاعدة بتيمز مختلفة.</div>
+            <div id="automation-keyword-rules-list"></div>
+            <button type="button" class="sr-chip" onclick="addKeywordRoutingRule()" style="margin-bottom:14px">
+                <i data-lucide="plus" style="width:13px;height:13px;vertical-align:-2px"></i> Add another team rule
+            </button>
         </div>
 
         <!-- Welcome / CSAT: نص رسالة قابل للتعديل بالكامل من اليوزر -->
@@ -6449,7 +6448,7 @@ async function saveTeamMembers() {
 let AUTOMATION_SETTINGS_CACHE = null;
 let AUTOMATION_AGENTS_CACHE = [];
 let AUTOMATION_TEAMS_CACHE = [];
-let KEYWORD_ROUTING_KEYWORDS_DRAFT = [];
+let KEYWORD_ROUTING_RULES_DRAFT = []; // [{ team_id, keywords: [...] }, ...]
 let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat' | 'keyword_routing'
 
 const WELCOME_SCHEDULE_DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -6553,10 +6552,16 @@ function renderAutomationSettings() {
 
     const keywordRoutingDesc = document.getElementById('keyword_routing-desc');
     if (keywordRoutingDesc) {
-        const kws = s.keyword_routing_keywords || [];
-        if (s.keyword_routing_enabled && kws.length && s.keyword_routing_team_name) {
-            const preview = kws.slice(0, 3).map((k) => `"${k}"`).join(' or ');
-            keywordRoutingDesc.textContent = `When message contains ${preview}${kws.length > 3 ? '…' : ''} → Assign to ${s.keyword_routing_team_name}`;
+        const rules = (s.keyword_routing_rules || []).filter((r) => r.team_id && r.keywords && r.keywords.length);
+        if (s.keyword_routing_enabled && rules.length) {
+            if (rules.length === 1) {
+                const kws = rules[0].keywords;
+                const preview = kws.slice(0, 3).map((k) => `"${k}"`).join(' or ');
+                keywordRoutingDesc.textContent = `When message contains ${preview}${kws.length > 3 ? '…' : ''} → Assign to ${rules[0].team_name || 'selected team'}`;
+            } else {
+                const teamNames = rules.map((r) => r.team_name || 'team').join(', ');
+                keywordRoutingDesc.textContent = `${rules.length} keyword rules active → Routes to: ${teamNames}`;
+            }
         } else {
             keywordRoutingDesc.textContent = 'When message contains chosen keywords → Assign to selected team (disabled)';
         }
@@ -6589,7 +6594,8 @@ async function toggleAutomationRule(type) {
         }
         await patchAutomationSettings({ csat_enabled: !s.csat_enabled });
     } else if (type === 'keyword_routing') {
-        if (!s.keyword_routing_enabled && (!s.keyword_routing_team_id || !(s.keyword_routing_keywords || []).length)) {
+        const hasCompleteRule = (s.keyword_routing_rules || []).some((r) => r.team_id && r.keywords && r.keywords.length);
+        if (!s.keyword_routing_enabled && !hasCompleteRule) {
             openAutomationModal('keyword_routing');
             return;
         }
@@ -6629,8 +6635,7 @@ async function openAutomationModal(type) {
 
     const enableToggle = document.getElementById('automation-modal-enable-toggle');
     const agentField = document.getElementById('automation-agent-field');
-    const teamField = document.getElementById('automation-team-field');
-    const keywordsField = document.getElementById('automation-keywords-field');
+    const rulesField = document.getElementById('automation-rules-field');
     const messageField = document.getElementById('automation-message-field');
     const messageInput = document.getElementById('automation-message-input');
     const scheduleToggleField = document.getElementById('automation-schedule-toggle-field');
@@ -6638,8 +6643,7 @@ async function openAutomationModal(type) {
 
     // بنقفل كل الحقول الاختيارية الأول، وبعدين نفتح بس اللي مناسب للنوع الحالي
     agentField.style.display = 'none';
-    teamField.style.display = 'none';
-    keywordsField.style.display = 'none';
+    rulesField.style.display = 'none';
     messageField.style.display = 'none';
     scheduleToggleField.style.display = 'none';
     scheduleField.style.display = 'none';
@@ -6650,12 +6654,11 @@ async function openAutomationModal(type) {
         await populateAutomationAgentSelect(s.auto_assign_agent_id);
     } else if (type === 'keyword_routing') {
         enableToggle.classList.toggle('on', Boolean(s.keyword_routing_enabled));
-        teamField.style.display = '';
-        keywordsField.style.display = '';
-        KEYWORD_ROUTING_KEYWORDS_DRAFT = Array.isArray(s.keyword_routing_keywords) ? [...s.keyword_routing_keywords] : [];
-        document.getElementById('automation-keywords-input').value = '';
-        renderKeywordChips();
-        await populateAutomationTeamSelect(s.keyword_routing_team_id);
+        rulesField.style.display = '';
+        await ensureAutomationTeamsLoaded();
+        const existingRules = Array.isArray(s.keyword_routing_rules) ? s.keyword_routing_rules : [];
+        KEYWORD_ROUTING_RULES_DRAFT = existingRules.map((r) => ({ team_id: r.team_id || null, keywords: Array.isArray(r.keywords) ? [...r.keywords] : [] }));
+        renderKeywordRoutingRules();
     } else {
         enableToggle.classList.toggle('on', Boolean(type === 'welcome' ? s.welcome_enabled : s.csat_enabled));
         messageField.style.display = '';
@@ -6753,66 +6756,126 @@ async function populateAutomationAgentSelect(selectedAgentId) {
     }
 }
 
-// بتجيب ليستة التيمز الحقيقية (نفس فكرة populateAutomationAgentSelect بالظبط)
-// عشان اليوزر يختار منها التيم اللي هتتحول له المحادثات في قاعدة الـ Keyword Routing
-async function populateAutomationTeamSelect(selectedTeamId) {
-    const select = document.getElementById('automation-team-select');
-    select.innerHTML = '<option value="">جارِ التحميل…</option>';
+// بتجيب ليستة التيمز الحقيقية مرة واحدة وتكاشها، عشان كل صفوف القواعد
+// (اللي ممكن يكونوا كذا صف) يستخدموها من غير ما نطلبها من السيرفر كل مرة
+async function ensureAutomationTeamsLoaded() {
+    if (AUTOMATION_TEAMS_CACHE.length) return;
     try {
-        if (!AUTOMATION_TEAMS_CACHE.length) {
-            const res = await apiFetch('/api/teams');
-            if (!res.ok) throw new Error('Failed to fetch teams');
-            AUTOMATION_TEAMS_CACHE = await res.json();
-        }
-        select.innerHTML = '<option value="">Select a team…</option>' +
-            AUTOMATION_TEAMS_CACHE.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-        if (selectedTeamId) select.value = String(selectedTeamId);
+        const res = await apiFetch('/api/teams');
+        if (!res.ok) throw new Error('Failed to fetch teams');
+        AUTOMATION_TEAMS_CACHE = await res.json();
     } catch (err) {
-        console.error('[API] populateAutomationTeamSelect error:', err);
-        select.innerHTML = '<option value="">تعذر تحميل التيمز</option>';
+        console.error('[API] ensureAutomationTeamsLoaded error:', err);
     }
 }
 
-// بترسم الـ chips بتاعة الكلمات المفتاحية المضافة لحد دلوقتي (KEYWORD_ROUTING_KEYWORDS_DRAFT)
-// مع زرار مسح صغير لكل واحدة
-function renderKeywordChips() {
-    const container = document.getElementById('automation-keywords-chips');
-    if (!KEYWORD_ROUTING_KEYWORDS_DRAFT.length) {
-        container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary)">لسه مفيش كلمات مضافة</div>';
+// بترسم كل صفوف قواعد الـ Keyword Routing (تيم + كلماته) من KEYWORD_ROUTING_RULES_DRAFT
+function renderKeywordRoutingRules() {
+    const container = document.getElementById('automation-keyword-rules-list');
+    if (!KEYWORD_ROUTING_RULES_DRAFT.length) {
+        container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">لسه مفيش قواعد مضافة — دوس "Add another team rule" عشان تبدأ</div>';
+        lucide.createIcons();
         return;
     }
-    container.innerHTML = KEYWORD_ROUTING_KEYWORDS_DRAFT.map((kw, idx) => `
-        <span class="label-chip" style="background:rgba(108,92,231,0.1);color:var(--primary)">
-            ${escapeHtml(kw)}
-            <button type="button" onclick="removeKeywordChip(${idx})" style="width:15px;height:15px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;opacity:.7;margin-inline-start:2px">×</button>
-        </span>`).join('');
+
+    const teamOptionsHtml = (selectedTeamId) => '<option value="">Select a team…</option>' +
+        (AUTOMATION_TEAMS_CACHE.length
+            ? AUTOMATION_TEAMS_CACHE.map((t) => `<option value="${t.id}" ${String(t.id) === String(selectedTeamId) ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('')
+            : '');
+
+    container.innerHTML = KEYWORD_ROUTING_RULES_DRAFT.map((rule, ruleIdx) => {
+        const chips = rule.keywords.length
+            ? rule.keywords.map((kw, kwIdx) => `
+                <span class="label-chip" style="background:rgba(108,92,231,0.1);color:var(--primary)">
+                    ${escapeHtml(kw)}
+                    <button type="button" class="kw-chip-remove" data-rule-idx="${ruleIdx}" data-kw-idx="${kwIdx}" style="width:15px;height:15px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;opacity:.7;margin-inline-start:2px">×</button>
+                </span>`).join('')
+            : '<div style="font-size:11.5px;color:var(--text-secondary)">لسه مفيش كلمات مضافة لقاعدة التيم دي</div>';
+
+        return `
+            <div class="kw-rule-row" data-rule-idx="${ruleIdx}" style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                    <select class="iw-input kw-rule-team-select" data-rule-idx="${ruleIdx}" style="flex:1;margin-bottom:0">${teamOptionsHtml(rule.team_id)}</select>
+                    <button type="button" class="st-icon-btn kw-rule-remove" data-rule-idx="${ruleIdx}" title="مسح القاعدة دي"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+                </div>
+                <div class="kw-rule-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${chips}</div>
+                <input class="iw-input kw-rule-input" data-rule-idx="${ruleIdx}" style="margin-bottom:0" placeholder="اكتب كلمة واضغط Enter عشان تضيفها">
+            </div>`;
+    }).join('');
+
+    lucide.createIcons();
 }
 
-// بتضيف كلمة جديدة للـ draft (بتتجاهل بهدوء لو فاضية أو متكررة)، وبتصفّر خانة الإدخال
-function addKeywordFromInput() {
-    const input = document.getElementById('automation-keywords-input');
-    const value = input.value.trim();
-    input.value = '';
+// بتضيف صف قاعدة جديد فاضي (تيم + كلماته)، وبتتحمّل ليستة التيمز الأول لو
+// لسه متحملتش (زي لما اليوزر يفتح المودال لأول مرة ومفيش قواعد أصلاً)
+async function addKeywordRoutingRule() {
+    await ensureAutomationTeamsLoaded();
+    KEYWORD_ROUTING_RULES_DRAFT.push({ team_id: null, keywords: [] });
+    renderKeywordRoutingRules();
+}
+
+function removeKeywordRoutingRule(ruleIdx) {
+    KEYWORD_ROUTING_RULES_DRAFT.splice(ruleIdx, 1);
+    renderKeywordRoutingRules();
+}
+
+// بتضيف كلمة جديدة لقاعدة معينة (بتتجاهل بهدوء لو فاضية أو متكررة جوه نفس القاعدة)
+function addKeywordToRule(ruleIdx, rawValue) {
+    const value = String(rawValue || '').trim();
     if (!value) return;
-    const exists = KEYWORD_ROUTING_KEYWORDS_DRAFT.some((k) => k.toLowerCase() === value.toLowerCase());
+    const rule = KEYWORD_ROUTING_RULES_DRAFT[ruleIdx];
+    if (!rule) return;
+    const exists = rule.keywords.some((k) => k.toLowerCase() === value.toLowerCase());
     if (exists) return;
-    KEYWORD_ROUTING_KEYWORDS_DRAFT.push(value);
-    renderKeywordChips();
+    rule.keywords.push(value);
+    renderKeywordRoutingRules();
 }
 
-function removeKeywordChip(index) {
-    KEYWORD_ROUTING_KEYWORDS_DRAFT.splice(index, 1);
-    renderKeywordChips();
-}
+// Event delegation واحد بس على الحاوية الرئيسية بدل ما نربط listener لكل صف
+// (الصفوف بتتغير باستمرار مع كل render، فربط listeners منفصلة هيتسرب/يتكرر)
+(function setupKeywordRoutingDelegation() {
+    const container = document.getElementById('automation-keyword-rules-list');
+    if (!container) return;
 
-// Enter أو الفاصلة (، أو ,) بيضيفوا الكلمة الحالية كـ chip منفصلة، عشان اليوزر
-// يقدر يكتب أكتر من كلمة من غير ما يضطر يدوس زرار
-function handleKeywordInputKeydown(event) {
-    if (event.key === 'Enter' || event.key === ',' || event.key === '،') {
-        event.preventDefault();
-        addKeywordFromInput();
-    }
-}
+    container.addEventListener('change', (event) => {
+        const select = event.target.closest('.kw-rule-team-select');
+        if (!select) return;
+        const ruleIdx = Number(select.getAttribute('data-rule-idx'));
+        if (KEYWORD_ROUTING_RULES_DRAFT[ruleIdx]) {
+            KEYWORD_ROUTING_RULES_DRAFT[ruleIdx].team_id = select.value ? Number(select.value) : null;
+        }
+    });
+
+    container.addEventListener('click', (event) => {
+        const removeRuleBtn = event.target.closest('.kw-rule-remove');
+        if (removeRuleBtn) {
+            removeKeywordRoutingRule(Number(removeRuleBtn.getAttribute('data-rule-idx')));
+            return;
+        }
+        const removeChipBtn = event.target.closest('.kw-chip-remove');
+        if (removeChipBtn) {
+            const ruleIdx = Number(removeChipBtn.getAttribute('data-rule-idx'));
+            const kwIdx = Number(removeChipBtn.getAttribute('data-kw-idx'));
+            const rule = KEYWORD_ROUTING_RULES_DRAFT[ruleIdx];
+            if (rule) {
+                rule.keywords.splice(kwIdx, 1);
+                renderKeywordRoutingRules();
+            }
+        }
+    });
+
+    // Enter أو الفاصلة (، أو ,) بيضيفوا الكلمة الحالية كـ chip منفصلة في قاعدتها
+    container.addEventListener('keydown', (event) => {
+        const input = event.target.closest('.kw-rule-input');
+        if (!input) return;
+        if (event.key === 'Enter' || event.key === ',' || event.key === '،') {
+            event.preventDefault();
+            const ruleIdx = Number(input.getAttribute('data-rule-idx'));
+            addKeywordToRule(ruleIdx, input.value);
+            input.value = '';
+        }
+    });
+})();
 
 function closeAutomationModal(event) {
     if (event && event.target !== event.currentTarget) return;
@@ -6837,19 +6900,16 @@ async function saveAutomationModal() {
         body.auto_assign_enabled = enabled;
         body.auto_assign_agent_id = agentId ? Number(agentId) : null;
     } else if (automationModalType === 'keyword_routing') {
-        const teamId = document.getElementById('automation-team-select').value;
-        const keywords = KEYWORD_ROUTING_KEYWORDS_DRAFT;
-        if (enabled && !teamId) {
-            errorBox.textContent = 'لازم تختار التيم اللي هتتحول له المحادثات الأول';
-            return;
-        }
-        if (enabled && !keywords.length) {
-            errorBox.textContent = 'لازم تضيف كلمة مفتاحية واحدة على الأقل';
+        // بنبعت بس الصفوف اللي فيها تيم مختار وكلمة واحدة على الأقل — أي صف
+        // فاضي (لسه من غير تيم أو كلمات) بيتجاهله السيرفر بهدوء برضه، فمفيش
+        // داعي نمنع الحفظ بسببه هنا
+        const completeRules = KEYWORD_ROUTING_RULES_DRAFT.filter((r) => r.team_id && r.keywords.length);
+        if (enabled && !completeRules.length) {
+            errorBox.textContent = 'لازم تضيف قاعدة واحدة كاملة على الأقل (تيم + كلمة مفتاحية)';
             return;
         }
         body.keyword_routing_enabled = enabled;
-        body.keyword_routing_team_id = teamId ? Number(teamId) : null;
-        body.keyword_routing_keywords = keywords;
+        body.keyword_routing_rules = completeRules;
     } else {
         const text = document.getElementById('automation-message-input').value.trim();
         if (enabled && !text) {

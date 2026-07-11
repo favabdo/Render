@@ -686,8 +686,9 @@ async function ensureCompaniesHaveAutomationColumns() {
     // فيها واحدة (أو أكتر) من الكلمات دي، المحادثة بتتحول أوتوماتيك لتيم معين.
     // الكلمات نفسها متخزنة كـ JSON array من النصوص في automation_keyword_routing_keywords
     { name: 'automation_keyword_routing_enabled', def: 'BIT NOT NULL DEFAULT 0' },
-    { name: 'automation_keyword_routing_team_id', def: 'BIGINT NULL' },
-    { name: 'automation_keyword_routing_keywords', def: 'NVARCHAR(MAX) NULL' },
+    // كل قاعدة = { team_id, keywords: [...] } — بيتخزنوا كـ JSON array واحد،
+    // عشان تقدر تعمل أكتر من قاعدة: كل مجموعة كلمات بتوجه لتيم مختلف
+    { name: 'automation_keyword_routing_rules', def: 'NVARCHAR(MAX) NULL' },
   ];
   for (const col of columns) {
     await pool.request().query(`

@@ -6,8 +6,9 @@ const userRepo = require('../repositories/user.repo');
 const teamRepo = require('../repositories/team.repo');
 const { DAY_KEYS, normalizeSchedule } = require('../utils/welcomeSchedule');
 
-// أقصى عدد كلمات مفتاحية مسموح بيه لقاعدة الـ Keyword Routing، وأقصى طول لكل كلمة
-const MAX_KEYWORD_ROUTING_KEYWORDS = 30;
+// أقصى عدد قواعد (كل قاعدة = تيم + كلماته) وأقصى عدد كلمات في القاعدة الواحدة، وأقصى طول للكلمة
+const MAX_KEYWORD_ROUTING_RULES = 15;
+const MAX_KEYWORD_ROUTING_KEYWORDS_PER_RULE = 30;
 const MAX_KEYWORD_LENGTH = 100;
 
 // بتنضف وتفلتر ليستة الكلمات الجاية من الفرونت: تريم، تشيل الفاضي، وتشيل التكرار
@@ -109,17 +110,23 @@ async function getAutomationSettings(req, res) {
     autoAssignAgentName = agent ? userRepo.resolveDisplayName(agent) : null;
   }
 
-  // نفس الفكرة بالظبط لقاعدة الـ Keyword Routing: بنرجع اسم التيم جنب الـ id
-  let keywordRoutingTeamName = null;
-  if (settings.keyword_routing_team_id) {
-    const team = await teamRepo.getTeamById(settings.keyword_routing_team_id);
-    keywordRoutingTeamName = team ? team.name : null;
+  // نفس الفكرة بالظبط بس لكل قاعدة من قواعد الـ Keyword Routing: بنرجع اسم
+  // التيم بتاعها جنب الـ id، عشان الواجهة تعرضه من غير ما تحتاج تدور بنفسها
+  const teamIds = [...new Set((settings.keyword_routing_rules || []).map((r) => r.team_id).filter(Boolean))];
+  const teamsById = new Map();
+  for (const teamId of teamIds) {
+    const team = await teamRepo.getTeamById(teamId);
+    if (team) teamsById.set(String(teamId), team);
   }
+  const keywordRoutingRules = (settings.keyword_routing_rules || []).map((rule) => ({
+    ...rule,
+    team_name: teamsById.get(String(rule.team_id))?.name || null,
+  }));
 
   res.json({
     ...settings,
     auto_assign_agent_name: autoAssignAgentName,
-    keyword_routing_team_name: keywordRoutingTeamName,
+    keyword_routing_rules: keywordRoutingRules,
   });
 }
 
@@ -135,8 +142,7 @@ async function updateAutomationSettings(req, res) {
     csat_enabled,
     csat_message,
     keyword_routing_enabled,
-    keyword_routing_team_id,
-    keyword_routing_keywords,
+    keyword_routing_rules,
   } = req.body || {};
 
   const user = await userRepo.findUserById(req.user.userId);
@@ -203,25 +209,40 @@ async function updateAutomationSettings(req, res) {
   if (keyword_routing_enabled !== undefined) {
     fields.keywordRoutingEnabled = Boolean(keyword_routing_enabled);
   }
-  if (keyword_routing_team_id !== undefined) {
-    const teamId = keyword_routing_team_id === null || keyword_routing_team_id === '' ? null : Number(keyword_routing_team_id);
-    if (teamId !== null) {
+  if (keyword_routing_rules !== undefined) {
+    if (!Array.isArray(keyword_routing_rules)) {
+      return res.status(400).json({ error: 'شكل قواعد الـ Keyword Routing مش صحيح' });
+    }
+    if (keyword_routing_rules.length > MAX_KEYWORD_ROUTING_RULES) {
+      return res.status(400).json({ error: `أقصى عدد قواعد هو ${MAX_KEYWORD_ROUTING_RULES}` });
+    }
+    const cleanedRules = [];
+    for (const rule of keyword_routing_rules) {
+      const teamId = rule && rule.team_id !== undefined && rule.team_id !== null && rule.team_id !== ''
+        ? Number(rule.team_id)
+        : null;
+      const keywords = rule && Array.isArray(rule.keywords) ? sanitizeKeywords(rule.keywords) : [];
+
+      // بنتجاهل بهدوء أي قاعدة فاضية تمامًا (مفيش تيم ولا كلمات) بدل ما نرمي error،
+      // عشان اليوزر يقدر يضيف صف فاضي في الواجهة من غير ما كل حاجة توقف
+      if (!teamId && !keywords.length) continue;
+
+      if (!teamId) {
+        return res.status(400).json({ error: 'كل قاعدة لازم يكون ليها تيم مختار' });
+      }
       const team = await teamRepo.getTeamById(teamId);
       if (!team) {
-        return res.status(400).json({ error: 'التيم المختار للتوجيه بالكلمات المفتاحية مش موجود' });
+        return res.status(400).json({ error: 'أحد التيمز المختارة للتوجيه بالكلمات المفتاحية مش موجود' });
       }
+      if (!keywords.length) {
+        return res.status(400).json({ error: `لازم تضيف كلمة مفتاحية واحدة على الأقل لقاعدة تيم "${team.name}"` });
+      }
+      if (keywords.length > MAX_KEYWORD_ROUTING_KEYWORDS_PER_RULE) {
+        return res.status(400).json({ error: `أقصى عدد كلمات لكل قاعدة هو ${MAX_KEYWORD_ROUTING_KEYWORDS_PER_RULE}` });
+      }
+      cleanedRules.push({ team_id: teamId, keywords });
     }
-    fields.keywordRoutingTeamId = teamId;
-  }
-  if (keyword_routing_keywords !== undefined) {
-    if (!Array.isArray(keyword_routing_keywords)) {
-      return res.status(400).json({ error: 'شكل الكلمات المفتاحية مش صحيح' });
-    }
-    const cleaned = sanitizeKeywords(keyword_routing_keywords);
-    if (cleaned.length > MAX_KEYWORD_ROUTING_KEYWORDS) {
-      return res.status(400).json({ error: `أقصى عدد كلمات مفتاحية هو ${MAX_KEYWORD_ROUTING_KEYWORDS}` });
-    }
-    fields.keywordRoutingKeywords = cleaned;
+    fields.keywordRoutingRules = cleanedRules;
   }
 
   // لو حد فعّل قاعدة الـ Auto-assign لازم يكون في إيجنت مختار (سواء دلوقتي أو
@@ -250,18 +271,14 @@ async function updateAutomationSettings(req, res) {
     }
   }
 
-  // لو حد فعّل قاعدة الـ Keyword Routing لازم يكون في تيم مختار وكلمة واحدة
-  // على الأقل (سواء دلوقتي أو متحددين من قبل كده وموجودين في الداتابيز بالفعل)
+  // لو حد فعّل قاعدة الـ Keyword Routing لازم يكون في قاعدة واحدة كاملة (تيم +
+  // كلمة) على الأقل، سواء دلوقتي أو متحددة من قبل كده وموجودة في الداتابيز بالفعل
   const willKeywordRoutingBeEnabled = fields.keywordRoutingEnabled !== undefined ? fields.keywordRoutingEnabled : undefined;
   if (willKeywordRoutingBeEnabled) {
     const existing = await companyRepo.getAutomationSettings(company.id);
-    const finalTeamId = fields.keywordRoutingTeamId !== undefined ? fields.keywordRoutingTeamId : existing.keyword_routing_team_id;
-    const finalKeywords = fields.keywordRoutingKeywords !== undefined ? fields.keywordRoutingKeywords : existing.keyword_routing_keywords;
-    if (!finalTeamId) {
-      return res.status(400).json({ error: 'لازم تختار التيم اللي هتتحول له المحادثات الأول' });
-    }
-    if (!finalKeywords || !finalKeywords.length) {
-      return res.status(400).json({ error: 'لازم تضيف كلمة مفتاحية واحدة على الأقل' });
+    const finalRules = fields.keywordRoutingRules !== undefined ? fields.keywordRoutingRules : existing.keyword_routing_rules;
+    if (!finalRules || !finalRules.length) {
+      return res.status(400).json({ error: 'لازم تضيف قاعدة واحدة على الأقل (تيم + كلمة مفتاحية) قبل التفعيل' });
     }
   }
 
