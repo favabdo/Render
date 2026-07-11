@@ -405,6 +405,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .sched-end-btn{padding:6px 12px;border-radius:8px;border:none;background:var(--success);color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px;transition:all .15s}
 .sched-end-btn:hover{background:#059669}
 .sched-ended-tag{font-size:10.5px;font-weight:700;color:var(--success);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:4px}
+.sched-ended-tag.late{color:var(--danger)}
 .sched-filters-bar{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
 .sched-filter-group{display:flex;flex-direction:column;gap:5px;min-width:180px}
 .sched-filter-group label{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:5px}
@@ -4710,6 +4711,16 @@ function goToTaskConversation(contactId) {
 }
 
 function scheduledTaskCardHtml(t, ended) {
+    // لما التاسك تتقفل، الباك إند بيحسب delivery_status ('on_time' أو 'late') لحظة
+    // الإند نفسه بمقارنة معاد الإند بـ due_date — هنا بنعرضها بس زي ما جاية
+    const isLate = t.delivery_status === 'late';
+    const endedTagHtml = t.delivery_status
+        ? `<span class="sched-ended-tag${isLate ? ' late' : ''}">
+               <i data-lucide="${isLate ? 'alarm-clock' : 'check-circle'}" style="width:12px;height:12px"></i>
+               ${isLate ? 'Late delivery' : 'Delivered on time'}
+           </span>`
+        : '<span class="sched-ended-tag"><i data-lucide="check-circle" style="width:12px;height:12px"></i>Ended</span>';
+
     return `
         <div class="sched-task-card${ended ? ' ended' : ''}">
             <div class="sched-task-customer">
@@ -4724,7 +4735,7 @@ function scheduledTaskCardHtml(t, ended) {
             <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
             <div class="sched-task-actions">
                 ${ended
-                    ? '<span class="sched-ended-tag"><i data-lucide="check-circle" style="width:12px;height:12px"></i>Ended</span>'
+                    ? endedTagHtml
                     : `<button class="sched-end-btn" onclick="endScheduledTask(${t.id}, ${t.contact_id})"><i data-lucide="check" style="width:13px;height:13px"></i>End Task</button>`}
             </div>
         </div>

@@ -10,6 +10,5 @@ router.get('/api/scheduled-tasks', asyncHandler(scheduledTaskController.listAllT
 router.get('/api/contacts/:contactId/scheduled-tasks', asyncHandler(scheduledTaskController.listTasks));
 router.post('/api/contacts/:contactId/scheduled-tasks', asyncHandler(scheduledTaskController.addTask));
 router.patch('/api/contacts/:contactId/scheduled-tasks/:taskId/end', asyncHandler(scheduledTaskController.endTask));
-router.patch('/api/contacts/:contactId/scheduled-tasks/:taskId/reopen', asyncHandler(scheduledTaskController.reopenTask));
 
 module.exports = router;

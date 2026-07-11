@@ -404,6 +404,17 @@ async function ensureScheduledTasksTableExists() {
       CREATE INDEX IX_NileChat_ScheduledTasks_byA_contact_id
         ON [dbo].[NileChat_ScheduledTasks_byA](contact_id);
     END
+
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_ScheduledTasks_byA') AND name = 'delivery_status'
+    )
+    BEGIN
+      -- delivery_status بتتحسب مرة واحدة بس لحظة الـ End (شوف endScheduledTask في
+      -- scheduledTask.repo.js): 'on_time' لو اتقفلت في نفس يوم due_date أو قبله،
+      -- 'late' لو اتقفلت بعد ما يوم التسليم المتفق عليه عدى. NULL لحد ما التاسك تتقفل.
+      ALTER TABLE [dbo].[NileChat_ScheduledTasks_byA] ADD delivery_status NVARCHAR(20) NULL;
+    END
   `);
   logger.info('✅ جدول Scheduled Tasks جاهز.');
 }

@@ -62,19 +62,4 @@ async function endTask(req, res) {
   res.json({ ok: true, task });
 }
 
-async function reopenTask(req, res) {
-  const existing = await scheduledTaskRepo.getScheduledTaskById(req.params.taskId);
-  if (!existing || String(existing.contact_id) !== String(req.params.contactId)) {
-    return res.status(404).json({ error: 'التاسك دي مش موجودة' });
-  }
-
-  const task = await scheduledTaskRepo.reopenScheduledTask(req.params.taskId);
-  if (!task) return res.status(409).json({ error: 'التاسك دي مفتوحة بالفعل' });
-
-  const io = req.app.get('io');
-  if (io) io.emit('scheduled_task_reopened', { contactId: req.params.contactId, task });
-
-  res.json({ ok: true, task });
-}
-
-module.exports = { listTasks, listAllTasks, addTask, endTask, reopenTask };
+module.exports = { listTasks, listAllTasks, addTask, endTask };
