@@ -697,8 +697,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 }
 
 .app-footer{
-    flex-shrink:0;padding:5px 0;
-    text-align:center;font-size:10.5px;color:var(--text-secondary);
+    flex-shrink:0;padding:1px 0;line-height:1.2;
+    text-align:center;font-size:9px;color:var(--text-secondary);
     opacity:.55;pointer-events:none;
 }
 
@@ -1359,7 +1359,10 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="rule-row-right"><button class="toggle" id="welcome-toggle" onclick="toggleAutomationRule('welcome')"></button><button class="st-icon-btn" onclick="openAutomationModal('welcome')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
             </div>
 
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Tag billing keywords</div><div class="rule-row-desc">When message contains "فاتورة" or "دفع" → Add label Billing</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
+            <div class="rule-row" id="rule-row-keyword_routing">
+                <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Route conversations by keyword</div><div class="rule-row-desc" id="keyword_routing-desc">When message contains chosen keywords → Assign to selected team</div></div></div>
+                <div class="rule-row-right"><button class="toggle" id="keyword_routing-toggle" onclick="toggleAutomationRule('keyword_routing')"></button><button class="st-icon-btn" onclick="openAutomationModal('keyword_routing')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
+            </div>
 
             <div class="rule-row" id="rule-row-csat">
                 <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send CSAT after resolution</div><div class="rule-row-desc" id="csat-desc">When conversation is resolved → Send satisfaction survey</div></div></div>
@@ -1617,6 +1620,18 @@ function formatDateTimeLabel(isoString) {
     return `${dateStr} • ${timeStr}`;
 }
 
+/* التاريخ + الوقت مع بعض دايمًا (من غير أي اختصار زي "Today"/"Yesterday")،
+   مستخدمة في كل رسالة/نوت/ماسدج نظام أو أتمتة جوه التايم لاين بتاع المحادثة،
+   عشان اليوزر يعرف بالظبط اتبعتت يوم إيه الساعة كام حتى لو النهارده نفسه */
+function formatMessageTimestamp(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    const now = new Date();
+    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const dateStr = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+    return `${dateStr} • ${timeStr}`;
+}
+
 /* عدد الأيام اللي عدت من تاريخ معين لحد دلوقتي، بشكل نص واضح (Today / Yesterday / N days ago) */
 function daysAgoLabel(isoString) {
     if (!isoString) return '';
@@ -1757,7 +1772,7 @@ function mapApiMessage(m) {
             id: m.id,
             from: 'note',
             text: m.message_text || '',
-            time: formatTime(m.created_at),
+            time: formatMessageTimestamp(m.created_at),
             senderName: m.sent_by_name || null,
             isNote: true
         };
@@ -1767,14 +1782,14 @@ function mapApiMessage(m) {
             id: m.id,
             from: 'system',
             text: m.message_text || '',
-            time: formatTime(m.created_at)
+            time: formatMessageTimestamp(m.created_at)
         };
     }
     return {
         id: m.id,
         from: m.direction === 'out' ? 'agent' : 'customer',
         text: m.message_text || '',
-        time: formatTime(m.created_at),
+        time: formatMessageTimestamp(m.created_at),
         senderName: m.sent_by_name || null,
         phone: m.from_number || null
     };
@@ -1935,7 +1950,7 @@ function initSocket() {
             c.messages.push({
                 from: 'note',
                 text: note.message_text || '',
-                time: formatTime(note.created_at),
+                time: formatMessageTimestamp(note.created_at),
                 senderName: note.sent_by_name || null,
                 isNote: true
             });
@@ -1965,7 +1980,7 @@ function initSocket() {
                 // رسالة نظام (self-assigned / assigned by / resolved / reopened...) —
                 // بتتضاف في التايم لاين بس زي أي رسالة تانية، من غير أي pending logic
                 if (message.direction === 'system') {
-                    c.messages.push({ from: 'system', text: message.message_text || '', time: formatTime(message.created_at) });
+                    c.messages.push({ from: 'system', text: message.message_text || '', time: formatMessageTimestamp(message.created_at) });
                     if (selectedChatId === c.id) renderMessages(c);
                     return;
                 }
@@ -1988,7 +2003,7 @@ function initSocket() {
                     id: message.id || null,
                     from: message.direction === 'out' ? 'agent' : 'customer',
                     text: message.message_text || '',
-                    time: formatTime(message.created_at),
+                    time: formatMessageTimestamp(message.created_at),
                     senderName: message.sent_by_name || null,
                     phone: message.from_number || null
                 };
@@ -3125,7 +3140,7 @@ function toggleNoteMode() {
 }
 
 async function sendNoteText(c, text) {
-    const timeStr = new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+    const timeStr = formatMessageTimestamp(new Date().toISOString());
     c.messages.push({ from: 'note', text, time: timeStr, senderName: AUTH_USER.display_name || AUTH_USER.email, isNote: true, _pending: true });
     renderMessages(c);
 
@@ -3174,7 +3189,7 @@ async function sendMessage() {
     }
 
     // إضافة الرسالة فورًا في الواجهة (optimistic) عشان الإيجنت يحس إنها اترسلت فورًا
-    const timeStr = new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+    const timeStr = formatMessageTimestamp(new Date().toISOString());
     c.messages.push({from:'agent', text, time:timeStr, senderName: AUTH_USER.display_name || AUTH_USER.email, _pending:true});
     c.lastMsg = text;
     renderMessages(c);
@@ -6364,6 +6379,22 @@ async function saveTeamMembers() {
             </select>
         </div>
 
+        <!-- Keyword Routing: اختيار تيم من ليستة التيمز الحقيقية -->
+        <div id="automation-team-field" style="display:none">
+            <div class="resolve-cats-label">Route matching conversations to</div>
+            <select class="iw-input" id="automation-team-select" style="margin-bottom:14px">
+                <option value="">Select a team…</option>
+            </select>
+        </div>
+
+        <!-- Keyword Routing: كلمات مفتاحية متعددة، تتضاف كـ chips -->
+        <div id="automation-keywords-field" style="display:none">
+            <div class="resolve-cats-label">Keywords to match (in any customer message)</div>
+            <div id="automation-keywords-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+            <input class="iw-input" id="automation-keywords-input" style="margin-bottom:6px" placeholder="اكتب كلمة واضغط Enter عشان تضيفها" onkeydown="handleKeywordInputKeydown(event)">
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">تقدر تضيف أكتر من كلمة. لو أي رسالة من العميل فيها أي واحدة منهم، المحادثة هتتحول أوتوماتيك للتيم المختار فوق.</div>
+        </div>
+
         <!-- Welcome / CSAT: نص رسالة قابل للتعديل بالكامل من اليوزر -->
         <div id="automation-message-field" style="display:none">
             <div class="resolve-cats-label" id="automation-message-label">Message content</div>
@@ -6417,7 +6448,9 @@ async function saveTeamMembers() {
 ============================================================ */
 let AUTOMATION_SETTINGS_CACHE = null;
 let AUTOMATION_AGENTS_CACHE = [];
-let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat'
+let AUTOMATION_TEAMS_CACHE = [];
+let KEYWORD_ROUTING_KEYWORDS_DRAFT = [];
+let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat' | 'keyword_routing'
 
 const WELCOME_SCHEDULE_DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WELCOME_SCHEDULE_DAY_LABELS = { sun: 'الأحد', mon: 'الاثنين', tue: 'الثلاثاء', wed: 'الأربعاء', thu: 'الخميس', fri: 'الجمعة', sat: 'السبت' };
@@ -6447,6 +6480,12 @@ const AUTOMATION_RULE_META = {
         messageHint: 'This exact text is sent automatically the moment an agent resolves the conversation.',
         placeholder: 'شكراً لتواصلكم معنا! برجاء تقييم تجربتكم اليوم من 1 لـ 5.',
     },
+    keyword_routing: {
+        title: 'Route conversations by keyword',
+        icon: 'workflow',
+        enableDesc: 'When a customer message matches any of the keywords, move the conversation to the selected team',
+        offDesc: 'When message contains chosen keywords → Assign to selected team',
+    },
 };
 
 async function loadAutomationSettings() {
@@ -6468,6 +6507,7 @@ function renderAutomationSettings() {
     const autoAssignToggle = document.getElementById('auto_assign-toggle');
     const welcomeToggle = document.getElementById('welcome-toggle');
     const csatToggle = document.getElementById('csat-toggle');
+    const keywordRoutingToggle = document.getElementById('keyword_routing-toggle');
 
     if (autoAssignToggle) {
         autoAssignToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
@@ -6480,6 +6520,10 @@ function renderAutomationSettings() {
     if (csatToggle) {
         csatToggle.classList.toggle('on', Boolean(s.csat_enabled));
         csatToggle.disabled = !canEdit;
+    }
+    if (keywordRoutingToggle) {
+        keywordRoutingToggle.classList.toggle('on', Boolean(s.keyword_routing_enabled));
+        keywordRoutingToggle.disabled = !canEdit;
     }
 
     const autoAssignDesc = document.getElementById('auto_assign-desc');
@@ -6505,6 +6549,17 @@ function renderAutomationSettings() {
         csatDesc.textContent = s.csat_enabled && s.csat_message
             ? `When conversation is resolved → Send: "${s.csat_message.slice(0, 60)}${s.csat_message.length > 60 ? '…' : ''}"`
             : 'When conversation is resolved → Send satisfaction survey (disabled)';
+    }
+
+    const keywordRoutingDesc = document.getElementById('keyword_routing-desc');
+    if (keywordRoutingDesc) {
+        const kws = s.keyword_routing_keywords || [];
+        if (s.keyword_routing_enabled && kws.length && s.keyword_routing_team_name) {
+            const preview = kws.slice(0, 3).map((k) => `"${k}"`).join(' or ');
+            keywordRoutingDesc.textContent = `When message contains ${preview}${kws.length > 3 ? '…' : ''} → Assign to ${s.keyword_routing_team_name}`;
+        } else {
+            keywordRoutingDesc.textContent = 'When message contains chosen keywords → Assign to selected team (disabled)';
+        }
     }
 }
 
@@ -6533,6 +6588,12 @@ async function toggleAutomationRule(type) {
             return;
         }
         await patchAutomationSettings({ csat_enabled: !s.csat_enabled });
+    } else if (type === 'keyword_routing') {
+        if (!s.keyword_routing_enabled && (!s.keyword_routing_team_id || !(s.keyword_routing_keywords || []).length)) {
+            openAutomationModal('keyword_routing');
+            return;
+        }
+        await patchAutomationSettings({ keyword_routing_enabled: !s.keyword_routing_enabled });
     }
 }
 
@@ -6568,20 +6629,35 @@ async function openAutomationModal(type) {
 
     const enableToggle = document.getElementById('automation-modal-enable-toggle');
     const agentField = document.getElementById('automation-agent-field');
+    const teamField = document.getElementById('automation-team-field');
+    const keywordsField = document.getElementById('automation-keywords-field');
     const messageField = document.getElementById('automation-message-field');
     const messageInput = document.getElementById('automation-message-input');
     const scheduleToggleField = document.getElementById('automation-schedule-toggle-field');
+    const scheduleField = document.getElementById('automation-schedule-field');
+
+    // بنقفل كل الحقول الاختيارية الأول، وبعدين نفتح بس اللي مناسب للنوع الحالي
+    agentField.style.display = 'none';
+    teamField.style.display = 'none';
+    keywordsField.style.display = 'none';
+    messageField.style.display = 'none';
+    scheduleToggleField.style.display = 'none';
+    scheduleField.style.display = 'none';
 
     if (type === 'auto_assign') {
         enableToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
         agentField.style.display = '';
-        messageField.style.display = 'none';
-        scheduleToggleField.style.display = 'none';
-        document.getElementById('automation-schedule-field').style.display = 'none';
         await populateAutomationAgentSelect(s.auto_assign_agent_id);
+    } else if (type === 'keyword_routing') {
+        enableToggle.classList.toggle('on', Boolean(s.keyword_routing_enabled));
+        teamField.style.display = '';
+        keywordsField.style.display = '';
+        KEYWORD_ROUTING_KEYWORDS_DRAFT = Array.isArray(s.keyword_routing_keywords) ? [...s.keyword_routing_keywords] : [];
+        document.getElementById('automation-keywords-input').value = '';
+        renderKeywordChips();
+        await populateAutomationTeamSelect(s.keyword_routing_team_id);
     } else {
         enableToggle.classList.toggle('on', Boolean(type === 'welcome' ? s.welcome_enabled : s.csat_enabled));
-        agentField.style.display = 'none';
         messageField.style.display = '';
         messageInput.placeholder = meta.placeholder;
         messageInput.value = (type === 'welcome' ? s.welcome_message : s.csat_message) || '';
@@ -6593,8 +6669,6 @@ async function openAutomationModal(type) {
             document.getElementById('automation-offhours-message-input').value = s.welcome_offhours_message || '';
             syncWelcomeScheduleUI();
         } else {
-            scheduleToggleField.style.display = 'none';
-            document.getElementById('automation-schedule-field').style.display = 'none';
             document.getElementById('automation-message-label').textContent = meta.messageLabel;
             document.getElementById('automation-message-hint').textContent = meta.messageHint;
         }
@@ -6679,6 +6753,67 @@ async function populateAutomationAgentSelect(selectedAgentId) {
     }
 }
 
+// بتجيب ليستة التيمز الحقيقية (نفس فكرة populateAutomationAgentSelect بالظبط)
+// عشان اليوزر يختار منها التيم اللي هتتحول له المحادثات في قاعدة الـ Keyword Routing
+async function populateAutomationTeamSelect(selectedTeamId) {
+    const select = document.getElementById('automation-team-select');
+    select.innerHTML = '<option value="">جارِ التحميل…</option>';
+    try {
+        if (!AUTOMATION_TEAMS_CACHE.length) {
+            const res = await apiFetch('/api/teams');
+            if (!res.ok) throw new Error('Failed to fetch teams');
+            AUTOMATION_TEAMS_CACHE = await res.json();
+        }
+        select.innerHTML = '<option value="">Select a team…</option>' +
+            AUTOMATION_TEAMS_CACHE.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+        if (selectedTeamId) select.value = String(selectedTeamId);
+    } catch (err) {
+        console.error('[API] populateAutomationTeamSelect error:', err);
+        select.innerHTML = '<option value="">تعذر تحميل التيمز</option>';
+    }
+}
+
+// بترسم الـ chips بتاعة الكلمات المفتاحية المضافة لحد دلوقتي (KEYWORD_ROUTING_KEYWORDS_DRAFT)
+// مع زرار مسح صغير لكل واحدة
+function renderKeywordChips() {
+    const container = document.getElementById('automation-keywords-chips');
+    if (!KEYWORD_ROUTING_KEYWORDS_DRAFT.length) {
+        container.innerHTML = '<div style="font-size:12px;color:var(--text-secondary)">لسه مفيش كلمات مضافة</div>';
+        return;
+    }
+    container.innerHTML = KEYWORD_ROUTING_KEYWORDS_DRAFT.map((kw, idx) => `
+        <span class="label-chip" style="background:rgba(108,92,231,0.1);color:var(--primary)">
+            ${escapeHtml(kw)}
+            <button type="button" onclick="removeKeywordChip(${idx})" style="width:15px;height:15px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;opacity:.7;margin-inline-start:2px">×</button>
+        </span>`).join('');
+}
+
+// بتضيف كلمة جديدة للـ draft (بتتجاهل بهدوء لو فاضية أو متكررة)، وبتصفّر خانة الإدخال
+function addKeywordFromInput() {
+    const input = document.getElementById('automation-keywords-input');
+    const value = input.value.trim();
+    input.value = '';
+    if (!value) return;
+    const exists = KEYWORD_ROUTING_KEYWORDS_DRAFT.some((k) => k.toLowerCase() === value.toLowerCase());
+    if (exists) return;
+    KEYWORD_ROUTING_KEYWORDS_DRAFT.push(value);
+    renderKeywordChips();
+}
+
+function removeKeywordChip(index) {
+    KEYWORD_ROUTING_KEYWORDS_DRAFT.splice(index, 1);
+    renderKeywordChips();
+}
+
+// Enter أو الفاصلة (، أو ,) بيضيفوا الكلمة الحالية كـ chip منفصلة، عشان اليوزر
+// يقدر يكتب أكتر من كلمة من غير ما يضطر يدوس زرار
+function handleKeywordInputKeydown(event) {
+    if (event.key === 'Enter' || event.key === ',' || event.key === '،') {
+        event.preventDefault();
+        addKeywordFromInput();
+    }
+}
+
 function closeAutomationModal(event) {
     if (event && event.target !== event.currentTarget) return;
     document.getElementById('automation-overlay').classList.remove('show');
@@ -6701,6 +6836,20 @@ async function saveAutomationModal() {
         }
         body.auto_assign_enabled = enabled;
         body.auto_assign_agent_id = agentId ? Number(agentId) : null;
+    } else if (automationModalType === 'keyword_routing') {
+        const teamId = document.getElementById('automation-team-select').value;
+        const keywords = KEYWORD_ROUTING_KEYWORDS_DRAFT;
+        if (enabled && !teamId) {
+            errorBox.textContent = 'لازم تختار التيم اللي هتتحول له المحادثات الأول';
+            return;
+        }
+        if (enabled && !keywords.length) {
+            errorBox.textContent = 'لازم تضيف كلمة مفتاحية واحدة على الأقل';
+            return;
+        }
+        body.keyword_routing_enabled = enabled;
+        body.keyword_routing_team_id = teamId ? Number(teamId) : null;
+        body.keyword_routing_keywords = keywords;
     } else {
         const text = document.getElementById('automation-message-input').value.trim();
         if (enabled && !text) {

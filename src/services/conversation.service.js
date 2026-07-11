@@ -5,6 +5,7 @@ const conversationRepo = require('../repositories/conversation.repo');
 const inboxRepo = require('../repositories/inbox.repo');
 const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
+const teamRepo = require('../repositories/team.repo');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
 const logger = require('../utils/logger');
@@ -121,6 +122,15 @@ async function processIncomingMessages(value, io) {
       io.emit('new_message', { conversationId, message: saved });
     }
 
+    // قاعدة الـ Keyword Routing: بتتفحص مع كل رسالة نصية جاية من العميل (مش
+    // بس أول رسالة بتفتح المحادثة)، عشان لو العميل ذكر كلمة زي "فاتورة" في
+    // نص المحادثة في أي وقت، تتحول المحادثة فورًا للتيم المحدد
+    if (messageText) {
+      applyKeywordRoutingForMessage(conversationId, messageText, io).catch((err) => {
+        logger.error('❌ فشل تنفيذ قاعدة الـ Keyword Routing:', err.message);
+      });
+    }
+
     // قواعد الأتمتة (Automation) اللي بتتفعّل أول ما محادثة جديدة تتفتح فعليًا —
     // بتتنفذ مرة واحدة بس (أول رسالة فعلاً بتنشئ المحادثة)، مش مع كل رسالة جاية
     // بعد كده على نفس المحادثة المفتوحة
@@ -191,6 +201,50 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
     } catch (err) {
       logger.error('❌ فشل إرسال رسالة الترحيب التلقائية:', err.message);
     }
+  }
+}
+
+// قاعدة أتمتة "التوجيه بالكلمات المفتاحية" (Keyword Routing): لو نص رسالة
+// العميل فيه أي واحدة من الكلمات المحددة في الإعدادات، بتتحط المحادثة على
+// التيم المختار فورًا (بحث بسيط بالـ substring، case-insensitive، ومفيش فرق
+// لو الكلمة عربي أو إنجليزي). بتشتغل مع كل رسالة نصية جاية، مش أول رسالة بس،
+// وبتتجاهل بهدوء لو التيم متحط على المحادثة بالفعل عشان متكررش نفس رسالة
+// النظام مع كل رسالة جديدة على نفس المحادثة
+async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
+  const settings = await companyRepo.getAutomationSettings();
+  if (!settings || !settings.keyword_routing_enabled) return;
+  if (!settings.keyword_routing_team_id) return;
+
+  const keywords = settings.keyword_routing_keywords || [];
+  if (!keywords.length) return;
+
+  const normalizedText = String(messageText).toLocaleLowerCase();
+  const matchedKeyword = keywords.find((k) => normalizedText.includes(String(k).toLocaleLowerCase()));
+  if (!matchedKeyword) return;
+
+  try {
+    // لو التيم متحط بالفعل على المحادثة من قبل، متبقاش نعيد نفس الخطوة تاني
+    const existingTeams = await teamRepo.listTeamsForConversation(conversationId);
+    if (existingTeams.some((t) => String(t.id) === String(settings.keyword_routing_team_id))) return;
+
+    const team = await teamRepo.getTeamById(settings.keyword_routing_team_id);
+    if (!team) return;
+
+    const [, systemMessage] = await Promise.all([
+      teamRepo.addTeamToConversation(conversationId, settings.keyword_routing_team_id),
+      conversationRepo.addSystemMessage(
+        conversationId,
+        `Routed to team ${team.name} (Automation rule: Route conversations by keyword — matched "${matchedKeyword}")`
+      ),
+    ]);
+
+    const updated = await conversationRepo.getConversationById(conversationId);
+    if (io) {
+      if (updated) io.emit('conversation_updated', updated);
+      if (systemMessage) io.emit('new_message', { conversationId, message: systemMessage });
+    }
+  } catch (err) {
+    logger.error('❌ فشل تنفيذ قاعدة الـ Keyword Routing على المحادثة:', err.message);
   }
 }
 

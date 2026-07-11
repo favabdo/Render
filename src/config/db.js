@@ -682,6 +682,12 @@ async function ensureCompaniesHaveAutomationColumns() {
     { name: 'automation_welcome_schedule', def: 'NVARCHAR(MAX) NULL' },
     { name: 'automation_csat_enabled', def: 'BIT NOT NULL DEFAULT 0' },
     { name: 'automation_csat_message', def: 'NVARCHAR(MAX) NULL' },
+    // توجيه بالكلمات المفتاحية (Keyword Routing): لو أي رسالة جاية من العميل
+    // فيها واحدة (أو أكتر) من الكلمات دي، المحادثة بتتحول أوتوماتيك لتيم معين.
+    // الكلمات نفسها متخزنة كـ JSON array من النصوص في automation_keyword_routing_keywords
+    { name: 'automation_keyword_routing_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_keyword_routing_team_id', def: 'BIGINT NULL' },
+    { name: 'automation_keyword_routing_keywords', def: 'NVARCHAR(MAX) NULL' },
   ];
   for (const col of columns) {
     await pool.request().query(`

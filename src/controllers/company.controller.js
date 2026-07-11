@@ -3,7 +3,29 @@
 
 const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
+const teamRepo = require('../repositories/team.repo');
 const { DAY_KEYS, normalizeSchedule } = require('../utils/welcomeSchedule');
+
+// أقصى عدد كلمات مفتاحية مسموح بيه لقاعدة الـ Keyword Routing، وأقصى طول لكل كلمة
+const MAX_KEYWORD_ROUTING_KEYWORDS = 30;
+const MAX_KEYWORD_LENGTH = 100;
+
+// بتنضف وتفلتر ليستة الكلمات الجاية من الفرونت: تريم، تشيل الفاضي، وتشيل التكرار
+// (المقارنة بتبقى case-insensitive عشان منمنعش تكرار "ABC" و"abc" مثلاً، لكن
+// النص المتخزن نفسه بيفضل زي ما اليوزر كتبه بالظبط)
+function sanitizeKeywords(rawKeywords) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of rawKeywords) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed.slice(0, MAX_KEYWORD_LENGTH));
+  }
+  return result;
+}
 
 // أي قيمة مسموحة لعدد أيام الـ Auto Resolve — null يعني الخاصية متوقفة
 const ALLOWED_AUTO_RESOLVE_DAYS = [null, 1, 2, 3, 5, 7, 14, 30];
@@ -87,7 +109,18 @@ async function getAutomationSettings(req, res) {
     autoAssignAgentName = agent ? userRepo.resolveDisplayName(agent) : null;
   }
 
-  res.json({ ...settings, auto_assign_agent_name: autoAssignAgentName });
+  // نفس الفكرة بالظبط لقاعدة الـ Keyword Routing: بنرجع اسم التيم جنب الـ id
+  let keywordRoutingTeamName = null;
+  if (settings.keyword_routing_team_id) {
+    const team = await teamRepo.getTeamById(settings.keyword_routing_team_id);
+    keywordRoutingTeamName = team ? team.name : null;
+  }
+
+  res.json({
+    ...settings,
+    auto_assign_agent_name: autoAssignAgentName,
+    keyword_routing_team_name: keywordRoutingTeamName,
+  });
 }
 
 async function updateAutomationSettings(req, res) {
@@ -101,6 +134,9 @@ async function updateAutomationSettings(req, res) {
     welcome_schedule,
     csat_enabled,
     csat_message,
+    keyword_routing_enabled,
+    keyword_routing_team_id,
+    keyword_routing_keywords,
   } = req.body || {};
 
   const user = await userRepo.findUserById(req.user.userId);
@@ -164,6 +200,29 @@ async function updateAutomationSettings(req, res) {
     }
     fields.csatMessage = trimmed;
   }
+  if (keyword_routing_enabled !== undefined) {
+    fields.keywordRoutingEnabled = Boolean(keyword_routing_enabled);
+  }
+  if (keyword_routing_team_id !== undefined) {
+    const teamId = keyword_routing_team_id === null || keyword_routing_team_id === '' ? null : Number(keyword_routing_team_id);
+    if (teamId !== null) {
+      const team = await teamRepo.getTeamById(teamId);
+      if (!team) {
+        return res.status(400).json({ error: 'التيم المختار للتوجيه بالكلمات المفتاحية مش موجود' });
+      }
+    }
+    fields.keywordRoutingTeamId = teamId;
+  }
+  if (keyword_routing_keywords !== undefined) {
+    if (!Array.isArray(keyword_routing_keywords)) {
+      return res.status(400).json({ error: 'شكل الكلمات المفتاحية مش صحيح' });
+    }
+    const cleaned = sanitizeKeywords(keyword_routing_keywords);
+    if (cleaned.length > MAX_KEYWORD_ROUTING_KEYWORDS) {
+      return res.status(400).json({ error: `أقصى عدد كلمات مفتاحية هو ${MAX_KEYWORD_ROUTING_KEYWORDS}` });
+    }
+    fields.keywordRoutingKeywords = cleaned;
+  }
 
   // لو حد فعّل قاعدة الـ Auto-assign لازم يكون في إيجنت مختار (سواء دلوقتي أو
   // متحدد من قبل كده وموجود في الداتابيز بالفعل)
@@ -188,6 +247,21 @@ async function updateAutomationSettings(req, res) {
     }
     if (!finalOffhoursMessage) {
       return res.status(400).json({ error: 'لازم تكتب رسالة الترحيب خارج أوقات العمل الأول' });
+    }
+  }
+
+  // لو حد فعّل قاعدة الـ Keyword Routing لازم يكون في تيم مختار وكلمة واحدة
+  // على الأقل (سواء دلوقتي أو متحددين من قبل كده وموجودين في الداتابيز بالفعل)
+  const willKeywordRoutingBeEnabled = fields.keywordRoutingEnabled !== undefined ? fields.keywordRoutingEnabled : undefined;
+  if (willKeywordRoutingBeEnabled) {
+    const existing = await companyRepo.getAutomationSettings(company.id);
+    const finalTeamId = fields.keywordRoutingTeamId !== undefined ? fields.keywordRoutingTeamId : existing.keyword_routing_team_id;
+    const finalKeywords = fields.keywordRoutingKeywords !== undefined ? fields.keywordRoutingKeywords : existing.keyword_routing_keywords;
+    if (!finalTeamId) {
+      return res.status(400).json({ error: 'لازم تختار التيم اللي هتتحول له المحادثات الأول' });
+    }
+    if (!finalKeywords || !finalKeywords.length) {
+      return res.status(400).json({ error: 'لازم تضيف كلمة مفتاحية واحدة على الأقل' });
     }
   }
 
