@@ -208,8 +208,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .msg-row.sent .msg-bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
 .msg-row.received .msg-bubble{background:#fff;color:var(--text);border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
 .msg-time{font-size:10px;margin-top:4px;opacity:.7}
-.msg-row.sent .msg-time{text-align:right}
-.msg-row.received .msg-time{text-align:left}
+.msg-row.sent .msg-time{text-align:right;color:rgba(255,255,255,0.85)}
+.msg-row.received .msg-time{text-align:left;color:var(--text-secondary)}
 .msg-row.note-row{justify-content:center;margin:10px 0}
 .note-bubble{max-width:80%;background:#fff8dc;border:1px dashed #e0c46c;border-radius:12px;padding:9px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
 .note-label{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#8a6d1a;margin-bottom:4px;letter-spacing:.2px}
@@ -1774,6 +1774,7 @@ function mapApiMessage(m) {
             from: 'note',
             text: m.message_text || '',
             time: formatMessageTimestamp(m.created_at),
+            rawTime: m.created_at,
             senderName: m.sent_by_name || null,
             isNote: true
         };
@@ -1783,7 +1784,8 @@ function mapApiMessage(m) {
             id: m.id,
             from: 'system',
             text: m.message_text || '',
-            time: formatMessageTimestamp(m.created_at)
+            time: formatMessageTimestamp(m.created_at),
+            rawTime: m.created_at
         };
     }
     return {
@@ -1791,6 +1793,7 @@ function mapApiMessage(m) {
         from: m.direction === 'out' ? 'agent' : 'customer',
         text: m.message_text || '',
         time: formatMessageTimestamp(m.created_at),
+        rawTime: m.created_at,
         senderName: m.sent_by_name || null,
         phone: m.from_number || null
     };
@@ -1952,6 +1955,7 @@ function initSocket() {
                 from: 'note',
                 text: note.message_text || '',
                 time: formatMessageTimestamp(note.created_at),
+                rawTime: note.created_at,
                 senderName: note.sent_by_name || null,
                 isNote: true
             });
@@ -1981,7 +1985,7 @@ function initSocket() {
                 // رسالة نظام (self-assigned / assigned by / resolved / reopened...) —
                 // بتتضاف في التايم لاين بس زي أي رسالة تانية، من غير أي pending logic
                 if (message.direction === 'system') {
-                    c.messages.push({ from: 'system', text: message.message_text || '', time: formatMessageTimestamp(message.created_at) });
+                    c.messages.push({ from: 'system', text: message.message_text || '', time: formatMessageTimestamp(message.created_at), rawTime: message.created_at });
                     if (selectedChatId === c.id) renderMessages(c);
                     return;
                 }
@@ -2005,6 +2009,7 @@ function initSocket() {
                     from: message.direction === 'out' ? 'agent' : 'customer',
                     text: message.message_text || '',
                     time: formatMessageTimestamp(message.created_at),
+                    rawTime: message.created_at,
                     senderName: message.sent_by_name || null,
                     phone: message.from_number || null
                 };
@@ -2915,6 +2920,37 @@ function selectChat(id) {
    الحاوية بتتصفر بالكامل بس لما نفتح محادثة تانية (تبديل شات فعلي،
    مش "ريلود" لنفس الشات). ============================================================ */
 const _msgRowMaps = new Map(); // conversationId -> Map(messageObj -> {el, sig})
+const _dayDividerMaps = new Map(); // conversationId -> Map(dayKey -> dividerElement)
+
+/* بيرجع نص واضح لفاصل اليوم: Today / Yesterday / أو التاريخ الفعلي (زي الواتساب بالظبط) */
+function dayDividerLabel(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    const now = new Date();
+    const startOfDay = (dt) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+    const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return d.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'long',
+        year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+}
+
+/* مفتاح فريد لليوم (من غير الوقت) عشان نجمّع كل رسايل نفس اليوم تحت فاصل واحد */
+function dayKeyFor(isoString) {
+    if (!isoString) return 'unknown';
+    return new Date(isoString).toDateString();
+}
+
+function buildDateDividerRow(label) {
+    const div = document.createElement('div');
+    div.className = 'msg-date-divider';
+    div.innerHTML = `<span></span>`;
+    div.firstElementChild.textContent = label;
+    return div;
+}
 
 function messageSignature(m, c) {
     return JSON.stringify([
@@ -2938,10 +2974,7 @@ function buildMessageRow(m, c) {
     } else if (m.from === 'system') {
         html = `
             <div class="msg-row system-row fade-in">
-                <div style="display:flex;flex-direction:column;align-items:center;max-width:80%">
-                    <div class="system-bubble">${escapeHtml(m.text)}</div>
-                    <div class="system-time">${m.time}</div>
-                </div>
+                <div class="system-bubble">${escapeHtml(m.text)}<div class="system-time">${m.time}</div></div>
             </div>`;
     } else {
         html = `
@@ -2969,26 +3002,53 @@ function renderMessages(c) {
     if (isNewConv) {
         // تبديل فعلي لمحادثة تانية — هنا فعلاً محتاجين نبني الحاوية من الصفر
         container.dataset.convId = String(c.id);
-        container.innerHTML = '<div class="msg-date-divider"><span>Today</span></div>';
+        container.innerHTML = '';
         _msgRowMaps.set(c.id, new Map());
+        _dayDividerMaps.set(c.id, new Map());
     }
     if (!_msgRowMaps.has(c.id)) _msgRowMaps.set(c.id, new Map());
+    if (!_dayDividerMaps.has(c.id)) _dayDividerMaps.set(c.id, new Map());
     const rowMap = _msgRowMaps.get(c.id);
+    const dividerMap = _dayDividerMaps.get(c.id);
 
     // لو الإيجنت مش لاصق في آخر الشات أصلاً (بيقرا رسايل قديمة)، متنزلوش السكرول بالقوة تحته
     const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
 
-    let cursor = container.querySelector('.msg-date-divider');
-    const seen = new Set();
+    let cursor = null; // آخر عنصر (فاصل يوم أو رسالة) اتحط في مكانه الصح
+    const seenMessages = new Set();
+    const seenDayKeys = new Set();
+    let previousDayKey = null;
+
+    const placeAfterCursor = (el) => {
+        if (cursor) {
+            if (cursor.nextElementSibling !== el) cursor.after(el);
+        } else if (container.firstElementChild !== el) {
+            container.prepend(el);
+        }
+        cursor = el;
+    };
 
     c.messages.forEach(m => {
+        // فاصل اليوم: بيتحط تلقائيًا قبل أول رسالة في أي يوم جديد (زي الواتساب بالظبط) —
+        // مش تاريخ ثابت زي "Today" دايمًا، لكل يوم فاصله بتاريخه أو "Today"/"Yesterday" لو مناسب
+        const dayKey = dayKeyFor(m.rawTime);
+        if (dayKey !== previousDayKey) {
+            previousDayKey = dayKey;
+            seenDayKeys.add(dayKey);
+            let dividerEl = dividerMap.get(dayKey);
+            if (!dividerEl) {
+                dividerEl = buildDateDividerRow(dayDividerLabel(m.rawTime));
+                dividerMap.set(dayKey, dividerEl);
+            }
+            placeAfterCursor(dividerEl);
+        }
+
         const sig = messageSignature(m, c);
         let entry = rowMap.get(m);
         if (!entry) {
             const el = buildMessageRow(m, c);
             rowMap.set(m, { el, sig });
-            cursor.after(el);
-            cursor = el;
+            placeAfterCursor(el);
         } else {
             if (entry.sig !== sig) {
                 const newEl = buildMessageRow(m, c);
@@ -2996,19 +3056,23 @@ function renderMessages(c) {
                 entry.el = newEl;
                 entry.sig = sig;
             }
-            if (cursor !== entry.el && cursor.nextElementSibling !== entry.el) {
-                cursor.after(entry.el);
-            }
-            cursor = entry.el;
+            placeAfterCursor(entry.el);
         }
-        seen.add(m);
+        seenMessages.add(m);
     });
 
     // شيل أي صف بقى قديم/مش موجود في c.messages تاني
     for (const [msgObj, entry] of rowMap.entries()) {
-        if (!seen.has(msgObj)) {
+        if (!seenMessages.has(msgObj)) {
             entry.el.remove();
             rowMap.delete(msgObj);
+        }
+    }
+    // شيل أي فاصل يوم بقى مالوش رسايل أصلاً (حالة نادرة، زي لو كل رسايل يوم معين اتمسحت)
+    for (const [dayKey, el] of dividerMap.entries()) {
+        if (!seenDayKeys.has(dayKey)) {
+            el.remove();
+            dividerMap.delete(dayKey);
         }
     }
 
@@ -3144,8 +3208,9 @@ function toggleNoteMode() {
 }
 
 async function sendNoteText(c, text) {
-    const timeStr = formatMessageTimestamp(new Date().toISOString());
-    c.messages.push({ from: 'note', text, time: timeStr, senderName: AUTH_USER.display_name || AUTH_USER.email, isNote: true, _pending: true });
+    const nowIso = new Date().toISOString();
+    const timeStr = formatMessageTimestamp(nowIso);
+    c.messages.push({ from: 'note', text, time: timeStr, rawTime: nowIso, senderName: AUTH_USER.display_name || AUTH_USER.email, isNote: true, _pending: true });
     renderMessages(c);
 
     try {
@@ -3193,8 +3258,9 @@ async function sendMessage() {
     }
 
     // إضافة الرسالة فورًا في الواجهة (optimistic) عشان الإيجنت يحس إنها اترسلت فورًا
-    const timeStr = formatMessageTimestamp(new Date().toISOString());
-    c.messages.push({from:'agent', text, time:timeStr, senderName: AUTH_USER.display_name || AUTH_USER.email, _pending:true});
+    const nowIso = new Date().toISOString();
+    const timeStr = formatMessageTimestamp(nowIso);
+    c.messages.push({from:'agent', text, time:timeStr, rawTime: nowIso, senderName: AUTH_USER.display_name || AUTH_USER.email, _pending:true});
     c.lastMsg = text;
     renderMessages(c);
     renderChatList(currentFilter, document.querySelector('.cl-search').value);
