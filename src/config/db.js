@@ -704,6 +704,34 @@ async function ensureCompaniesHaveAutomationColumns() {
   logger.info('✅ أعمدة إعدادات الأتمتة (Automation) جاهزة على جدول Companies.');
 }
 
+// جدول الـ Webhooks الصادرة (Outbound): اليوزر بيسجّل URL بتاعه، واحنا بنبعتله
+// طلب POST فيه تفاصيل الحدث (رسالة جديدة، رد، Resolve...) لحظة حصوله فعليًا،
+// موقّع بتوقيع HMAC-SHA256 عشان يتأكد إن الطلب جاي منا فعلاً
+async function ensureWebhooksTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Webhooks_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Webhooks_byA] (
+        id                 BIGINT IDENTITY(1,1) PRIMARY KEY,
+        company_id         BIGINT NOT NULL,
+        url                NVARCHAR(1000) NOT NULL,
+        secret             NVARCHAR(200) NOT NULL,
+        events             NVARCHAR(MAX) NOT NULL,
+        enabled            BIT NOT NULL DEFAULT 1,
+        created_by         BIGINT NULL,
+        created_at         DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        last_triggered_at  DATETIME2 NULL,
+        last_status_code   INT NULL,
+        last_error         NVARCHAR(500) NULL
+      );
+      CREATE INDEX IX_NileChat_Webhooks_byA_company_id
+        ON [dbo].[NileChat_Webhooks_byA](company_id);
+    END
+  `);
+  logger.info('✅ جدول الـ Webhooks الصادرة جاهز.');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -733,6 +761,7 @@ async function ensureSchema() {
   await ensureTeamsTableExists();
   await ensureTeamMembersTableExists();
   await ensureConversationTeamsTableExists();
+  await ensureWebhooksTableExists();
 }
 
 module.exports = {
@@ -767,6 +796,7 @@ module.exports = {
   ensureTeamsTableExists,
   ensureTeamMembersTableExists,
   ensureConversationTeamsTableExists,
+  ensureWebhooksTableExists,
   ensureSchema,
   TABLE_NAME,
 };

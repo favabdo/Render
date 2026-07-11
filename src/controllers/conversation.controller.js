@@ -6,6 +6,7 @@ const userRepo = require('../repositories/user.repo');
 const companyRepo = require('../repositories/company.repo');
 const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
+const webhookDispatchService = require('../services/webhookDispatch.service');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
@@ -126,6 +127,13 @@ async function resolve(req, res) {
   }
 
   res.json({ ok: true, conversation: updated });
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_RESOLVED, {
+    conversation_id: updated.id,
+    resolved_by: actingName,
+    category: category || null,
+    notes: notes || null,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation.resolved:', err.message));
 
   // قاعدة أتمتة "Send CSAT after resolution" — لو مفعّلة، بتبعت رسالة تقييم
   // رضا العميل جاهزة (قابلة للتعديل من صفحة الإعدادات) فور ما المحادثة تتقفل.
@@ -258,6 +266,10 @@ async function reply(req, res) {
     .sendReplyLive(conversation, text, senderInfo, () => {})
     .then((message) => {
       if (io) io.emit('new_message', { conversationId: conversation.id, message });
+      webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_SENT, {
+        conversation_id: conversation.id,
+        message: { id: message.id, text: message.message_text, sent_by: senderInfo, created_at: message.created_at },
+      }).catch((err) => logger.error('❌ فشل إرسال Webhook message.sent:', err.message));
     })
     .catch((err) => {
       logger.error('❌ فشل تسجيل/إرسال الرد:', err.message);

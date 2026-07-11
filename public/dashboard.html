@@ -1377,10 +1377,12 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <div class="page-content">
             <div class="settings-top-row"><div><h2>Integrations</h2><div class="settings-top-desc">Connect NileChat with the tools you already use</div></div></div>
             <div class="settings-card-grid">
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="webhook" style="width:20px;height:20px"></i></div><div class="settings-card-title">Webhooks</div><div class="settings-card-desc">Send conversation events to your own server</div><div class="settings-card-meta"><span>2 configured</span><span class="settings-card-connect">Configure</span></div></div>
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="layout-dashboard" style="width:20px;height:20px"></i></div><div class="settings-card-title">Dashboard Apps</div><div class="settings-card-desc">Embed your own apps inside the dashboard</div><div class="settings-card-meta"><span>1 configured</span><span class="settings-card-connect">Configure</span></div></div>
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="slack" style="width:20px;height:20px"></i></div><div class="settings-card-title">Slack</div><div class="settings-card-desc">Get notified about conversations in Slack</div><div class="settings-card-meta"><span>Not connected</span><span class="settings-card-connect">Connect</span></div></div>
-                <div class="settings-card"><div class="settings-card-icon" style="background:rgba(0,210,255,0.1);color:var(--secondary)"><i data-lucide="key-round" style="width:20px;height:20px"></i></div><div class="settings-card-title">API Access Token</div><div class="settings-card-desc">Authenticate requests to the Chatwoot-style API</div><div class="settings-card-meta"><span>Active</span><span class="settings-card-connect">View</span></div></div>
+                <div class="settings-card" onclick="openWebhooksModal()" style="cursor:pointer">
+                    <div class="settings-card-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="webhook" style="width:20px;height:20px"></i></div>
+                    <div class="settings-card-title">Webhooks</div>
+                    <div class="settings-card-desc">Send conversation events to your own server</div>
+                    <div class="settings-card-meta"><span id="webhooks-card-meta">Loading…</span><span class="settings-card-connect">Configure</span></div>
+                </div>
             </div>
         </div>
         </div>
@@ -1388,6 +1390,36 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         </div><!-- /settings-content-panel -->
     </div><!-- /settings-layout -->
 </div><!-- /page-settings -->
+
+<!-- ============ WEBHOOKS MODAL (Settings → Integrations → Webhooks) ============ -->
+<div class="resolve-overlay" id="webhooks-overlay" onclick="closeWebhooksModal(event)">
+    <div class="resolve-modal" id="webhooks-modal" style="width:520px">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" style="background:rgba(108,92,231,0.12);color:var(--primary)">
+                <i data-lucide="webhook" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title">Webhooks</div>
+        </div>
+        <div class="resolve-modal-sub" style="padding-left:0;margin-bottom:16px">Get a real HTTP POST request sent to your own server the moment a conversation event happens (new message, reply, resolve...), signed so you can verify it's really from NileChat.</div>
+
+        <div id="webhooks-list" style="margin-bottom:6px"></div>
+
+        <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:16px">
+            <div class="resolve-cats-label">Add a new webhook</div>
+            <input class="iw-input" id="webhook-url-input" placeholder="https://your-server.com/nilechat-events" style="margin-bottom:12px">
+            <div class="resolve-cats-label" style="margin-top:0">Events to send</div>
+            <div id="webhook-events-checkboxes" style="display:flex;flex-direction:column;gap:7px;margin:8px 0 12px"></div>
+            <div id="webhook-add-error" style="color:var(--danger);font-size:12.5px;margin-bottom:8px"></div>
+            <button class="resolve-confirm-btn" style="width:100%" onclick="createWebhook()">
+                <i data-lucide="plus" style="width:15px;height:15px"></i> Add Webhook
+            </button>
+        </div>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeWebhooksModal()">Close</button>
+        </div>
+    </div>
+</div>
 
 <!-- PROFILE PAGE (خاص بكل إيجنت، منفصل عن Settings العامة بتاعة المنظمة) -->
 <div id="page-profile" class="page flex flex-1">
@@ -1417,6 +1449,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         </div>
     </div>
 </div>
+
 
 </div></div>
 <div class="app-footer">Copyright © Nile Techno Designed by Abdullah Elsawy 2026</div>
@@ -2759,6 +2792,7 @@ function navigateSettingsSection(section, el) {
     if (section === 'general') loadAccountSettings();
     if (section === 'teams') loadTeams();
     if (section === 'automation') loadAutomationSettings();
+    if (section === 'integrations') loadWebhooksCardMeta();
     if (section === 'profile' || section === 'general') renderProfileSection();
 }
 
@@ -6552,6 +6586,211 @@ const AUTOMATION_RULE_META = {
         offDesc: 'When message contains chosen keywords → Assign to selected team',
     },
 };
+
+/* ============================================================
+   Webhooks (Settings → Integrations): Webhooks صادرة حقيقية بتبعت
+   POST request لسيرفر اليوزر لحظة حصول حدث فعلي (رسالة جديدة، رد، Resolve)
+============================================================ */
+let WEBHOOKS_CACHE = [];
+let WEBHOOK_AVAILABLE_EVENTS = [];
+
+const WEBHOOK_EVENT_LABELS = {
+    'message.received': 'New message from customer',
+    'message.sent': 'Agent sent a reply',
+    'conversation.created': 'New conversation started',
+    'conversation.resolved': 'Conversation resolved',
+};
+
+// بتحدّث النص تحت كارت "Webhooks" في صفحة الـ Integrations (X configured)
+async function loadWebhooksCardMeta() {
+    const metaEl = document.getElementById('webhooks-card-meta');
+    if (!metaEl) return;
+    try {
+        const res = await apiFetch('/api/webhooks');
+        if (!res.ok) throw new Error('Failed to fetch webhooks');
+        const data = await res.json();
+        const count = (data.webhooks || []).length;
+        metaEl.textContent = count ? `${count} configured` : 'Not configured';
+    } catch (err) {
+        console.error('[API] loadWebhooksCardMeta error:', err);
+        metaEl.textContent = 'Not configured';
+    }
+}
+
+async function openWebhooksModal() {
+    document.getElementById('webhooks-overlay').classList.add('show');
+    document.getElementById('webhook-add-error').textContent = '';
+    document.getElementById('webhook-url-input').value = '';
+    await loadWebhooksList();
+}
+
+function closeWebhooksModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('webhooks-overlay').classList.remove('show');
+}
+
+async function loadWebhooksList() {
+    const listEl = document.getElementById('webhooks-list');
+    listEl.innerHTML = '<div style="font-size:12.5px;color:var(--text-secondary);padding:8px 0">جارِ التحميل…</div>';
+    try {
+        const res = await apiFetch('/api/webhooks');
+        if (!res.ok) throw new Error('Failed to fetch webhooks');
+        const data = await res.json();
+        WEBHOOKS_CACHE = data.webhooks || [];
+        WEBHOOK_AVAILABLE_EVENTS = data.available_events || [];
+        renderWebhooksList();
+        renderWebhookEventCheckboxes();
+        loadWebhooksCardMeta();
+    } catch (err) {
+        console.error('[API] loadWebhooksList error:', err);
+        listEl.innerHTML = '<div style="font-size:12.5px;color:var(--danger);padding:8px 0">تعذر تحميل الـ Webhooks</div>';
+    }
+}
+
+function renderWebhookEventCheckboxes(selected = []) {
+    const container = document.getElementById('webhook-events-checkboxes');
+    container.innerHTML = WEBHOOK_AVAILABLE_EVENTS.map((eventType) => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer">
+            <input type="checkbox" class="webhook-event-checkbox" value="${eventType}" ${selected.includes(eventType) ? 'checked' : ''} style="width:15px;height:15px;accent-color:var(--primary)">
+            ${escapeHtml(WEBHOOK_EVENT_LABELS[eventType] || eventType)}
+        </label>`).join('');
+}
+
+function formatWebhookLastDelivery(wh) {
+    if (!wh.last_triggered_at) return '<span style="color:var(--text-secondary)">لسه معملش أي محاولة إرسال</span>';
+    const when = formatMessageTimestamp(wh.last_triggered_at);
+    if (wh.last_error) {
+        return `<span style="color:var(--danger)">آخر محاولة (${when}) فشلت: ${escapeHtml(wh.last_error)}</span>`;
+    }
+    return `<span style="color:var(--success)">آخر محاولة (${when}) نجحت — HTTP ${wh.last_status_code}</span>`;
+}
+
+function renderWebhooksList() {
+    const listEl = document.getElementById('webhooks-list');
+    if (!WEBHOOKS_CACHE.length) {
+        listEl.innerHTML = '<div style="font-size:12.5px;color:var(--text-secondary);padding:8px 0">لسه مفيش Webhooks متسجلة — ضيف واحد تحت</div>';
+        return;
+    }
+
+    listEl.innerHTML = WEBHOOKS_CACHE.map((wh) => `
+        <div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <div style="flex:1;font-size:13px;font-weight:700;word-break:break-all">${escapeHtml(wh.url)}</div>
+                <button class="toggle ${wh.enabled ? 'on' : ''}" onclick="toggleWebhookEnabled(${wh.id}, this)" title="تفعيل/إيقاف"></button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
+                ${wh.events.map((e) => `<span class="label-chip" style="background:rgba(108,92,231,0.1);color:var(--primary)">${escapeHtml(WEBHOOK_EVENT_LABELS[e] || e)}</span>`).join('')}
+            </div>
+            <div style="font-size:11.5px;margin-bottom:8px">${formatWebhookLastDelivery(wh)}</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-secondary);margin-bottom:10px">
+                <span>Secret:</span>
+                <code style="background:rgba(0,0,0,0.05);padding:2px 6px;border-radius:6px;font-size:11px">${escapeHtml(wh.secret.slice(0, 8))}••••••••</code>
+                <button class="st-icon-btn" onclick="copyWebhookSecret('${wh.id}')" title="نسخ الـ Secret كامل"><i data-lucide="copy" style="width:12px;height:12px"></i></button>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="resolve-cancel-btn" style="flex:1;padding:7px" onclick="testWebhookNow(${wh.id}, this)">Send test event</button>
+                <button class="resolve-cancel-btn" style="flex:1;padding:7px;color:var(--danger);border-color:var(--danger)" onclick="deleteWebhookConfirm(${wh.id})">Delete</button>
+            </div>
+        </div>`).join('');
+
+    lucide.createIcons();
+}
+
+async function createWebhook() {
+    const urlInput = document.getElementById('webhook-url-input');
+    const errorBox = document.getElementById('webhook-add-error');
+    errorBox.textContent = '';
+
+    const url = urlInput.value.trim();
+    const events = Array.from(document.querySelectorAll('.webhook-event-checkbox:checked')).map((el) => el.value);
+
+    if (!url) {
+        errorBox.textContent = 'لازم تكتب رابط الـ Webhook الأول';
+        return;
+    }
+    if (!events.length) {
+        errorBox.textContent = 'لازم تختار حدث واحد على الأقل';
+        return;
+    }
+
+    try {
+        const res = await apiFetch('/api/webhooks', {
+            method: 'POST',
+            body: JSON.stringify({ url, events }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الـ Webhook');
+
+        urlInput.value = '';
+        renderWebhookEventCheckboxes();
+        showToast('تمت إضافة الـ Webhook بنجاح', 'success');
+        await loadWebhooksList();
+    } catch (err) {
+        errorBox.textContent = err.message;
+    }
+}
+
+async function toggleWebhookEnabled(id, btnEl) {
+    const wh = WEBHOOKS_CACHE.find((w) => String(w.id) === String(id));
+    if (!wh) return;
+    const nextEnabled = !wh.enabled;
+    btnEl.classList.toggle('on', nextEnabled); // استجابة فورية بصريًا قبل رد السيرفر
+
+    try {
+        const res = await apiFetch(`/api/webhooks/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ enabled: nextEnabled }),
+        });
+        if (!res.ok) throw new Error('فشل تحديث حالة الـ Webhook');
+        wh.enabled = nextEnabled;
+        loadWebhooksCardMeta();
+    } catch (err) {
+        btnEl.classList.toggle('on', wh.enabled); // ارجع للحالة القديمة لو فشل التحديث فعليًا
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteWebhookConfirm(id) {
+    if (!confirm('متأكد إنك عايز تمسح الـ Webhook ده؟ الإجراء ده نهائي.')) return;
+    try {
+        const res = await apiFetch(`/api/webhooks/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('فشل مسح الـ Webhook');
+        showToast('تم مسح الـ Webhook', 'success');
+        await loadWebhooksList();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function testWebhookNow(id, btnEl) {
+    const originalText = btnEl.textContent;
+    btnEl.textContent = 'جارِ الإرسال…';
+    btnEl.disabled = true;
+    try {
+        const res = await apiFetch(`/api/webhooks/${id}/test`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إرسال حدث تجريبي');
+
+        showToast(data.delivered ? 'وصل الحدث التجريبي بنجاح ✅' : 'اتبعت الحدث بس السيرفر بتاعك رد بخطأ ⚠️', data.delivered ? 'success' : 'error');
+        await loadWebhooksList();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btnEl.textContent = originalText;
+        btnEl.disabled = false;
+    }
+}
+
+async function copyWebhookSecret(id) {
+    const wh = WEBHOOKS_CACHE.find((w) => String(w.id) === String(id));
+    if (!wh) return;
+    try {
+        await navigator.clipboard.writeText(wh.secret);
+        showToast('اتنسخ الـ Secret كامل', 'success');
+    } catch {
+        showToast('تعذر النسخ — انسخه يدويًا: ' + wh.secret, 'error');
+    }
+}
 
 async function loadAutomationSettings() {
     try {

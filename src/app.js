@@ -19,6 +19,7 @@ const resolveCategoriesRoutes = require('./routes/resolveCategories.routes');
 const labelsRoutes = require('./routes/labels.routes');
 const companyRoutes = require('./routes/company.routes');
 const teamsRoutes = require('./routes/teams.routes');
+const webhookConfigRoutes = require('./routes/webhookConfig.routes');
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use('/', resolveCategoriesRoutes);
 app.use('/', labelsRoutes);
 app.use('/', companyRoutes);
 app.use('/', teamsRoutes);
+app.use('/', webhookConfigRoutes);
 
 // أي Error يوصل هنا (عن طريق asyncHandler أو next(err)) بيتحول لرد JSON موحد
 app.use(errorHandler);

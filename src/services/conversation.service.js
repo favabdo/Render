@@ -6,6 +6,7 @@ const inboxRepo = require('../repositories/inbox.repo');
 const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
 const teamRepo = require('../repositories/team.repo');
+const webhookDispatchService = require('./webhookDispatch.service');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
 const logger = require('../utils/logger');
@@ -120,6 +121,21 @@ async function processIncomingMessages(value, io) {
 
     if (io) {
       io.emit('new_message', { conversationId, message: saved });
+    }
+
+    // Webhooks الصادرة: بنبعت حدث "رسالة جديدة من العميل" فورًا لأي Webhook
+    // مسجل ومشترك في الحدث ده، وحدث "محادثة جديدة" لو دي فعلاً أول رسالة
+    webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_RECEIVED, {
+      conversation_id: conversationId,
+      message: { id: saved.id, text: messageText, from: msg.from, type: messageType, created_at: saved.created_at },
+    }).catch((err) => logger.error('❌ فشل إرسال Webhook message.received:', err.message));
+
+    if (isNew) {
+      webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_CREATED, {
+        conversation_id: conversationId,
+        contact_name: contactName,
+        phone: msg.from,
+      }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation.created:', err.message));
     }
 
     // قاعدة الـ Keyword Routing: بتتفحص مع كل رسالة نصية جاية من العميل (مش
