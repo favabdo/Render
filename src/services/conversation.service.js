@@ -123,19 +123,26 @@ async function processIncomingMessages(value, io) {
       io.emit('new_message', { conversationId, message: saved });
     }
 
-    // Webhooks الصادرة: بنبعت حدث "رسالة جديدة من العميل" فورًا لأي Webhook
-    // مسجل ومشترك في الحدث ده، وحدث "محادثة جديدة" لو دي فعلاً أول رسالة
-    webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_RECEIVED, {
+    // Webhooks الصادرة: بنبعت حدث "رسالة جديدة" فورًا لأي Webhook مسجل ومشترك في
+    // الحدث ده (direction: in لأنها جاية من العميل)، وحدث "محادثة جديدة" لو دي فعلاً أول رسالة
+    webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_CREATED, {
       conversation_id: conversationId,
-      message: { id: saved.id, text: messageText, from: msg.from, type: messageType, created_at: saved.created_at },
-    }).catch((err) => logger.error('❌ فشل إرسال Webhook message.received:', err.message));
+      message: {
+        id: saved.id,
+        text: messageText,
+        from: msg.from,
+        type: messageType,
+        direction: 'in',
+        created_at: saved.created_at,
+      },
+    }).catch((err) => logger.error('❌ فشل إرسال Webhook message_created:', err.message));
 
     if (isNew) {
       webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_CREATED, {
         conversation_id: conversationId,
         contact_name: contactName,
         phone: msg.from,
-      }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation.created:', err.message));
+      }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_created:', err.message));
     }
 
     // قاعدة الـ Keyword Routing: بتتفحص مع كل رسالة نصية جاية من العميل (مش
@@ -294,7 +301,16 @@ async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
 // (مفيش تيك بيتعرض في الواجهة يستخدمها أصلًا بعد ما اتشالت فكرة الصح/الصحين)
 async function processStatusUpdates(value) {
   for (const st of value.statuses) {
-    await conversationRepo.updateMessageStatusByWaId(st.id, st.status);
+    const updated = await conversationRepo.updateMessageStatusByWaId(st.id, st.status);
+
+    // حدث "رسالة اتحدثت": بيحصل هنا فعليًا لما ميتا ترجع حالة تسليم/قراءة/فشل
+    // لرسالة بعتناها قبل كده (sent/delivered/read/failed)
+    if (updated) {
+      webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_UPDATED, {
+        conversation_id: updated.conversation_id || null,
+        message: { id: updated.id, wa_message_id: st.id, status: st.status },
+      }).catch((err) => logger.error('❌ فشل إرسال Webhook message_updated:', err.message));
+    }
   }
 }
 

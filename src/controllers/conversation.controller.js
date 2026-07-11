@@ -93,6 +93,18 @@ async function assign(req, res) {
         io.emit('conversation_updated', conversation);
         io.emit('new_message', { conversationId: conversation.id, message: systemMessage });
       }
+      if (conversation) {
+        webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_UPDATED, {
+          conversation_id: conversation.id,
+          assigned_agent_id: targetAgentId,
+          assigned_agent_name: targetName,
+        }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_updated:', err.message));
+
+        webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_STATUS_CHANGED, {
+          conversation_id: conversation.id,
+          status: conversation.status,
+        }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
+      }
     })
     .catch((err) => logger.error('❌ فشل تحديث المحادثة بعد الأسين (broadcast خلفي):', err.message));
 }
@@ -128,12 +140,13 @@ async function resolve(req, res) {
 
   res.json({ ok: true, conversation: updated });
 
-  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_RESOLVED, {
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_STATUS_CHANGED, {
     conversation_id: updated.id,
+    status: updated.status,
     resolved_by: actingName,
     category: category || null,
     notes: notes || null,
-  }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation.resolved:', err.message));
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
 
   // قاعدة أتمتة "Send CSAT after resolution" — لو مفعّلة، بتبعت رسالة تقييم
   // رضا العميل جاهزة (قابلة للتعديل من صفحة الإعدادات) فور ما المحادثة تتقفل.
@@ -189,6 +202,12 @@ async function reopen(req, res) {
   }
 
   res.json({ ok: true, conversation: updated });
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_STATUS_CHANGED, {
+    conversation_id: updated.id,
+    status: updated.status,
+    reopened_by: actingName,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
 }
 
 // ملاحظة خاصة بين الإيجنتس بس — مش بتتبعت لواتساب ومش بتظهر للعميل أبدًا
@@ -266,10 +285,16 @@ async function reply(req, res) {
     .sendReplyLive(conversation, text, senderInfo, () => {})
     .then((message) => {
       if (io) io.emit('new_message', { conversationId: conversation.id, message });
-      webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_SENT, {
+      webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_CREATED, {
         conversation_id: conversation.id,
-        message: { id: message.id, text: message.message_text, sent_by: senderInfo, created_at: message.created_at },
-      }).catch((err) => logger.error('❌ فشل إرسال Webhook message.sent:', err.message));
+        message: {
+          id: message.id,
+          text: message.message_text,
+          direction: 'out',
+          sent_by: senderInfo,
+          created_at: message.created_at,
+        },
+      }).catch((err) => logger.error('❌ فشل إرسال Webhook message_created:', err.message));
     })
     .catch((err) => {
       logger.error('❌ فشل تسجيل/إرسال الرد:', err.message);

@@ -6595,10 +6595,14 @@ let WEBHOOKS_CACHE = [];
 let WEBHOOK_AVAILABLE_EVENTS = [];
 
 const WEBHOOK_EVENT_LABELS = {
-    'message.received': 'New message from customer',
-    'message.sent': 'Agent sent a reply',
-    'conversation.created': 'New conversation started',
-    'conversation.resolved': 'Conversation resolved',
+    'conversation_created': 'Conversation Created',
+    'conversation_status_changed': 'Conversation Status Changed',
+    'conversation_updated': 'Conversation Updated',
+    'message_created': 'Message created',
+    'message_updated': 'Message updated',
+    'webwidget_triggered': 'Live chat widget opened by the user',
+    'contact_created': 'Contact created',
+    'contact_updated': 'Contact updated',
 };
 
 // بتحدّث النص تحت كارت "Webhooks" في صفحة الـ Integrations (X configured)

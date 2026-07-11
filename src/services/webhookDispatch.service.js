@@ -8,12 +8,16 @@ const logger = require('../utils/logger');
 const webhookConfigRepo = require('../repositories/webhookConfig.repo');
 
 // أنواع الأحداث المدعومة حاليًا — نفس القايمة دي بتتعرض في الواجهة كـ checkboxes
-// عشان اليوزر يختار يشترك في أي حدث منها
+// عشان اليوزر يختار يشترك في أي حدث منها. الأسامي دي على نفس نمط Chatwoot.
 const EVENT_TYPES = {
-  MESSAGE_RECEIVED: 'message.received',   // رسالة جديدة جاية من العميل
-  MESSAGE_SENT: 'message.sent',           // الإيجنت بعت رد للعميل
-  CONVERSATION_CREATED: 'conversation.created', // أول رسالة فتحت محادثة جديدة خالص
-  CONVERSATION_RESOLVED: 'conversation.resolved', // المحادثة اتقفلت (Resolve)
+  CONVERSATION_CREATED: 'conversation_created',                // أول رسالة فتحت محادثة جديدة خالص
+  CONVERSATION_STATUS_CHANGED: 'conversation_status_changed',   // status اتغير (assigned/closed/open...)
+  CONVERSATION_UPDATED: 'conversation_updated',                 // تحديث عام على المحادثة (تعيين، ربط كونتاكت...)
+  MESSAGE_CREATED: 'message_created',                           // رسالة جديدة اتسجلت (جاية من العميل أو رد من الإيجنت)
+  MESSAGE_UPDATED: 'message_updated',                           // حالة رسالة اتغيرت (sent/delivered/read/failed)
+  WEBWIDGET_TRIGGERED: 'webwidget_triggered',                   // فتح ويدجت الشات (مش متاحة فعليًا حاليًا — واتساب بس)
+  CONTACT_CREATED: 'contact_created',                           // كونتاكت جديد اتسجل
+  CONTACT_UPDATED: 'contact_updated',                           // بيانات كونتاكت اتعدلت
 };
 
 const ALL_EVENT_TYPES = Object.values(EVENT_TYPES);

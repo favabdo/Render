@@ -2,6 +2,8 @@
 const contactRepo = require('../repositories/contact.repo');
 const conversationRepo = require('../repositories/conversation.repo');
 const contactService = require('../services/contact.service');
+const webhookDispatchService = require('../services/webhookDispatch.service');
+const logger = require('../utils/logger');
 
 // كل الكونتاكتس الحقيقيين (لصفحة Contacts، وكمان لاختيار "اربط بكونتاكت موجود")
 async function listContacts(req, res) {
@@ -36,6 +38,11 @@ async function updateContact(req, res) {
   const io = req.app.get('io');
   if (io) io.emit('contact_updated', contact);
 
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: contact.id,
+    name: contact.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
   res.json({ ok: true, contact });
 }
 
@@ -53,6 +60,11 @@ async function updatePhoneLabel(req, res) {
   const io = req.app.get('io');
   if (io) io.emit('contact_updated', contact);
 
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: contact.id,
+    name: contact.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
   res.json({ ok: true, contact });
 }
 
@@ -68,6 +80,11 @@ async function linkConversationContact(req, res) {
   const updated = await conversationRepo.getConversationById(req.params.id);
   const io = req.app.get('io');
   if (io) io.emit('conversation_updated', updated);
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_UPDATED, {
+    conversation_id: updated.id,
+    contact_id: updated.contact_id || null,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_updated:', err.message));
 
   res.json({ ok: true, conversation: updated });
 }

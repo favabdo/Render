@@ -3,6 +3,7 @@
 
 const contactRepo = require('../repositories/contact.repo');
 const conversationRepo = require('../repositories/conversation.repo');
+const webhookDispatchService = require('./webhookDispatch.service');
 const logger = require('../utils/logger');
 
 // بيدور على الكونتاكت الحقيقي بتاع الرقم ده، ولو مش موجود بينشئه تلقائيًا باسمه اللي ظاهر
@@ -12,6 +13,13 @@ async function findOrCreateContactForIncoming(phoneNumber, waProfileName) {
     let contact = await contactRepo.findContactByPhone(phoneNumber);
     if (!contact) {
       contact = await contactRepo.createContactWithPhone(waProfileName || phoneNumber, phoneNumber);
+      if (contact) {
+        webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
+          contact_id: contact.id,
+          name: contact.name,
+          phone: phoneNumber,
+        }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_created:', err.message));
+      }
     }
     return contact;
   } catch (err) {
@@ -47,6 +55,12 @@ async function linkContactToConversation(conversation, { mode, contactId, name }
         logger.error('❌ خطأ أثناء تنظيف الكونتاكت الفاضي:', err.message);
       });
     }
+
+    webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+      contact_id: targetContact.id,
+      name: targetContact.name,
+      linked_phone: conversation.contact_number,
+    }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
   } else if (mode === 'new') {
     const trimmed = (name || '').trim();
     if (!trimmed) {
@@ -55,6 +69,12 @@ async function linkContactToConversation(conversation, { mode, contactId, name }
       throw err;
     }
     targetContact = await contactRepo.createContactWithPhone(trimmed, conversation.contact_number);
+
+    webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
+      contact_id: targetContact.id,
+      name: targetContact.name,
+      phone: conversation.contact_number,
+    }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_created:', err.message));
   } else {
     const err = new Error("الـ mode لازم يكون 'link' أو 'new'");
     err.status = 400;
