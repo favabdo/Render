@@ -4733,6 +4733,7 @@ function scheduledTaskCardHtml(t, ended) {
             </div>
             <div class="sched-task-text">${escapeHtml(t.task_text)}</div>
             <div class="sched-task-meta"><i data-lucide="calendar" style="width:13px;height:13px"></i>Added: ${formatSchedDate(t.created_at)}</div>
+            ${ended ? `<div class="sched-task-meta"><i data-lucide="calendar-check" style="width:13px;height:13px"></i>Ended: ${formatSchedDate(t.ended_at)}</div>` : ''}
             <div class="sched-task-actions">
                 ${ended
                     ? endedTagHtml
