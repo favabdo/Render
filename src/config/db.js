@@ -139,6 +139,31 @@ async function ensureUsersTableExists() {
   logger.info('✅ جدول Users جاهز.');
 }
 
+// أعمدة صفحة البروفايل الشخصي بتاعة كل إيجنت: صورة البروفايل، الاسم الكامل،
+// توكن الوصول الخاص بالـ API integration، وتفضيلات الإشعارات (JSON نصي بيحدد
+// إيميل/بوش لكل نوع حدث). كل عمود بيتضاف لو مش موجود من غير ما يلمس أي بيانات قديمة.
+async function ensureUsersHaveProfileColumns() {
+  const pool = await getPool();
+  const columns = [
+    { name: 'full_name', def: 'NVARCHAR(200) NULL' },
+    { name: 'avatar_data', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'access_token', def: 'NVARCHAR(200) NULL' },
+    { name: 'notif_prefs', def: 'NVARCHAR(MAX) NULL' },
+  ];
+  for (const col of columns) {
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.NileChat_Users_byA') AND name = '${col.name}'
+      )
+      BEGIN
+        ALTER TABLE [dbo].[NileChat_Users_byA] ADD ${col.name} ${col.def};
+      END
+    `);
+  }
+  logger.info('✅ أعمدة صفحة البروفايل الشخصي (avatar/full_name/access_token/notif_prefs) جاهزة.');
+}
+
 // جدول الـ Inboxes — كل Inbox بيمثل قناة اتصال حقيقية (دلوقتي: WhatsApp Cloud API)
 // كل Inbox ليه بيانات اعتماد (credentials) مستقلة، فممكن تضيف أكتر من رقم واتساب
 // وكل واحد بيبقى Inbox منفصل، بالظبط زي فكرة Chatwoot
@@ -748,6 +773,7 @@ async function ensureSchema() {
   await ensureConversationsTableExists();
   await ensureAgentsTableExists();
   await ensureUsersTableExists();
+  await ensureUsersHaveProfileColumns();
   await ensureMessagesHaveConversationColumn();
   await ensureMessagesHaveSenderColumns();
   await ensureInboxesTableExists();
@@ -782,6 +808,7 @@ module.exports = {
   ensureConversationsTableExists,
   ensureAgentsTableExists,
   ensureUsersTableExists,
+  ensureUsersHaveProfileColumns,
   ensureMessagesHaveConversationColumn,
   ensureMessagesHaveSenderColumns,
   ensureInboxesTableExists,

@@ -102,21 +102,96 @@ async function getMe(req, res) {
   res.json({ ...user, display_name: userRepo.resolveDisplayName(user) });
 }
 
-// الإيجنت بيغيّر الاسم اللي بيتعرض بيه هو بس (بدل ما يفضل الإيميل ظاهر)
+// الإيجنت بيغيّر بياناته الشخصية: اسم العرض (زي الأول)، أو الاسم الكامل، الإيميل،
+// وصورة البروفايل (base64 data URL). أي حقل مبعوتش في الـ body بيفضل زي ما هو.
 async function updateMe(req, res) {
-  const { display_name } = req.body || {};
-  const trimmed = (display_name || '').trim();
+  const { display_name, full_name, email, avatar_data } = req.body || {};
+  const fields = {};
 
-  if (!trimmed) {
-    return res.status(400).json({ error: 'لازم تكتب اسم' });
-  }
-  if (trimmed.length < 2 || trimmed.length > 100) {
-    return res.status(400).json({ error: 'الاسم لازم يكون بين 2 و 100 حرف' });
+  if (display_name !== undefined) {
+    const trimmed = (display_name || '').trim();
+    if (!trimmed) return res.status(400).json({ error: 'لازم تكتب اسم' });
+    if (trimmed.length < 2 || trimmed.length > 100) {
+      return res.status(400).json({ error: 'الاسم لازم يكون بين 2 و 100 حرف' });
+    }
+    fields.display_name = trimmed;
   }
 
-  const user = await userRepo.updateDisplayName(req.user.userId, trimmed);
+  if (full_name !== undefined) {
+    const trimmed = (full_name || '').trim();
+    if (trimmed && (trimmed.length < 2 || trimmed.length > 100)) {
+      return res.status(400).json({ error: 'الاسم الكامل لازم يكون بين 2 و 100 حرف' });
+    }
+    fields.full_name = trimmed || null;
+  }
+
+  if (email !== undefined) {
+    const trimmed = (email || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      return res.status(400).json({ error: 'الإيميل غير صحيح' });
+    }
+    const existing = await userRepo.findUserByEmail(trimmed);
+    if (existing && String(existing.id) !== String(req.user.userId)) {
+      return res.status(409).json({ error: 'الإيميل ده مستخدم بالفعل' });
+    }
+    fields.email = trimmed;
+  }
+
+  if (avatar_data !== undefined) {
+    // بنحدد حد أقصى تقريبي (~2MB بعد الـ base64) عشان مايتبعتش صور ضخمة للداتابيز
+    if (avatar_data && avatar_data.length > 2_800_000) {
+      return res.status(400).json({ error: 'حجم الصورة كبير جدًا' });
+    }
+    fields.avatar_data = avatar_data || null;
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return res.status(400).json({ error: 'مفيش أي بيانات لتحديثها' });
+  }
+
+  const user = await userRepo.updateProfile(req.user.userId, fields);
   if (!user) return res.status(404).json({ error: 'اليوزر مش موجود' });
   res.json({ ok: true, user: { ...user, display_name: userRepo.resolveDisplayName(user) } });
+}
+
+// تغيير كلمة سر الإيجنت نفسه — لازم يأكد كلمة السر الحالية الأول
+async function changeMyPassword(req, res) {
+  const { current_password, new_password } = req.body || {};
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: 'لازم تبعت كلمة السر الحالية والجديدة' });
+  }
+  if (new_password.length < 6) {
+    return res.status(400).json({ error: 'كلمة المرور الجديدة لازم تكون 6 حروف على الأقل' });
+  }
+
+  const user = await userRepo.findUserByEmail(req.user.email);
+  if (!user) return res.status(404).json({ error: 'اليوزر مش موجود' });
+
+  const validPassword = await userRepo.verifyPassword(current_password, user.password);
+  if (!validPassword) {
+    return res.status(401).json({ error: 'كلمة السر الحالية غلط' });
+  }
+
+  await userRepo.changePassword(user.id, new_password);
+  res.json({ ok: true });
+}
+
+// بيولّد Access Token جديد (لتكامل API خارجي)، ويلغي أي توكن قديم فورًا
+async function regenerateMyToken(req, res) {
+  const token = await userRepo.regenerateAccessToken(req.user.userId);
+  res.json({ ok: true, access_token: token });
+}
+
+// تحديث تفضيلات الإشعارات (إيميل/بوش) لكل نوع حدث
+async function updateMyNotifPrefs(req, res) {
+  const { prefs } = req.body || {};
+  if (!prefs || typeof prefs !== 'object') {
+    return res.status(400).json({ error: 'لازم تبعت تفضيلات الإشعارات' });
+  }
+  const saved = await userRepo.updateNotifPrefs(req.user.userId, prefs);
+  if (!saved) return res.status(404).json({ error: 'اليوزر مش موجود' });
+  res.json({ ok: true, notif_prefs: saved });
 }
 
 // قايمة الإيجنتس الحقيقيين المسجلين — متاحة لأي إيجنت مسجل دخول (مش admin بس)
@@ -290,6 +365,9 @@ module.exports = {
   createFirstUser,
   getMe,
   updateMe,
+  changeMyPassword,
+  regenerateMyToken,
+  updateMyNotifPrefs,
   listAgents,
   listUsers,
   createUserAccount,

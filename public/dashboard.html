@@ -551,6 +551,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .st-icon-btn{width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
 .st-icon-btn:hover{background:var(--bg);color:var(--primary)}
 .st-icon-btn.danger:hover{background:rgba(239,68,68,0.1);color:var(--danger)}
+.st-text-input{padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:13.5px;font-family:inherit;outline:none;transition:border-color .15s}
+.st-text-input:focus{border-color:var(--primary)}
+.notif-check{width:16px;height:16px;cursor:pointer;accent-color:var(--primary)}
 .agent-name-edit-input{font-size:13.5px;font-weight:600;color:var(--text);border:1.5px solid var(--primary);border-radius:8px;padding:4px 8px;font-family:inherit;outline:none;width:150px}
 .agent-name-edit-actions{display:inline-flex;gap:2px;margin-left:4px}
 .agent-you-tag{font-size:10px;font-weight:700;color:var(--primary);background:rgba(108,92,231,0.1);padding:2px 6px;border-radius:6px;margin-left:6px}
@@ -1425,31 +1428,86 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 <!-- PROFILE PAGE (خاص بكل إيجنت، منفصل عن Settings العامة بتاعة المنظمة) -->
 <div id="page-profile" class="page flex flex-1">
     <div class="page-content" style="max-width:700px;margin:0 auto;padding:32px 24px;overflow-y:auto;width:100%">
-        <div class="settings-top-row"><div><h2>Profile</h2><div class="settings-top-desc">Your personal account details</div></div></div>
+        <div class="settings-top-row"><div><h2>Profile Settings</h2><div class="settings-top-desc">Your personal account details</div></div></div>
 
+        <!-- صورة البروفايل + الاسم + الإيميل -->
         <div class="settings-section">
-            <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-                <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light)" id="profile-avatar"></div>
-                <div><div id="profile-display-name" style="font-weight:700;font-size:16px"></div><div id="profile-email" style="font-size:13px;color:var(--text-secondary)"></div></div>
+            <h3>Profile Picture</h3>
+            <div style="display:flex;align-items:center;gap:16px;padding-bottom:4px">
+                <div style="position:relative;cursor:pointer" onclick="document.getElementById('profile-avatar-input').click()" title="Change profile picture">
+                    <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light)" id="profile-avatar"></div>
+                    <div style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)">
+                        <i data-lucide="camera" style="width:12px;height:12px"></i>
+                    </div>
+                </div>
+                <div>
+                    <div id="profile-display-name" style="font-weight:700;font-size:16px"></div>
+                    <div id="profile-email" style="font-size:13px;color:var(--text-secondary)"></div>
+                    <button class="st-icon-btn" style="width:auto;padding:4px 10px;gap:6px;display:inline-flex;margin-top:6px;background:var(--bg);font-size:12px" onclick="document.getElementById('profile-avatar-input').click()">
+                        <i data-lucide="upload" style="width:13px;height:13px"></i> Upload photo
+                    </button>
+                </div>
+                <input type="file" id="profile-avatar-input" accept="image/*" style="display:none" onchange="handleProfileAvatarChange(event)">
             </div>
+        </div>
+
+        <!-- بيانات الحساب: الاسم الكامل / اسم العرض / الإيميل -->
+        <div class="settings-section">
+            <h3>Personal Information</h3>
+            <div class="setting-row"><div><div class="setting-label">Full Name</div><div class="setting-desc">Your legal / full name</div></div><span id="profile-full-name-row" style="font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:8px"></span></div>
             <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Visible to customers instead of your email</div></div><span id="profile-display-name-row" style="font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:8px"></span></div>
+            <div class="setting-row"><div><div class="setting-label">Email Address</div><div class="setting-desc">Used to sign in to your account</div></div><span id="profile-email-row" style="font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:8px"></span></div>
             <div class="setting-row"><div><div class="setting-label">Role</div><div class="setting-desc">Your permission level</div></div><span id="profile-role" style="font-size:14px;color:var(--primary);font-weight:600"></span></div>
         </div>
 
+        <!-- كلمة السر -->
         <div class="settings-section">
-            <h3>Notifications</h3>
-            <div class="setting-row"><div><div class="setting-label">New Message Alerts</div><div class="setting-desc">Play sound for incoming messages</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-            <div class="setting-row"><div><div class="setting-label">Desktop Notifications</div><div class="setting-desc">Show browser notifications</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-            <div class="setting-row"><div><div class="setting-label">Email Digest</div><div class="setting-desc">Daily summary of conversations</div></div><button class="toggle" onclick="this.classList.toggle('on')"></button></div>
+            <h3>Password</h3>
+            <div style="display:flex;flex-direction:column;gap:12px">
+                <input type="password" id="pw-current" class="st-text-input" placeholder="Current password" autocomplete="current-password">
+                <input type="password" id="pw-new" class="st-text-input" placeholder="New password" autocomplete="new-password">
+                <input type="password" id="pw-confirm" class="st-text-input" placeholder="Confirm new password" autocomplete="new-password">
+                <button class="page-btn" style="align-self:flex-start" onclick="submitPasswordChange()">
+                    <i data-lucide="lock" style="width:14px;height:14px"></i> Update Password
+                </button>
+            </div>
         </div>
 
+        <!-- تفضيلات الإشعارات -->
         <div class="settings-section">
-            <h3>Security</h3>
-            <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-            <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+            <h3>Notification Preferences</h3>
+            <div class="setting-row" style="border-bottom:1px solid var(--border)">
+                <div><div class="setting-label">Enable Browser Push Notifications</div><div class="setting-desc">Allow this browser to show desktop notifications</div></div>
+                <button class="page-btn" id="push-permission-btn" style="padding:8px 14px" onclick="requestPushPermission()">Enable</button>
+            </div>
+            <div style="overflow-x:auto;margin-top:8px">
+                <table style="width:100%;border-collapse:collapse;font-size:13px" id="notif-prefs-table">
+                    <thead>
+                        <tr style="text-align:left">
+                            <th style="padding:10px 8px;font-weight:600;color:var(--text-secondary)">Notification type</th>
+                            <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--text-secondary);width:70px">Email</th>
+                            <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--text-secondary);width:70px">Push</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notif-prefs-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- توكن الوصول للـ API -->
+        <div class="settings-section">
+            <h3>Access Token</h3>
+            <div class="setting-desc" style="margin-bottom:12px">This token can be used if you are building an API based integration</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input type="text" id="access-token-field" class="st-text-input" style="flex:1;min-width:220px;font-family:monospace" readonly value="••••••••••••••••••••••••••">
+                <button class="st-icon-btn" style="background:var(--bg)" onclick="toggleAccessTokenVisibility()" title="Show/Hide" id="access-token-toggle-btn"><i data-lucide="eye" style="width:15px;height:15px"></i></button>
+                <button class="st-icon-btn" style="background:var(--bg)" onclick="copyAccessToken()" title="Copy"><i data-lucide="copy" style="width:15px;height:15px"></i></button>
+                <button class="page-btn" style="background:var(--danger)" onclick="regenerateAccessToken()">Regenerate</button>
+            </div>
         </div>
     </div>
 </div>
+
 
 
 </div></div>
@@ -2014,6 +2072,7 @@ function initSocket() {
         socket.on('new_message', (payload) => {
             const { conversationId, message } = payload;
             let c = conversations.find(x => String(x.id) === String(conversationId));
+            maybeShowDesktopNotification(c, message);
 
             if (c) {
                 // رسالة نظام (self-assigned / assigned by / resolved / reopened...) —
@@ -2093,6 +2152,7 @@ function initSocket() {
         /* السيرفر بيبعت 'conversation_updated' (مش 'conversation_status_update') لما يحصل assign */
         socket.on('conversation_updated', (updatedConv) => {
             const c = conversations.find(x => String(x.id) === String(updatedConv.id));
+            const wasAssignedToMe = c && String(c.assignedTo || '') === String(CURRENT_AGENT);
             if (c) {
                 c.status = updatedConv.status === 'closed' ? 'resolved' : 'open';
                 c.rawStatus = updatedConv.status;
@@ -2105,6 +2165,14 @@ function initSocket() {
                 }
             } else {
                 loadConversationsFromAPI();
+            }
+
+            // إشعار ديسكتوب لو المحادثة دي اتعينتلك أنت بالذات (مش self-assign اللي إحنا عاملينه بإيدينا)
+            if (String(updatedConv.assigned_agent_id || '') === String(AUTH_USER.id) && !wasAssignedToMe) {
+                const prefs = AUTH_USER.notif_prefs || {};
+                if (prefs.conversation_assigned && prefs.conversation_assigned.push && 'Notification' in window && Notification.permission === 'granted') {
+                    try { new Notification('Conversation assigned to you', { body: (updatedConv.contact_name || updatedConv.name || 'A conversation') + ' was assigned to you' }); } catch (e) {}
+                }
             }
         });
 
@@ -2626,8 +2694,20 @@ async function confirmAgentNameEdit(id) {
 }
 
 /* ============================================================
-   صفحة الإعدادات -> Profile: نفس فكرة تعديل الاسم، بس من صفحة البروفايل
+   صفحة الإعدادات -> Profile: صورة البروفايل، البيانات الشخصية،
+   كلمة السر، تفضيلات الإشعارات، وتوكن الوصول (Access Token)
 ============================================================ */
+
+/* بيرجع الأفتار الفعلي (صورة مرفوعة) لو موجود، وإلا الحروف الأولى الملونة زي الأول */
+function agentAvatarHtml(user, size) {
+    if (user && user.avatar_data) {
+        const px = size || 44;
+        return `<img src="${user.avatar_data}" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover;flex-shrink:0" />`;
+    }
+    const name = (user && (user.display_name || user.email)) || '?';
+    return customerAvatarHtml(name, 'agent-' + (user ? user.id : ''), size);
+}
+
 function renderProfileSection() {
     const name = AUTH_USER.display_name || AUTH_USER.email;
     const nameEl = document.getElementById('profile-display-name');
@@ -2637,37 +2717,82 @@ function renderProfileSection() {
     if (nameEl) nameEl.textContent = name;
     if (emailEl) emailEl.textContent = AUTH_USER.email;
     if (roleEl) roleEl.textContent = roleLabel(AUTH_USER.role);
-    if (avatarEl) avatarEl.innerHTML = customerAvatarHtml(name, 'agent-' + AUTH_USER.id, 64);
+    if (avatarEl) avatarEl.innerHTML = agentAvatarHtml(AUTH_USER, 64);
     renderProfileNameRow(name);
+    renderProfileFieldRow('full_name', 'profile-full-name-row', AUTH_USER.full_name || '', 'Add your full name');
+    renderProfileFieldRow('email', 'profile-email-row', AUTH_USER.email || '');
+    renderNotifPrefsTable();
+    renderAccessTokenField();
+    updatePushPermissionButton();
 }
 
 function renderProfileNameRow(name) {
-    const row = document.getElementById('profile-display-name-row');
+    renderProfileFieldRow('display_name', 'profile-display-name-row', name);
+}
+
+/* محرر عام لأي حقل في البروفايل (display_name / full_name / email) — نفس فكرة
+   تعديل اسم العرض بالظبط، معمم عشان الحقول التلاتة تستخدم نفس الكود */
+function renderProfileFieldRow(field, rowId, value, placeholder) {
+    const row = document.getElementById(rowId);
     if (!row) return;
-    row.innerHTML = `<span>${escapeHtml(name)}</span><button class="st-icon-btn" onclick="startProfileNameEdit()" title="Edit"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>`;
+    const display = value ? escapeHtml(value) : `<span style="color:var(--text-secondary);font-style:italic">${escapeHtml(placeholder || '—')}</span>`;
+    row.innerHTML = `<span>${display}</span><button class="st-icon-btn" onclick="startProfileFieldEdit('${field}','${rowId}')" title="Edit"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>`;
     lucide.createIcons();
 }
 
-let _profileNameEditOriginal = '';
-function startProfileNameEdit() {
-    const row = document.getElementById('profile-display-name-row');
+let _profileFieldEditOriginal = {};
+function startProfileFieldEdit(field, rowId) {
+    const row = document.getElementById(rowId);
     if (!row) return;
-    _profileNameEditOriginal = AUTH_USER.display_name || AUTH_USER.email;
+    const current = field === 'display_name' ? (AUTH_USER.display_name || AUTH_USER.email)
+        : field === 'full_name' ? (AUTH_USER.full_name || '')
+        : (AUTH_USER.email || '');
+    _profileFieldEditOriginal[field] = current;
     row.innerHTML = `
-        <input type="text" class="agent-name-edit-input" id="profile-name-input" maxlength="100">
+        <input type="${field === 'email' ? 'email' : 'text'}" class="agent-name-edit-input" id="profile-field-input-${field}" maxlength="150" style="width:200px">
         <span class="agent-name-edit-actions">
-            <button class="st-icon-btn" onclick="confirmProfileNameEdit()" title="Save"><i data-lucide="check" style="width:14px;height:14px"></i></button>
-            <button class="st-icon-btn" onclick="renderProfileNameRow(_profileNameEditOriginal)" title="Cancel"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+            <button class="st-icon-btn" onclick="confirmProfileFieldEdit('${field}','${rowId}')" title="Save"><i data-lucide="check" style="width:14px;height:14px"></i></button>
+            <button class="st-icon-btn" onclick="renderProfileFieldRow('${field}','${rowId}', _profileFieldEditOriginal['${field}'])" title="Cancel"><i data-lucide="x" style="width:14px;height:14px"></i></button>
         </span>`;
     lucide.createIcons();
-    const input = document.getElementById('profile-name-input');
-    input.value = _profileNameEditOriginal;
+    const input = document.getElementById('profile-field-input-' + field);
+    input.value = current;
     input.focus();
     input.select();
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); confirmProfileNameEdit(); }
-        if (e.key === 'Escape') { e.preventDefault(); renderProfileNameRow(_profileNameEditOriginal); }
+        if (e.key === 'Enter') { e.preventDefault(); confirmProfileFieldEdit(field, rowId); }
+        if (e.key === 'Escape') { e.preventDefault(); renderProfileFieldRow(field, rowId, _profileFieldEditOriginal[field]); }
     });
+}
+
+async function confirmProfileFieldEdit(field, rowId) {
+    const input = document.getElementById('profile-field-input-' + field);
+    if (!input) return;
+    if (field === 'display_name') { await submitDisplayNameChange(input.value); return; }
+    await submitProfileFieldChange(field, input.value, rowId);
+}
+
+/* بيبعت أي حقل بروفايل تاني (full_name / email) للسيرفر، وبيحدّث الواجهة فورًا */
+async function submitProfileFieldChange(field, newValue, rowId) {
+    const trimmed = (newValue || '').trim();
+    if (field === 'email' && !trimmed) {
+        showToast('اكتب إيميل صحيح', 'error');
+        return;
+    }
+    try {
+        const res = await apiFetch('/api/me', { method: 'PATCH', body: JSON.stringify({ [field]: trimmed }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل التحديث');
+
+        AUTH_USER[field] = data.user[field];
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+        showToast('تم التحديث بنجاح', 'success');
+        renderProfileSection();
+    } catch (err) {
+        console.error('[API] submitProfileFieldChange error:', err);
+        showToast(err.message || 'فشل التحديث', 'error');
+        renderProfileFieldRow(field, rowId, _profileFieldEditOriginal[field]);
+    }
 }
 
 async function confirmProfileNameEdit() {
@@ -2697,7 +2822,7 @@ async function submitDisplayNameChange(newName) {
         const avatarEl = document.getElementById('my-avatar');
         if (avatarEl) {
             avatarEl.title = AUTH_USER.display_name;
-            avatarEl.innerHTML = customerAvatarHtml(AUTH_USER.display_name, 'agent-' + AUTH_USER.id, 36);
+            avatarEl.innerHTML = agentAvatarHtml(AUTH_USER, 36);
         }
 
         showToast('تم تحديث اسمك بنجاح', 'success');
@@ -2716,6 +2841,242 @@ async function submitDisplayNameChange(newName) {
     }
 }
 
+/* ===== صورة البروفايل ===== */
+function handleProfileAvatarChange(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        showToast('اختار صورة صحيحة', 'error');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = async () => {
+            // بنصغّر الصورة لـ 256x256 كحد أقصى قبل ما نبعتها، عشان مايتخزنش حجم ضخم في الداتابيز
+            const maxSize = 256;
+            let { width, height } = img;
+            if (width > height) { if (width > maxSize) { height *= maxSize / width; width = maxSize; } }
+            else { if (height > maxSize) { width *= maxSize / height; height = maxSize; } }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+            try {
+                const res = await apiFetch('/api/me', { method: 'PATCH', body: JSON.stringify({ avatar_data: dataUrl }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error((data && data.error) || 'فشل رفع الصورة');
+
+                AUTH_USER.avatar_data = data.user.avatar_data;
+                localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+                renderProfileSection();
+                const sidebarAvatar = document.getElementById('my-avatar');
+                if (sidebarAvatar) sidebarAvatar.innerHTML = agentAvatarHtml(AUTH_USER, 36);
+                showToast('تم تحديث صورة البروفايل', 'success');
+            } catch (err) {
+                console.error('[API] handleProfileAvatarChange error:', err);
+                showToast(err.message || 'فشل رفع الصورة', 'error');
+            }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+}
+
+/* ===== كلمة السر ===== */
+async function submitPasswordChange() {
+    const current = document.getElementById('pw-current').value;
+    const next = document.getElementById('pw-new').value;
+    const confirm = document.getElementById('pw-confirm').value;
+
+    if (!current || !next || !confirm) {
+        showToast('املأ كل خانات كلمة السر', 'error');
+        return;
+    }
+    if (next.length < 6) {
+        showToast('كلمة السر الجديدة لازم تكون 6 حروف على الأقل', 'error');
+        return;
+    }
+    if (next !== confirm) {
+        showToast('كلمة السر الجديدة والتأكيد مش متطابقين', 'error');
+        return;
+    }
+
+    try {
+        const res = await apiFetch('/api/me/password', {
+            method: 'PATCH',
+            body: JSON.stringify({ current_password: current, new_password: next }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحديث كلمة السر');
+
+        document.getElementById('pw-current').value = '';
+        document.getElementById('pw-new').value = '';
+        document.getElementById('pw-confirm').value = '';
+        showToast('تم تحديث كلمة السر بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] submitPasswordChange error:', err);
+        showToast(err.message || 'فشل تحديث كلمة السر', 'error');
+    }
+}
+
+/* ===== تفضيلات الإشعارات ===== */
+const NOTIF_PREF_LABELS = {
+    new_conversation: 'A new conversation is created',
+    conversation_assigned: 'A conversation is assigned to you',
+    mentioned: 'You are mentioned in a conversation',
+    new_message_assigned: 'A new message is created in an assigned conversation',
+    new_message_participating: 'A new message is created in a participating conversation',
+};
+
+function renderNotifPrefsTable() {
+    const tbody = document.getElementById('notif-prefs-tbody');
+    if (!tbody) return;
+    const prefs = AUTH_USER.notif_prefs || {};
+    tbody.innerHTML = Object.keys(NOTIF_PREF_LABELS).map((key) => {
+        const pref = prefs[key] || { email: false, push: false };
+        return `
+        <tr style="border-top:1px solid var(--border)">
+            <td style="padding:10px 8px">${escapeHtml(NOTIF_PREF_LABELS[key])}</td>
+            <td style="padding:10px 8px;text-align:center"><input type="checkbox" class="notif-check" ${pref.email ? 'checked' : ''} onchange="toggleNotifPref('${key}','email',this.checked)"></td>
+            <td style="padding:10px 8px;text-align:center"><input type="checkbox" class="notif-check" ${pref.push ? 'checked' : ''} onchange="toggleNotifPref('${key}','push',this.checked)"></td>
+        </tr>`;
+    }).join('');
+}
+
+async function toggleNotifPref(key, channel, checked) {
+    const prefs = { ...(AUTH_USER.notif_prefs || {}) };
+    prefs[key] = { ...(prefs[key] || {}), [channel]: checked };
+    try {
+        const res = await apiFetch('/api/me/notifications', { method: 'PATCH', body: JSON.stringify({ prefs }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ تفضيلات الإشعارات');
+        AUTH_USER.notif_prefs = data.notif_prefs;
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+    } catch (err) {
+        console.error('[API] toggleNotifPref error:', err);
+        showToast(err.message || 'فشل حفظ تفضيلات الإشعارات', 'error');
+        renderNotifPrefsTable(); // نرجّع الجدول لآخر حالة معروفة لو فشل الحفظ
+    }
+}
+
+/* ===== إشعارات المتصفح (Browser Push) ===== */
+function updatePushPermissionButton() {
+    const btn = document.getElementById('push-permission-btn');
+    if (!btn) return;
+    if (!('Notification' in window)) {
+        btn.textContent = 'Not supported';
+        btn.disabled = true;
+        return;
+    }
+    if (Notification.permission === 'granted') {
+        btn.textContent = 'Enabled ✓';
+        btn.disabled = true;
+    } else if (Notification.permission === 'denied') {
+        btn.textContent = 'Blocked by browser';
+        btn.disabled = true;
+    } else {
+        btn.textContent = 'Enable';
+        btn.disabled = false;
+    }
+}
+
+async function requestPushPermission() {
+    if (!('Notification' in window)) {
+        showToast('المتصفح ده مش بيدعم الإشعارات', 'error');
+        return;
+    }
+    try {
+        const perm = await Notification.requestPermission();
+        updatePushPermissionButton();
+        if (perm === 'granted') {
+            showToast('تم تفعيل إشعارات المتصفح', 'success');
+            new Notification('NileChat', { body: 'هتوصلك إشعارات هنا أول ما رسالة جديدة توصل 🎉' });
+        } else {
+            showToast('مسموحش بالإشعارات — ممكن تفعّلها من إعدادات المتصفح', 'error');
+        }
+    } catch (err) {
+        console.error('[Push] requestPushPermission error:', err);
+    }
+}
+
+/* بيتنادى من socket.on('new_message') عشان يعرض إشعار ديسكتوب حقيقي، بس لو:
+   1) المتصفح مسموحله يعرض إشعارات، 2) الرسالة جاية من العميل (مش رد الإيجنت نفسه)،
+   3) الإيجنت فعّل تفضيل البوش لنوع الحدث ده من صفحة البروفايل */
+function maybeShowDesktopNotification(conversation, message) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!message || message.direction !== 'in') return;
+    if (document.hasFocus() && selectedChatId === (conversation && conversation.id)) return; // المحادثة مفتوحة فعليًا قدامه
+
+    const prefs = AUTH_USER.notif_prefs || {};
+    const isMine = conversation && String(conversation.assignedTo || '') === String(CURRENT_AGENT);
+    const eventKey = isMine ? 'new_message_assigned' : 'new_message_participating';
+    if (!prefs[eventKey] || !prefs[eventKey].push) return;
+
+    const title = (conversation && conversation.name) || 'رسالة جديدة';
+    const body = message.message_text || message.text || 'رسالة جديدة وصلت';
+    try {
+        new Notification(title, { body });
+    } catch (err) {
+        console.error('[Push] maybeShowDesktopNotification error:', err);
+    }
+}
+
+/* ===== توكن الوصول (Access Token) ===== */
+let _accessTokenVisible = false;
+function renderAccessTokenField() {
+    const field = document.getElementById('access-token-field');
+    if (!field) return;
+    if (_accessTokenVisible && AUTH_USER.access_token) {
+        field.value = AUTH_USER.access_token;
+    } else {
+        field.value = AUTH_USER.access_token ? '•'.repeat(28) : 'No token generated yet — click Regenerate';
+    }
+}
+
+function toggleAccessTokenVisibility() {
+    if (!AUTH_USER.access_token) {
+        showToast('اعمل Regenerate الأول عشان تولّد توكن', 'error');
+        return;
+    }
+    _accessTokenVisible = !_accessTokenVisible;
+    renderAccessTokenField();
+    const btn = document.getElementById('access-token-toggle-btn');
+    if (btn) btn.innerHTML = `<i data-lucide="${_accessTokenVisible ? 'eye-off' : 'eye'}" style="width:15px;height:15px"></i>`;
+    lucide.createIcons();
+}
+
+function copyAccessToken() {
+    if (!AUTH_USER.access_token) {
+        showToast('اعمل Regenerate الأول عشان تولّد توكن', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(AUTH_USER.access_token)
+        .then(() => showToast('تم نسخ التوكن', 'success'))
+        .catch(() => showToast('فشل النسخ', 'error'));
+}
+
+async function regenerateAccessToken() {
+    if (AUTH_USER.access_token && !confirm('التوكن الحالي هيتلغي فورًا ومش هيشتغل تاني — متأكد؟')) return;
+    try {
+        const res = await apiFetch('/api/me/token/regenerate', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل توليد التوكن');
+        AUTH_USER.access_token = data.access_token;
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+        _accessTokenVisible = true;
+        renderAccessTokenField();
+        showToast('تم توليد توكن جديد', 'success');
+    } catch (err) {
+        console.error('[API] regenerateAccessToken error:', err);
+        showToast(err.message || 'فشل توليد التوكن', 'error');
+    }
+}
+
 /* بنجيب أحدث بيانات لليوزر الحالي من السيرفر لحظة فتح التطبيق (مش بس من التوكن القديم) */
 async function refreshCurrentUser() {
     try {
@@ -2723,6 +3084,11 @@ async function refreshCurrentUser() {
         if (!res.ok) return;
         const data = await res.json();
         AUTH_USER.display_name = data.display_name;
+        AUTH_USER.full_name = data.full_name;
+        AUTH_USER.email = data.email;
+        AUTH_USER.avatar_data = data.avatar_data;
+        AUTH_USER.access_token = data.access_token;
+        AUTH_USER.notif_prefs = data.notif_prefs;
         AUTH_USER.role = data.role;
         localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
         renderProfileSection();
@@ -2730,7 +3096,7 @@ async function refreshCurrentUser() {
         const avatarEl = document.getElementById('my-avatar');
         if (avatarEl) {
             avatarEl.title = AUTH_USER.display_name;
-            avatarEl.innerHTML = customerAvatarHtml(AUTH_USER.display_name, 'agent-' + AUTH_USER.id, 36);
+            avatarEl.innerHTML = agentAvatarHtml(AUTH_USER, 36);
         }
     } catch (err) {
         console.error('[API] refreshCurrentUser error:', err);
@@ -5251,7 +5617,7 @@ function init() {
         p.style.display = p.classList.contains('active') ? 'flex' : 'none';
     });
     document.getElementById('my-avatar').title = AUTH_USER.display_name || AUTH_USER.email;
-    document.getElementById('my-avatar').innerHTML = customerAvatarHtml(AUTH_USER.display_name || AUTH_USER.email, 'agent-' + AUTH_USER.id, 36);
+    document.getElementById('my-avatar').innerHTML = agentAvatarHtml(AUTH_USER, 36);
     applyRoleVisibility();
     renderChatList('open', '');
     renderProfileSection();

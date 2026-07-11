@@ -35,6 +35,22 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'لازم تسجل دخول' });
   }
 
+  // توكنات الـ API الشخصية (Access Token) بتبدأ بـ "nc_" — دي بتاعة تكاملات
+  // خارجية (زي صفحة البروفايل)، مختلفة عن جلسة الـ JWT العادية بتاعة الداشبورد
+  if (token.startsWith('nc_')) {
+    userRepo
+      .findUserByAccessToken(token)
+      .then((user) => {
+        if (!user || user.status !== 'active') {
+          return res.status(401).json({ error: 'توكن غير صحيح أو الحساب موقوف' });
+        }
+        req.user = { userId: user.id, email: user.email, role: user.role };
+        next();
+      })
+      .catch(next);
+    return;
+  }
+
   let payload;
   try {
     payload = jwt.verify(token, env.JWT_SECRET);
