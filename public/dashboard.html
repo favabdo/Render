@@ -912,7 +912,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     <button class="input-action-btn" id="attach-btn" title="Attach" onclick="document.getElementById('attach-file-input').click()"><i data-lucide="paperclip" style="width:20px;height:20px"></i></button>
                     <input type="file" id="attach-file-input" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onchange="handleAttachFileChosen(event)">
                 </div>
-                <textarea id="msg-input" rows="1" placeholder="Type a message..." onkeydown="handleInputKey(event)" oninput="autoResize(this); handleTypingInput()"></textarea>
+                <textarea id="msg-input" rows="1" placeholder="Type a message..." onkeydown="handleInputKey(event)" oninput="autoResize(this); handleTypingInput()" onpaste="handlePasteImage(event)"></textarea>
                 <div class="voice-recording-bar" id="voice-recording-bar">
                     <span class="voice-recording-dot"></span>
                     <span class="voice-recording-time" id="voice-recording-time">0:00</span>
@@ -2641,7 +2641,9 @@ function renderAgentsSettings() {
             <td>
                 ${isMe
                     ? `<button class="st-icon-btn" onclick="startAgentNameEdit(${a.id})" title="Edit your display name"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>`
-                    : ''}
+                    : (canEditThisAgent
+                        ? `<button class="st-icon-btn" onclick="startAgentNameEdit(${a.id})" title="Edit agent name"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>`
+                        : '')}
                 ${canEditThisAgent
                     ? `<button class="st-icon-btn" onclick="openDeleteAgentModal(${a.id}, '${escapeHtml(a.email).replace(/'/g, "\\'")}')" title="Delete agent" style="color:var(--danger)"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>`
                     : ''}
@@ -2816,7 +2818,9 @@ async function submitDeleteAgent() {
 function startAgentNameEdit(id) {
     const cell = document.getElementById('agent-name-cell-' + id);
     if (!cell) return;
-    const current = AUTH_USER.display_name || AUTH_USER.email;
+    const isMe = String(id) === String(AUTH_USER.id);
+    const entry = AGENTS_SETTINGS_CACHE.find((a) => String(a.id) === String(id));
+    const current = isMe ? (AUTH_USER.display_name || AUTH_USER.email) : ((entry && (entry.display_name || entry.email)) || '');
     cell.innerHTML = `
         <input type="text" class="agent-name-edit-input" id="agent-name-input-${id}" maxlength="100">
         <span class="agent-name-edit-actions">
@@ -2837,7 +2841,44 @@ function startAgentNameEdit(id) {
 async function confirmAgentNameEdit(id) {
     const input = document.getElementById('agent-name-input-' + id);
     if (!input) return;
-    await submitDisplayNameChange(input.value);
+    if (String(id) === String(AUTH_USER.id)) {
+        await submitDisplayNameChange(input.value);
+    } else {
+        await submitOtherAgentNameChange(id, input.value);
+    }
+}
+
+/* بيسمح للأدمن/الأونر يغيّر اسم أي إيجنت تاني (عكس submitDisplayNameChange اللي
+   بتغيّر اسم اليوزر نفسه بس عن طريق /api/me) — بيستخدم PATCH /api/users/:id
+   اللي أصلاً بيقبل display_name، لكن محجوز بـ requireAdmin في الراوت */
+async function submitOtherAgentNameChange(id, newName) {
+    const trimmed = (newName || '').trim();
+    if (!trimmed) {
+        showToast('اكتب اسم الأول', 'error');
+        renderAgentsSettings();
+        return false;
+    }
+    if (trimmed.length < 2) {
+        showToast('الاسم قصير جدًا', 'error');
+        renderAgentsSettings();
+        return false;
+    }
+    try {
+        const res = await apiFetch(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify({ display_name: trimmed }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحديث اسم الإيجنت');
+
+        const entry = AGENTS_SETTINGS_CACHE.find((a) => String(a.id) === String(id));
+        if (entry) entry.display_name = data.user.display_name;
+        showToast('تم تحديث اسم الإيجنت بنجاح', 'success');
+        renderAgentsSettings();
+        return true;
+    } catch (err) {
+        console.error('[API] submitOtherAgentNameChange error:', err);
+        showToast(err.message || 'فشل تحديث اسم الإيجنت', 'error');
+        renderAgentsSettings();
+        return false;
+    }
 }
 
 /* ============================================================
@@ -3797,6 +3838,29 @@ function handleAttachFileChosen(event) {
     const MAX_SIZE = 30 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
         showToast('الملف ده أكبر من 30MB — اختار ملف أصغر', 'error');
+        return;
+    }
+    sendMediaFile(file);
+}
+
+/* لصق صورة اتعملها كوبي (Ctrl+V) على تربيعة كتابة الرسالة — بتتبعت زي أي مرفق
+   بالظبط (نفس sendMediaFile اللي بيستخدمها زرار المشبك). لو اللي اتلزق نص عادي
+   (مش صورة)، بنسيب الباست الافتراضي يشتغل عادي عشان ميتأثرش النص المكتوب */
+function handlePasteImage(event) {
+    if (!selectedChatId) return;
+    const items = event.clipboardData && event.clipboardData.items;
+    if (!items || !items.length) return;
+
+    const imageItem = Array.from(items).find((item) => item.kind === 'file' && item.type && item.type.startsWith('image/'));
+    if (!imageItem) return; // مفيش صورة ملزوقة — سيب الباست الافتراضي (نص) يشتغل زي ما هو
+
+    event.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    const MAX_SIZE = 30 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        showToast('الصورة دي أكبر من 30MB — اختار صورة أصغر', 'error');
         return;
     }
     sendMediaFile(file);
@@ -5898,6 +5962,18 @@ async function loadCustomerMaintenanceContracts(contactId) {
         const res = await apiFetch(`/api/contacts/${contactId}/maintenance-contracts`);
         if (!res.ok) throw new Error('فشل تحميل سجل الصيانة');
         const contracts = await res.json();
+
+        // زرار "إضافة عقد صيانة" بيتعطل لو لسه فيه عقد active شغال — لازم الأدمن
+        // يوقفه الأول (contracts جاية آخر عقد مضاف الأول، فبنفحص contracts[0] بس)
+        const addBtn = document.getElementById('customer-details-add-contract-btn');
+        const hasActive = contracts.length > 0 && contracts[0].status === 'active';
+        if (addBtn) {
+            addBtn.disabled = hasActive;
+            addBtn.style.opacity = hasActive ? '.5' : '';
+            addBtn.style.cursor = hasActive ? 'not-allowed' : '';
+            addBtn.title = hasActive ? 'لازم توقف عقد الصيانة الحالي الأول قبل ما تضيف عقد جديد' : '';
+        }
+
         if (!contracts.length) {
             list.innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">مفيش عقود صيانة مسجلة لسه</div>';
             return;
@@ -5910,8 +5986,12 @@ async function loadCustomerMaintenanceContracts(contactId) {
     }
 }
 
-/* بتحسب حالة العقد (ساري / منتهي / لسه هيبدأ) من تاريخ البدء والنهاية بتوعه */
+/* بتحسب حالة العقد: لو الأدمن وقفه يدويًا (status='stopped') بتبقى "متوقف" مهما
+   كانت التواريخ، وإلا بتتحسب من تاريخ البدء والنهاية زي ما هي (ساري/منتهي/لسه هيبدأ) */
 function maintenanceContractStatus(contract) {
+    if (contract.status === 'stopped') {
+        return { label: 'متوقف', color: 'var(--text-secondary)', icon: 'circle-slash' };
+    }
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const start = new Date(contract.start_date); start.setHours(0, 0, 0, 0);
     const end = new Date(contract.end_date); end.setHours(0, 0, 0, 0);
@@ -5922,6 +6002,16 @@ function maintenanceContractStatus(contract) {
 
 function maintenanceContractCardHtml(contract) {
     const status = maintenanceContractStatus(contract);
+    // زرار الإيقاف/المسح بيظهروا للأدمن/الأونر بس. الإيقاف متاح بس للعقد الشغال
+    // (status active)، والمسح متاح دايمًا
+    const adminActionsHtml = isOwnerOrAdmin() ? `
+            <div class="sched-task-actions">
+                ${contract.status === 'active'
+                    ? `<button class="sched-end-btn" onclick="stopMaintenanceContract(${contract.id})"><i data-lucide="octagon-pause" style="width:13px;height:13px"></i>إيقاف العقد</button>`
+                    : ''}
+                <button class="sched-end-btn" style="background:var(--danger);margin-inline-start:8px" onclick="deleteMaintenanceContract(${contract.id})"><i data-lucide="trash-2" style="width:13px;height:13px"></i>حذف</button>
+            </div>
+        ` : '';
     return `
         <div class="sched-task-card">
             <div class="sched-task-subrow">
@@ -5939,13 +6029,60 @@ function maintenanceContractCardHtml(contract) {
                 </div>
             </div>
             ${contract.notes ? `<div class="sched-task-text" style="margin-top:8px">${escapeHtml(contract.notes)}</div>` : ''}
+            ${adminActionsHtml}
         </div>
     `;
+}
+
+/* إيقاف عقد صيانة شغال — أدمن/أونر بس. بعد الإيقاف يبقى ينفع نضيف عقد جديد للعميل ده */
+async function stopMaintenanceContract(contractId) {
+    if (!customerDetailsCache) return;
+    if (!confirm('متأكد إنك عايز توقف عقد الصيانة ده؟')) return;
+    try {
+        const res = await apiFetch(`/api/contacts/${customerDetailsCache.id}/maintenance-contracts/${contractId}/stop`, { method: 'PATCH' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إيقاف عقد الصيانة');
+
+        if (data.contact) {
+            customerDetailsCache = data.contact;
+            renderCustomerDetailsStats(data.contact);
+        }
+        showToast('تم إيقاف عقد الصيانة', 'success');
+        loadCustomerMaintenanceContracts(customerDetailsCache.id);
+    } catch (err) {
+        console.error('[API] stopMaintenanceContract error:', err);
+        showToast(err.message || 'فشل إيقاف عقد الصيانة', 'error');
+    }
+}
+
+/* مسح عقد صيانة خالص من السجل — أدمن/أونر بس */
+async function deleteMaintenanceContract(contractId) {
+    if (!customerDetailsCache) return;
+    if (!confirm('متأكد إنك عايز تمسح عقد الصيانة ده؟ الإجراء ده نهائي.')) return;
+    try {
+        const res = await apiFetch(`/api/contacts/${customerDetailsCache.id}/maintenance-contracts/${contractId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حذف عقد الصيانة');
+
+        if (data.contact) {
+            customerDetailsCache = data.contact;
+            renderCustomerDetailsStats(data.contact);
+        }
+        showToast('تم حذف عقد الصيانة', 'success');
+        loadCustomerMaintenanceContracts(customerDetailsCache.id);
+    } catch (err) {
+        console.error('[API] deleteMaintenanceContract error:', err);
+        showToast(err.message || 'فشل حذف عقد الصيانة', 'error');
+    }
 }
 
 /* فتح مودال إضافة عقد صيانة جديد للعميل الحالي (أدمن/أونر بس) */
 function openAddMaintenanceContractModal() {
     if (!customerDetailsCache) return;
+    const addBtn = document.getElementById('customer-details-add-contract-btn');
+    if (addBtn && addBtn.disabled) {
+        return showToast('لازم توقف عقد الصيانة الحالي الأول قبل ما تضيف عقد جديد', 'info');
+    }
     document.getElementById('maintenance-contract-modal-customer').textContent = customerDetailsCache.name || 'بدون اسم';
     document.getElementById('maintenance-contract-start-date').value = '';
     document.getElementById('maintenance-contract-end-date').value = '';

@@ -3,15 +3,15 @@ const maintenanceContractRepo = require('./maintenanceContract.repo');
 
 // نفس منطق "العقد الحالي" الموجود في maintenanceContract.repo.getCurrentContractForContact
 // لكن كـ OUTER APPLY جوه استعلام واحد، عشان نجيب العقد الحالي لكل الكونتاكتس دفعة
-// واحدة من غير ما نعمل query منفصل لكل عميل (N+1)
+// واحدة من غير ما نعمل query منفصل لكل عميل (N+1).
+// "العقد الحالي" = دايمًا آخر عقد اتضاف (بغض النظر عن حالته active/stopped) —
+// الأرقام الظاهرة في كل الكروت لازم تتحدث دايمًا على آخر عقد مضاف
 const CURRENT_CONTRACT_APPLY = `
   OUTER APPLY (
-    SELECT TOP 1 start_date, end_date
+    SELECT TOP 1 start_date, end_date, status
     FROM [dbo].[NileChat_MaintenanceContracts_byA] m
     WHERE m.contact_id = c.id
-    ORDER BY
-      CASE WHEN CAST(SYSUTCDATETIME() AS DATE) BETWEEN m.start_date AND m.end_date THEN 0 ELSE 1 END,
-      m.end_date DESC
+    ORDER BY m.created_at DESC, m.id DESC
   ) mc
 `;
 
@@ -81,7 +81,8 @@ async function getContactByIdWithCurrentContract(id) {
     .input('id', sql.BigInt, id)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at,
-             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date
+             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
+             mc.status AS contract_status
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
       WHERE c.id = @id
@@ -137,7 +138,8 @@ async function listContacts() {
     .request()
     .query(`
       SELECT c.id, c.name, c.location, c.created_at,
-             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date
+             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
+             mc.status AS contract_status
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
       ORDER BY c.name ASC

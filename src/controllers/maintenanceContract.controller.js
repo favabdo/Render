@@ -23,11 +23,17 @@ async function listContractsForContact(req, res) {
   res.json(contracts);
 }
 
-// إضافة عقد صيانة جديد للعميل (تجديد كامل بتاريخ بدء ونهاية جديدين، حتى لو عقده
-// القديم لسه ساري أو لو خلص من مدة) — أدمن/أونر بس
+// إضافة عقد صيانة جديد للعميل (تجديد كامل بتاريخ بدء ونهاية جديدين) — أدمن/أونر
+// بس، وممنوع لو لسه فيه عقد "active" شغال للعميل ده. لازم الأدمن يوقف العقد
+// الحالي الأول من صفحة سجل الصيانة، وبعدين يقدر يضيف عقد جديد
 async function addContractForContact(req, res) {
   const contact = await contactRepo.getContactById(req.params.contactId);
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const activeContract = await maintenanceContractRepo.getActiveContractForContact(req.params.contactId);
+  if (activeContract) {
+    throw httpError(409, 'فيه عقد صيانة شغال بالفعل للعميل ده. لازم توقفه الأول قبل ما تضيف عقد جديد');
+  }
 
   const { startDate, endDate, notes } = req.body || {};
   if (!startDate) throw httpError(400, 'لازم تحدد تاريخ بدء العقد');
@@ -65,4 +71,54 @@ async function addContractForContact(req, res) {
   res.status(201).json({ ok: true, contract, contact: updatedContact });
 }
 
-module.exports = { listContractsForContact, addContractForContact };
+// إيقاف عقد صيانة شغال (status -> 'stopped') — أدمن/أونر بس. بعد ما يتوقف يبقى
+// ينفع يتضاف عقد جديد للعميل ده
+async function stopContract(req, res) {
+  const contact = await contactRepo.getContactById(req.params.contactId);
+  if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const existing = await maintenanceContractRepo.getContractById(req.params.contractId);
+  if (!existing || String(existing.contact_id) !== String(req.params.contactId)) {
+    return res.status(404).json({ error: 'عقد الصيانة ده مش موجود' });
+  }
+
+  const contract = await maintenanceContractRepo.stopContract(req.params.contractId);
+  if (!contract) return res.status(409).json({ error: 'عقد الصيانة ده متوقف بالفعل' });
+
+  // العقد الموقوف ده لسه هو "آخر عقد مضاف"، فأرقام الكروت مش بتتغير، لكن حالته
+  // اتغيرت، فبنبعت الكونتاكت المحدّث عشان أي حد فاتح صفحة تفاصيله يحدّث فورًا
+  const updatedContact = await contactRepo.getContactByIdWithPhones(req.params.contactId);
+
+  const io = req.app.get('io');
+  if (io) {
+    io.emit('maintenance_contract_stopped', { contactId: req.params.contactId, contract });
+    if (updatedContact) io.emit('contact_updated', updatedContact);
+  }
+
+  res.json({ ok: true, contract, contact: updatedContact });
+}
+
+// مسح عقد صيانة خالص من السجل — أدمن/أونر بس. لو العقد المتمسوح كان هو "آخر عقد
+// مضاف"، الأرقام الظاهرة في الكروت هترجع تتحدث على العقد اللي قبله تلقائيًا
+async function deleteContract(req, res) {
+  const contact = await contactRepo.getContactById(req.params.contactId);
+  if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const existing = await maintenanceContractRepo.getContractById(req.params.contractId);
+  if (!existing || String(existing.contact_id) !== String(req.params.contactId)) {
+    return res.status(404).json({ error: 'عقد الصيانة ده مش موجود' });
+  }
+
+  await maintenanceContractRepo.deleteContract(req.params.contractId);
+  const updatedContact = await contactRepo.getContactByIdWithPhones(req.params.contactId);
+
+  const io = req.app.get('io');
+  if (io) {
+    io.emit('maintenance_contract_deleted', { contactId: req.params.contactId, contractId: req.params.contractId });
+    if (updatedContact) io.emit('contact_updated', updatedContact);
+  }
+
+  res.json({ ok: true, contact: updatedContact });
+}
+
+module.exports = { listContractsForContact, addContractForContact, stopContract, deleteContract };

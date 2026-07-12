@@ -103,6 +103,7 @@ async function listConversations() {
       ct.location AS contact_location,
       mc.start_date AS contact_contract_date,
       mc.end_date AS contact_maintenance_end_date,
+      mc.status AS contact_contract_status,
       (
         SELECT TOP 1 m.message_text
         FROM [dbo].[${TABLE_NAME}] m
@@ -137,15 +138,13 @@ async function listConversations() {
     LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
     LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
     OUTER APPLY (
-      -- "العقد الحالي" لكونتاكت المحادثة دي: الساري لو موجود، وإلا آخر عقد انتهى
-      -- (نفس منطق CURRENT_CONTRACT_APPLY في contact.repo.js) — بيتعرض كبادچ "عميل
-      -- صيانة"/"منتهي" في بانل تفاصيل العميل جمب المحادثة
-      SELECT TOP 1 m.start_date, m.end_date
+      -- "العقد الحالي" لكونتاكت المحادثة دي: دايمًا آخر عقد اتضاف (بغض النظر عن
+      -- حالته active/stopped) — نفس منطق CURRENT_CONTRACT_APPLY في contact.repo.js —
+      -- بيتعرض كبادچ "عميل صيانة"/"منتهي" في بانل تفاصيل العميل جمب المحادثة
+      SELECT TOP 1 m.start_date, m.end_date, m.status
       FROM [dbo].[NileChat_MaintenanceContracts_byA] m
       WHERE m.contact_id = ct.id
-      ORDER BY
-        CASE WHEN CAST(SYSUTCDATETIME() AS DATE) BETWEEN m.start_date AND m.end_date THEN 0 ELSE 1 END,
-        m.end_date DESC
+      ORDER BY m.created_at DESC, m.id DESC
     ) mc
     ORDER BY c.last_message_at DESC
   `);
@@ -206,19 +205,19 @@ async function getConversationById(id) {
         COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
         ct.location AS contact_location,
         mc.start_date AS contact_contract_date,
-        mc.end_date AS contact_maintenance_end_date
+        mc.end_date AS contact_maintenance_end_date,
+        mc.status AS contact_contract_status
       FROM [dbo].[NileChat_Conversations_byA] c
       LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
       LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
       LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
       LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
       OUTER APPLY (
-        SELECT TOP 1 m.start_date, m.end_date
+        -- دايمًا آخر عقد اتضاف لكونتاكت المحادثة دي، بغض النظر عن حالته أو تواريخه
+        SELECT TOP 1 m.start_date, m.end_date, m.status
         FROM [dbo].[NileChat_MaintenanceContracts_byA] m
         WHERE m.contact_id = ct.id
-        ORDER BY
-          CASE WHEN CAST(SYSUTCDATETIME() AS DATE) BETWEEN m.start_date AND m.end_date THEN 0 ELSE 1 END,
-          m.end_date DESC
+        ORDER BY m.created_at DESC, m.id DESC
       ) mc
       WHERE c.id = @id
     `);
