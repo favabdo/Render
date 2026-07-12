@@ -7,8 +7,6 @@ const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
 const teamRepo = require('../repositories/team.repo');
 const webhookDispatchService = require('./webhookDispatch.service');
-const mailer = require('./mailer.service');
-const env = require('../config/env');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
 const logger = require('../utils/logger');
@@ -145,12 +143,6 @@ async function processIncomingMessages(value, io) {
         contact_name: contactName,
         phone: msg.from,
       }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_created:', err.message));
-
-      // إشعار إيميل لأي إيجنت فعّل "New Conversation" من صفحة البروفايل بتاعه —
-      // مش بيوقف أي حاجة في معالجة الرسالة، بس بيتبعت في الخلفية
-      notifyAgentsOfNewConversation(contactName, msg.from).catch((err) => {
-        logger.error('❌ فشل إرسال إيميلات إشعار المحادثة الجديدة:', err.message);
-      });
     }
 
     // قاعدة الـ Keyword Routing: بتتفحص مع كل رسالة نصية جاية من العميل (مش
@@ -173,33 +165,7 @@ async function processIncomingMessages(value, io) {
   }
 }
 
-// بيبعت إيميل لأي إيجنت (أو أدمن) فعّل تفضيل "New Conversation" الإيميلي من صفحة
-// البروفايل بتاعه — بيتنفذ مرة واحدة بس لحظة فتح محادثة جديدة فعليًا (isNew)
-async function notifyAgentsOfNewConversation(contactName, phoneNumber) {
-  const agents = await userRepo.listUsersWithNotifPrefs();
-  const recipients = agents.filter((a) => a.email && a.notif_prefs?.new_conversation?.email);
-  if (recipients.length === 0) return;
-
-  const baseUrl = env.APP_URL || '';
-  const who = contactName ? `${contactName} (+${phoneNumber})` : `+${phoneNumber}`;
-
-  await Promise.all(
-    recipients.map((agent) =>
-      mailer
-        .sendNotificationEmail({
-          to: agent.email,
-          subject: 'محادثة جديدة على NileChat',
-          heading: 'محادثة جديدة',
-          message: `فتح ${who} محادثة جديدة على واتساب. افتح لوحة التحكم عشان تشوفها.`,
-          ctaText: 'فتح لوحة التحكم',
-          ctaUrl: baseUrl ? `${baseUrl}/dashboard.html` : undefined,
-        })
-        .catch((err) => logger.error('❌ فشل إرسال إيميل محادثة جديدة لـ ' + agent.email + ':', err.message))
-    )
-  );
-}
-
-// قواعد الأتمتة (Automation) اللي بتتفعّل أول ما محادثة جديدة تتفتح فعليًا:
+// بتنفذ قاعدتين من قواعد الأتمتة على أي محادثة جديدة اتفتحت فعلاً:
 // 1) Auto-assign: لو مفعّلة، بتعين المحادثة فورًا للإيجنت المحدد في الإعدادات
 // 2) رسالة الترحيب: لو مفعّلة، بتبعت نص ثابت للعميل بمجرد ما المحادثة تتفتح
 async function applyAutomationForNewConversation(conversationId, inboxId, contactNumber, io) {

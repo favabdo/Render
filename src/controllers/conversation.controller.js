@@ -7,7 +7,6 @@ const companyRepo = require('../repositories/company.repo');
 const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
-const mailer = require('../services/mailer.service');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
@@ -87,26 +86,6 @@ async function assign(req, res) {
   });
 
   const io = req.app.get('io');
-
-  // إشعار إيميل للإيجنت اللي اتعينتله المحادثة (لو مش self-assign ولو فعّل
-  // إيميل "Assigned to me" من صفحة البروفايل بتاعته) — مش بيوقف الرد للمستخدم
-  if (!isSelfAssign && targetUser && targetUser.email) {
-    const prefs = targetUser.notif_prefs || {};
-    if (prefs.conversation_assigned && prefs.conversation_assigned.email) {
-      const baseUrl = env.APP_URL || '';
-      mailer
-        .sendNotificationEmail({
-          to: targetUser.email,
-          subject: 'تم تعيين محادثة لك على NileChat',
-          heading: 'اتعينتلك محادثة جديدة',
-          message: `${actingName} عيّن لك محادثة على NileChat، افتح لوحة التحكم عشان تشوفها وترد على العميل.`,
-          ctaText: 'فتح لوحة التحكم',
-          ctaUrl: baseUrl ? `${baseUrl}/dashboard.html` : undefined,
-        })
-        .catch((err) => logger.error('❌ فشل إرسال إيميل تعيين المحادثة:', err.message));
-    }
-  }
-
   conversationRepo
     .getConversationById(req.params.id)
     .then((conversation) => {

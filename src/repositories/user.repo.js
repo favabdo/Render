@@ -1,24 +1,4 @@
-const crypto = require('crypto');
 const { getPool, sql } = require('../config/db');
-
-// تفضيلات الإشعارات الافتراضية لأي إيجنت لسه معملش تخصيص بنفسه
-const DEFAULT_NOTIF_PREFS = {
-  new_conversation:            { email: false, push: true },
-  conversation_assigned:       { email: true,  push: true },
-  mentioned:                   { email: true,  push: true },
-  new_message_assigned:        { email: false, push: true },
-  new_message_participating:   { email: false, push: true },
-};
-
-function parseNotifPrefs(raw) {
-  if (!raw) return { ...DEFAULT_NOTIF_PREFS };
-  try {
-    const parsed = JSON.parse(raw);
-    return { ...DEFAULT_NOTIF_PREFS, ...parsed };
-  } catch {
-    return { ...DEFAULT_NOTIF_PREFS };
-  }
-}
 
 async function findUserByEmail(email) {
   const pool = await getPool();
@@ -34,10 +14,8 @@ async function findUserById(id) {
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
-    .query(`SELECT id, email, role, status, display_name, full_name, avatar_data, access_token, notif_prefs, company_id, company_code FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
-  const user = result.recordset[0] || null;
-  if (user) user.notif_prefs = parseNotifPrefs(user.notif_prefs);
-  return user;
+    .query(`SELECT id, email, role, status, display_name, company_id, company_code FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
+  return result.recordset[0] || null;
 }
 
 async function listUsers() {
@@ -134,112 +112,6 @@ async function verifyPassword(plainPassword, storedPassword) {
   return plainPassword === storedPassword;
 }
 
-// تحديث بيانات البروفايل الشخصي بتاعة الإيجنت نفسه: الاسم الكامل، اسم العرض،
-// الإيميل، وصورة البروفايل (base64 data URL). أي حقل مبعوتش بيفضل زي ما هو.
-async function updateProfile(id, { full_name, display_name, email, avatar_data }) {
-  const pool = await getPool();
-  const req = pool.request().input('id', sql.BigInt, id);
-  const sets = [];
-
-  if (full_name !== undefined) {
-    req.input('full_name', sql.NVarChar(200), full_name);
-    sets.push('full_name = @full_name');
-  }
-  if (display_name !== undefined) {
-    req.input('display_name', sql.NVarChar(200), display_name);
-    sets.push('display_name = @display_name');
-  }
-  if (email !== undefined) {
-    req.input('email', sql.NVarChar(200), email);
-    sets.push('email = @email');
-  }
-  if (avatar_data !== undefined) {
-    req.input('avatar_data', sql.NVarChar(sql.MAX), avatar_data);
-    sets.push('avatar_data = @avatar_data');
-  }
-
-  if (sets.length === 0) return findUserById(id);
-
-  const result = await req.query(`
-    UPDATE [dbo].[NileChat_Users_byA]
-    SET ${sets.join(', ')}
-    OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.status, INSERTED.display_name,
-           INSERTED.full_name, INSERTED.avatar_data
-    WHERE id = @id
-  `);
-  return result.recordset[0] || null;
-}
-
-// تغيير كلمة سر الإيجنت (بعد التأكد من الباسورد الحالي في الكونترولر)
-async function changePassword(id, newPlainPassword) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .input('password', sql.NVarChar(200), newPlainPassword) // plain text مؤقتاً زي باقي النظام
-    .query(`
-      UPDATE [dbo].[NileChat_Users_byA]
-      SET password = @password
-      OUTPUT INSERTED.id
-      WHERE id = @id
-    `);
-  return result.recordset[0] || null;
-}
-
-// بيولّد Access Token جديد للإيجنت (لاستخدامه في تكاملات API خارجية)، ويلغي القديم فورًا
-async function regenerateAccessToken(id) {
-  const pool = await getPool();
-  const token = 'nc_' + crypto.randomBytes(32).toString('hex');
-  await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .input('token', sql.NVarChar(200), token)
-    .query(`
-      UPDATE [dbo].[NileChat_Users_byA]
-      SET access_token = @token
-      WHERE id = @id
-    `);
-  return token;
-}
-
-// بنجيب اليوزر بتوكن الـ API الشخصي بتاعه (مستخدم كطريقة دخول بديلة للـ JWT في requireAuth)
-async function findUserByAccessToken(token) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('token', sql.NVarChar(200), token)
-    .query(`SELECT id, email, role, status FROM [dbo].[NileChat_Users_byA] WHERE access_token = @token`);
-  return result.recordset[0] || null;
-}
-
-// تحديث تفضيلات الإشعارات (إيميل/بوش لكل نوع حدث) — بتتخزن كـ JSON نصي واحد
-async function updateNotifPrefs(id, prefs) {
-  const merged = { ...DEFAULT_NOTIF_PREFS, ...prefs };
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .input('prefs', sql.NVarChar(sql.MAX), JSON.stringify(merged))
-    .query(`
-      UPDATE [dbo].[NileChat_Users_byA]
-      SET notif_prefs = @prefs
-      OUTPUT INSERTED.id
-      WHERE id = @id
-    `);
-  if (!result.recordset[0]) return null;
-  return merged;
-}
-
-// بنجيب كل الإيجنتس النشطين مع تفضيلات الإشعارات بتاعتهم — مستخدمة وقت إرسال
-// إيميلات الأحداث (محادثة جديدة، تعيين محادثة...) عشان نعرف مين فعّل الإيميل فعلاً
-async function listUsersWithNotifPrefs() {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .query(`SELECT id, email, display_name, notif_prefs, status FROM [dbo].[NileChat_Users_byA] WHERE status = 'active'`);
-  return result.recordset.map((u) => ({ ...u, notif_prefs: parseNotifPrefs(u.notif_prefs) }));
-}
-
 // بنسجل توكن الدعوة (اللي بيتبعت في لينك الإيميل) وتاريخ انتهاء صلاحيته
 async function setInviteToken(id, token, expiresAt) {
   const pool = await getPool();
@@ -317,11 +189,4 @@ module.exports = {
   findUserByInviteToken,
   completeInvite,
   deleteUser,
-  updateProfile,
-  changePassword,
-  regenerateAccessToken,
-  findUserByAccessToken,
-  updateNotifPrefs,
-  listUsersWithNotifPrefs,
-  DEFAULT_NOTIF_PREFS,
 };

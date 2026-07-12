@@ -18,9 +18,6 @@ router.post('/api/invite/:token/accept', asyncHandler(authController.acceptInvit
 // ===== البروفايل الشخصي (أي إيجنت مسجل دخول، مش لازم يكون admin) =====
 router.get('/api/me', requireAuth, asyncHandler(authController.getMe));
 router.patch('/api/me', requireAuth, asyncHandler(authController.updateMe));
-router.patch('/api/me/password', requireAuth, asyncHandler(authController.changeMyPassword));
-router.post('/api/me/token/regenerate', requireAuth, asyncHandler(authController.regenerateMyToken));
-router.patch('/api/me/notifications', requireAuth, asyncHandler(authController.updateMyNotifPrefs));
 router.get('/api/agents-list', requireAuth, asyncHandler(authController.listAgents));
 
 // ===== إدارة المستخدمين (admin فقط) =====

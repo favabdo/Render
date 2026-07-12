@@ -44,12 +44,11 @@ function buildInviteEmailHtml(inviteUrl, logoUrl) {
   </div>`;
 }
 
-// دالة عامة بتبعت أي إيميل عن طريق Resend — أي إيميل تاني في النظام (دعوة، إشعار...)
-// بيستخدمها بدل ما يكرر نفس منطق الـ fetch كل مرة
-async function sendRawEmail({ to, subject, html }) {
+async function sendInviteEmail({ to, inviteUrl, logoUrl }) {
   if (!env.RESEND_API_KEY) {
-    logger.warn('⚠️ RESEND_API_KEY مش متظبط في الإعدادات — هتم تجاهل الإيميل ده من غير إرسال حقيقي.');
-    logger.warn(`🔗 إيميل كان المفروض يتبعت لـ ${to}: ${subject}`);
+    // لو ملحقنا نظبط مفتاح Resend لسه، بنطبع الرابط في اللوج عشان الأدمن يقدر يبعته يدويًا
+    logger.warn('⚠️ RESEND_API_KEY مش متظبط في الإعدادات — هبعت رابط الدعوة في اللوج بس من غير إيميل حقيقي.');
+    logger.warn(`🔗 رابط دعوة ${to}: ${inviteUrl}`);
     return { sent: false, error: 'RESEND_API_KEY مش متظبط' };
   }
 
@@ -63,18 +62,18 @@ async function sendRawEmail({ to, subject, html }) {
       body: JSON.stringify({
         from: env.MAIL_FROM,
         to: [to],
-        subject,
-        html,
+        subject: 'دعوة للانضمام إلى NileChat',
+        html: buildInviteEmailHtml(inviteUrl, logoUrl),
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      logger.error('❌ فشل إرسال الإيميل عن طريق Resend:', errText);
+      logger.error('❌ فشل إرسال إيميل الدعوة عن طريق Resend:', errText);
       return { sent: false, error: errText };
     }
 
-    logger.info(`✅ تم إرسال إيميل إلى ${to}: ${subject}`);
+    logger.info(`✅ تم إرسال إيميل الدعوة إلى ${to}`);
     return { sent: true };
   } catch (err) {
     logger.error('❌ خطأ في الاتصال بـ Resend:', err.message);
@@ -82,48 +81,4 @@ async function sendRawEmail({ to, subject, html }) {
   }
 }
 
-async function sendInviteEmail({ to, inviteUrl, logoUrl }) {
-  return sendRawEmail({
-    to,
-    subject: 'دعوة للانضمام إلى NileChat',
-    html: buildInviteEmailHtml(inviteUrl, logoUrl),
-  });
-}
-
-// قالب بسيط لإيميلات إشعارات الأحداث (محادثة جديدة، تعيين محادثة لك...) —
-// بيتفعّل بس للإيجنتس اللي فعّلوا الإيميل لنفس الحدث ده من صفحة البروفايل
-function buildNotificationEmailHtml({ heading, message, ctaText, ctaUrl }) {
-  const ctaBlock = ctaUrl
-    ? `
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 0">
-        <tr>
-          <td align="center" bgcolor="#6C5CE7" style="border-radius:10px">
-            <a href="${ctaUrl}" target="_blank" rel="noopener noreferrer"
-               style="display:inline-block;background:#6C5CE7;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;font-family:Arial,sans-serif">
-               ${ctaText || 'فتح المحادثة'}
-            </a>
-          </td>
-        </tr>
-      </table>`
-    : '';
-
-  return `
-  <div style="font-family:'DM Sans',Arial,sans-serif;background:#f0f2f5;padding:40px 0">
-    <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px;box-shadow:0 10px 30px rgba(0,0,0,0.08)">
-      <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#6C5CE7,#00D2FF);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:Arial,sans-serif;font-size:18px;margin-bottom:20px">NC</div>
-      <h2 style="margin:0 0 8px;color:#1a1a2e;font-family:Arial,sans-serif">${heading}</h2>
-      <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0;font-family:Arial,sans-serif">${message}</p>
-      ${ctaBlock}
-    </div>
-  </div>`;
-}
-
-async function sendNotificationEmail({ to, subject, heading, message, ctaText, ctaUrl }) {
-  return sendRawEmail({
-    to,
-    subject,
-    html: buildNotificationEmailHtml({ heading, message, ctaText, ctaUrl }),
-  });
-}
-
-module.exports = { sendInviteEmail, sendRawEmail, sendNotificationEmail };
+module.exports = { sendInviteEmail };
