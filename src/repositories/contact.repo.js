@@ -66,14 +66,22 @@ async function getContactById(id) {
 
 // زي getContactById بالظبط، لكن contract_date/maintenance_end_date بييجوا لايف من
 // "العقد الحالي" في سجل عقود الصيانة (الساري لو موجود، وإلا آخر عقد انتهى) — مش من
-// عمودين ثابتين على الكونتاكت زي الطريقة القديمة
+// عمودين ثابتين على الكونتاكت زي الطريقة القديمة.
+// ملحوظة مهمة: بنكتب أعمدة الكونتاكت بالاسم بدل c.* عشان الكونتاكت نفسه لسه فيه
+// عمودين قدام بنفس الاسم (contract_date/maintenance_end_date، الأعمدة اللي كانت
+// بتتخزن عليها التواريخ زمان). لو استخدمنا c.* هيبقى فيه اسمين متكررين في نتيجة
+// الكويري (واحد من c.* وواحد من mc)، وده بيخلي مكتبة mssql تدمج القيمتين في
+// array بدل ما تستبدل القديمة بالجديدة — فيبقى contract_date مثلاً [oldValue,
+// newValue] بدل تاريخ لوحده، وده اللي كان بيكسر new Date() في الفرونت إند
+// ويطلع "NaN يوم" في الوقت المتبقي و"-" في مدة التعاقد حتى لو التاريخين ظاهرين
 async function getContactByIdWithCurrentContract(id) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
     .query(`
-      SELECT c.*, mc.start_date AS contract_date, mc.end_date AS maintenance_end_date
+      SELECT c.id, c.name, c.location, c.created_at,
+             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
       WHERE c.id = @id
