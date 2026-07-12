@@ -110,6 +110,14 @@ async function listConversations() {
         ORDER BY m.created_at DESC
       ) AS last_message_text,
       (
+        -- نوع آخر رسالة (text/image/video/audio/document...) عشان لو رسالة وسائط
+        -- من غير كابشن، الفرونت إند يعرض "📷 Photo" بدل معاينة فاضية
+        SELECT TOP 1 m.message_type
+        FROM [dbo].[${TABLE_NAME}] m
+        WHERE m.conversation_id = c.id AND m.direction != 'note'
+        ORDER BY m.created_at DESC
+      ) AS last_message_type,
+      (
         -- بنجيب اتجاه آخر رسالة (in/out) عشان الفرونت إند يعرف يفرق بين
         -- رسالة جديدة جاية من العميل (لازم تتحسب unread) ورد بعته الإيجنت نفسه
         SELECT TOP 1 m.direction
@@ -328,6 +336,8 @@ async function saveMessage({
   messageType = null,
   messageText = null,
   mediaUrl = null,
+  mediaMime = null,
+  mediaFileName = null,
   status = null,
   rawPayload = null,
   sentByUserId = null,
@@ -345,6 +355,8 @@ async function saveMessage({
     .input('messageType', sql.NVarChar(30), messageType)
     .input('messageText', sql.NVarChar(sql.MAX), messageText)
     .input('mediaUrl', sql.NVarChar(500), mediaUrl)
+    .input('mediaMime', sql.NVarChar(150), mediaMime)
+    .input('mediaFileName', sql.NVarChar(300), mediaFileName)
     .input('status', sql.NVarChar(30), status)
     .input('rawPayload', sql.NVarChar(sql.MAX), rawPayload)
     .input('sentByUserId', sql.BigInt, sentByUserId)
@@ -352,11 +364,13 @@ async function saveMessage({
     .query(`
       INSERT INTO [dbo].[${TABLE_NAME}]
         (wa_message_id, conversation_id, direction, from_number, to_number, contact_name,
-         message_type, message_text, media_url, status, raw_payload, sent_by_user_id, sent_by_name)
+         message_type, message_text, media_url, media_mime, media_filename, status, raw_payload,
+         sent_by_user_id, sent_by_name)
       OUTPUT INSERTED.*
       VALUES
         (@waMessageId, @conversationId, @direction, @fromNumber, @toNumber, @contactName,
-         @messageType, @messageText, @mediaUrl, @status, @rawPayload, @sentByUserId, @sentByName)
+         @messageType, @messageText, @mediaUrl, @mediaMime, @mediaFileName, @status, @rawPayload,
+         @sentByUserId, @sentByName)
     `);
   return result.recordset[0];
 }

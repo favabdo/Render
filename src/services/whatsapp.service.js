@@ -6,8 +6,13 @@ const env = require('../config/env');
 const conversationRepo = require('../repositories/conversation.repo');
 const inboxRepo = require('../repositories/inbox.repo');
 const { normalizeDigits } = require('../utils/helpers');
+const mediaStorage = require('../utils/mediaStorage');
+const logger = require('../utils/logger');
 
 const GRAPH_API_VERSION = 'v20.0';
+
+// أنواع الرسائل اللي WhatsApp Cloud API بتدعمها للوسائط (بره النص العادي)
+const MEDIA_MESSAGE_TYPES = ['image', 'video', 'audio', 'document', 'sticker'];
 
 // كاش بسيط في الذاكرة لبيانات اعتماد كل Inbox — التوكن ورقم الهاتف بتاعين الـ Inbox
 // بيتغيروا نادرًا جدًا (بس وقت الإضافة نفسها تقريبًا)، فمفيش داعي نعمل رحلة كاملة
@@ -119,6 +124,157 @@ async function sendTextMessage(toNumber, text, conversationId = null, inboxId = 
   return deliverOutgoingMessage(saved, { toNumber, text, inboxId });
 }
 
+// ===== وسائط (صور / فيديوهات / صوتيات / مستندات) =====
+
+/**
+ * لما تجيلنا رسالة وسائط من العميل، ميتا بتبعتلنا "media id" بس مش رابط مباشر
+ * (والرابط اللي ميتا بترجعه بينتهي سريعًا ومحتاج نفس التوكن). فبنعمل خطوتين:
+ * 1) نسأل ميتا عن الرابط المؤقت الحقيقي بالـ media id ده
+ * 2) ننزّل الملف فعليًا ونخزنه على السيرفر بتاعنا، ونرجع رابط ثابت (public/uploads)
+ *    نقدر نعرضه في لوحة التحكم مباشرة من غير ما نحتاج توكن ميتا تاني
+ */
+async function downloadIncomingMedia(mediaId, inboxId = null) {
+  if (!mediaId) return null;
+  try {
+    const { accessToken } = await resolveCredentials(inboxId);
+    if (!accessToken) return null;
+
+    const metaUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${mediaId}`;
+    const metaResponse = await axios.get(metaUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const { url, mime_type: mimeType, file_size: fileSize } = metaResponse.data || {};
+    if (!url) return null;
+
+    const fileResponse = await axios.get(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      responseType: 'arraybuffer',
+      maxContentLength: 50 * 1024 * 1024, // حد أقصى 50MB لأي ملف وارد
+    });
+
+    const buffer = Buffer.from(fileResponse.data);
+    const { publicUrl } = mediaStorage.saveBuffer(buffer, { folder: 'incoming', mimeType });
+
+    return { url: publicUrl, mimeType: mimeType || null, fileSize: fileSize || null };
+  } catch (err) {
+    logger.error('❌ فشل تنزيل ميديا واردة من واتساب:', err.response?.data?.error?.message || err.message);
+    return null;
+  }
+}
+
+/**
+ * بترفع ملف محلي (من public/uploads/outgoing) لسيرفرات ميتا نفسها، وبترجع
+ * الـ media id بتاعه — الخطوة دي لازمة قبل بعت أي رسالة وسائط لأن WhatsApp
+ * Cloud API بيطلب media id مرفوع عندهم الأول (أو رابط عام بديل، بس الرفع المباشر أوثق)
+ */
+async function uploadMediaToWhatsapp({ buffer, mimeType, fileName }, inboxId = null) {
+  const { phoneNumberId, accessToken } = await resolveCredentials(inboxId);
+  if (!phoneNumberId || !accessToken) {
+    throw new Error('مفيش بيانات اعتماد واتساب متاحة — ضيف Inbox من الإعدادات أو اضبط متغيرات الـ .env');
+  }
+
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('file', new Blob([buffer], { type: mimeType || 'application/octet-stream' }), fileName || 'file');
+
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/media`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.id) {
+    throw new Error(data?.error?.message || 'فشل رفع الملف لواتساب');
+  }
+  return data.id;
+}
+
+/**
+ * مرحلة 1 لرسالة وسائط صادرة (زي createOutgoingMessage بالظبط بس للوسائط):
+ * بتسجل الرسالة فورًا بحالة 'sending' ورابط الملف المحلي (اللي هيتعرض في الشات
+ * فورًا حتى قبل ما نخلص رفعه لواتساب فعليًا)
+ */
+async function createOutgoingMediaMessage(
+  toNumber,
+  { messageType, mediaUrl, mimeType, fileName, caption },
+  conversationId,
+  inboxId,
+  sender
+) {
+  const { phoneNumberId } = await resolveCredentials(inboxId);
+  return conversationRepo.saveMessage({
+    waMessageId: null,
+    conversationId,
+    direction: 'out',
+    fromNumber: phoneNumberId,
+    toNumber,
+    messageType,
+    messageText: caption || null,
+    mediaUrl,
+    mediaMime: mimeType || null,
+    mediaFileName: fileName || null,
+    status: 'sending',
+    sentByUserId: sender?.id || null,
+    sentByName: sender?.name || null,
+  });
+}
+
+/**
+ * مرحلة 2 لرسالة وسائط صادرة: بترفع الملف المحلي لواتساب، وبعدين تبعت رسالة
+ * الوسائط الفعلية (type: image/video/audio/document) بالـ media id اللي رجع.
+ * نفس فلسفة deliverOutgoingMessage تمامًا (sent/failed + onFinalized callback)
+ */
+async function deliverOutgoingMediaMessage(
+  savedMessage,
+  { toNumber, buffer, messageType, mimeType, fileName, caption, inboxId },
+  onFinalized
+) {
+  let finalRow;
+  try {
+    const { phoneNumberId, accessToken } = await resolveCredentials(inboxId);
+    if (!phoneNumberId || !accessToken) {
+      throw new Error('مفيش بيانات اعتماد واتساب متاحة — ضيف Inbox من الإعدادات أو اضبط متغيرات الـ .env');
+    }
+
+    const waMediaId = await uploadMediaToWhatsapp({ buffer, mimeType, fileName }, inboxId);
+
+    const mediaPayload = { id: waMediaId };
+    if (caption && messageType !== 'audio' && messageType !== 'sticker') {
+      mediaPayload.caption = caption;
+    }
+    if (messageType === 'document' && fileName) {
+      mediaPayload.filename = fileName;
+    }
+
+    const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`;
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: toNumber,
+      type: messageType,
+      [messageType]: mediaPayload,
+    };
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const waMessageId = response.data?.messages?.[0]?.id || null;
+    finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, {
+      waMessageId,
+      status: waMessageId ? 'sent' : 'failed',
+    });
+  } catch (err) {
+    logger.error('❌ فشل إرسال رسالة وسائط لواتساب:', err.response?.data?.error?.message || err.message);
+    finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, { status: 'failed' });
+  }
+  if (onFinalized) onFinalized(finalRow);
+  return finalRow;
+}
+
 /**
  * تحقق حقيقي من إن التلاتة بيانات دي بتاعة بعض فعلاً (من غير Business Account ID):
  * - بنسأل ميتا مباشرة عن الـ phoneNumberId ده بالـ accessToken اللي المستخدم كتبه
@@ -181,4 +337,8 @@ module.exports = {
   deliverOutgoingMessage,
   verifyWhatsappCredentials,
   invalidateCredentialsCache,
+  downloadIncomingMedia,
+  createOutgoingMediaMessage,
+  deliverOutgoingMediaMessage,
+  MEDIA_MESSAGE_TYPES,
 };

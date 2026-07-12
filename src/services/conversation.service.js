@@ -61,6 +61,48 @@ async function sendReplyLive(conversation, text, sender, onFinalized) {
   return savedMessage;
 }
 
+// نفس فلسفة sendReplyLive بالظبط بس لرسايل الوسائط (صورة/فيديو/صوت/مستند):
+// بتسجل الرسالة فورًا برابط الملف المحلي (بيظهر في الشات على طول) وترجعها،
+// وفي الخلفية بترفع الملف لواتساب فعليًا وتبعت الرسالة، وتنادي onFinalized
+// بالنتيجة النهائية (sent/failed) عشان الكنترولر يبعتها لايف على الـ socket
+async function sendMediaReplyLive(conversation, fileInfo, sender, onFinalized) {
+  const { buffer, mimeType, fileName, messageType, caption } = fileInfo;
+
+  const [savedMessage] = await Promise.all([
+    whatsappService.createOutgoingMediaMessage(
+      conversation.contact_number,
+      { messageType, mediaUrl: fileInfo.publicUrl, mimeType, fileName, caption },
+      conversation.id,
+      conversation.inbox_id,
+      sender
+    ),
+    conversationRepo.touchConversation(conversation.id),
+  ]);
+
+  whatsappService
+    .deliverOutgoingMediaMessage(
+      savedMessage,
+      {
+        toNumber: conversation.contact_number,
+        buffer,
+        messageType,
+        mimeType,
+        fileName,
+        caption,
+        inboxId: conversation.inbox_id,
+      },
+      async (finalRow) => {
+        if (finalRow) await conversationRepo.touchConversation(conversation.id);
+        if (onFinalized) onFinalized(finalRow);
+      }
+    )
+    .catch(() => {
+      /* أي استثناء غير متوقع اتلقط واتسجل جوه deliverOutgoingMediaMessage نفسها بالفعل */
+    });
+
+  return savedMessage;
+}
+
 // بيتعامل مع الرسائل الواردة من webhook واتساب (رسائل جديدة من عملاء)
 async function processIncomingMessages(value, io) {
   const contact = value.contacts?.[0];
@@ -78,12 +120,27 @@ async function processIncomingMessages(value, io) {
     const messageType = msg.type;
     let messageText = null;
     let mediaUrl = null;
+    let mediaMime = null;
+    let mediaFileName = null;
 
     if (messageType === 'text') {
       messageText = msg.text?.body || null;
     } else if (['image', 'video', 'audio', 'document', 'sticker'].includes(messageType)) {
-      mediaUrl = msg[messageType]?.id || null; // ده media id من ميتا، محتاج استدعاء API تاني عشان تجيب الرابط الفعلي
+      const mediaId = msg[messageType]?.id || null;
       messageText = msg[messageType]?.caption || null;
+      mediaFileName = msg[messageType]?.filename || null;
+
+      // بننزّل الملف فعليًا من ميتا ونخزنه عندنا (الـ media id لوحده مش كافي —
+      // محتاج توكن صالح كل مرة وبينتهي، فبنحوّله لرابط ثابت نقدر نعرضه في الشات مباشرة)
+      const downloaded = await whatsappService.downloadIncomingMedia(mediaId, matchedInbox?.id || null);
+      if (downloaded) {
+        mediaUrl = downloaded.url;
+        mediaMime = downloaded.mimeType;
+      } else {
+        // فشل التنزيل (توكن منتهي، الملف اتمسح من عند ميتا...) — بنسجل الرسالة برضه
+        // من غير رابط عشان الإيجنت على الأقل يشوف إنها كانت وسائط، مش تختفي تمامًا
+        logger.error(`⚠️ تعذر تنزيل ميديا واردة (type=${messageType}, id=${mediaId})`);
+      }
     } else if (messageType === 'button') {
       messageText = msg.button?.text || null;
     } else if (messageType === 'interactive') {
@@ -116,6 +173,8 @@ async function processIncomingMessages(value, io) {
       messageType,
       messageText,
       mediaUrl,
+      mediaMime,
+      mediaFileName,
       rawPayload: JSON.stringify(msg),
     });
 
@@ -314,4 +373,4 @@ async function processStatusUpdates(value) {
   }
 }
 
-module.exports = { sendReply, sendReplyLive, processIncomingMessages, processStatusUpdates };
+module.exports = { sendReply, sendReplyLive, sendMediaReplyLive, processIncomingMessages, processStatusUpdates };

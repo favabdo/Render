@@ -294,6 +294,28 @@ async function ensureMessagesHaveSenderColumns() {
   }
 }
 
+// بنسجل نوع الملف (MIME) واسمه الأصلي مع أي رسالة وسائط (صورة/فيديو/صوت/مستند)
+// عشان الواجهة تعرف تعرض العنصر الصح (img/video/audio/رابط تحميل) وتفضل عارفة
+// اسم الملف الأصلي حتى لو الرابط المخزن اسمه عشوائي على السيرفر
+async function ensureMessagesHaveMediaColumns() {
+  const pool = await getPool();
+  const columns = [
+    { name: 'media_mime', def: 'NVARCHAR(150) NULL' },
+    { name: 'media_filename', def: 'NVARCHAR(300) NULL' },
+  ];
+  for (const col of columns) {
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.${TABLE_NAME}') AND name = '${col.name}'
+      )
+      BEGIN
+        ALTER TABLE [dbo].[${TABLE_NAME}] ADD ${col.name} ${col.def};
+      END
+    `);
+  }
+}
+
 // ===== الكونتاكتس (العملاء الحقيقيين) =====
 // كونتاكت ممكن يبقى ليه أكتر من رقم واحد مرتبط بيه (لو العميل بعت من رقم جديد وربطناه بنفس الكونتاكت القديم)
 async function ensureContactsTableExists() {
@@ -812,6 +834,7 @@ async function ensureSchema() {
   await ensureUsersTableExists();
   await ensureMessagesHaveConversationColumn();
   await ensureMessagesHaveSenderColumns();
+  await ensureMessagesHaveMediaColumns();
   await ensureInboxesTableExists();
   await ensureInboxesHaveExtraColumns();
   await ensureInboxAgentsTableExists();
@@ -848,6 +871,7 @@ module.exports = {
   ensureUsersTableExists,
   ensureMessagesHaveConversationColumn,
   ensureMessagesHaveSenderColumns,
+  ensureMessagesHaveMediaColumns,
   ensureInboxesTableExists,
   ensureInboxesHaveExtraColumns,
   ensureInboxAgentsTableExists,

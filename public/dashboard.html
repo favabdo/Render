@@ -86,7 +86,7 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
     .chat-search-bar{padding:8px 12px}
     .chat-input-area{padding:6px 12px calc(12px + env(safe-area-inset-bottom));gap:6px}
     .saved-replies-bar{padding:8px 12px}
-    #emoji-btn,#voice-btn{display:none}
+    #emoji-btn{display:none}
     .note-toggle-bar{padding:6px 12px 4px;gap:6px}
     .note-toggle-btn{padding:6px 12px;font-size:11.5px}
 }
@@ -212,6 +212,36 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .msg-time{font-size:10px;margin-top:4px;opacity:.7}
 .msg-row.sent .msg-time{text-align:right;color:rgba(255,255,255,0.85)}
 .msg-row.received .msg-time{text-align:left;color:var(--text-secondary)}
+.msg-bubble.media-bubble{padding:6px}
+.msg-bubble.media-bubble .msg-time{padding:0 6px}
+.msg-media-image{display:block;max-width:260px;max-height:320px;width:100%;border-radius:12px;cursor:zoom-in;object-fit:cover}
+.msg-media-video{display:block;max-width:280px;max-height:320px;border-radius:12px;background:#000}
+.msg-media-audio{width:240px;max-width:70vw;height:40px}
+.msg-row.sent .msg-media-audio{filter:invert(1) hue-rotate(180deg) brightness(1.5)}
+.msg-media-caption{padding:6px 8px 2px;font-size:13.5px;white-space:pre-wrap;word-wrap:break-word}
+.msg-media-doc{display:flex;align-items:center;gap:10px;padding:8px 10px;min-width:200px}
+.msg-media-doc-icon{width:36px;height:36px;border-radius:8px;background:rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.msg-row.sent .msg-media-doc-icon{background:rgba(255,255,255,0.2)}
+.msg-media-doc-info{display:flex;flex-direction:column;min-width:0}
+.msg-media-doc-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.msg-media-doc-hint{font-size:11px;opacity:.75}
+.msg-media-doc a{color:inherit;text-decoration:none}
+.msg-media-unavailable{padding:10px 14px;font-size:13px;opacity:.8;font-style:italic;display:flex;align-items:center;gap:6px}
+.msg-row .msg-bubble.msg-pending{opacity:.65}
+.msg-row .msg-bubble.msg-failed{outline:1.5px solid var(--danger)}
+.msg-upload-progress{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border-radius:12px;color:#fff;font-size:11px;font-weight:600}
+
+/* ===== تسجيل ريكوردات صوتية (Voice notes) ===== */
+.input-action-btn#voice-btn.recording{background:var(--danger);color:#fff}
+.input-action-btn#voice-btn.recording:hover{background:var(--danger)}
+.voice-recording-bar{display:none;align-items:center;gap:10px;flex:1;min-width:0;padding:0 6px}
+.voice-recording-bar.active{display:flex}
+.voice-recording-dot{width:9px;height:9px;border-radius:50%;background:var(--danger);animation:voiceRecPulse 1.1s ease-in-out infinite}
+@keyframes voiceRecPulse{0%,100%{opacity:1}50%{opacity:.3}}
+.voice-recording-time{font-size:13px;font-weight:600;color:var(--text);min-width:38px}
+.voice-recording-hint{font-size:12.5px;color:var(--text-secondary);flex:1}
+.voice-cancel-btn{border:none;background:transparent;color:var(--danger);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;padding:6px 8px}
+
 .msg-row.note-row{justify-content:center;margin:10px 0}
 .note-bubble{max-width:80%;background:#fff8dc;border:1px dashed #e0c46c;border-radius:12px;padding:9px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
 .note-label{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#8a6d1a;margin-bottom:4px;letter-spacing:.2px}
@@ -842,10 +872,17 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <div class="chat-input-area" id="chat-input-area">
                 <div class="input-actions">
                     <button class="input-action-btn" id="emoji-btn" title="Emoji"><i data-lucide="smile" style="width:20px;height:20px"></i></button>
-                    <button class="input-action-btn" id="attach-btn" title="Attach"><i data-lucide="paperclip" style="width:20px;height:20px"></i></button>
+                    <button class="input-action-btn" id="attach-btn" title="Attach" onclick="document.getElementById('attach-file-input').click()"><i data-lucide="paperclip" style="width:20px;height:20px"></i></button>
+                    <input type="file" id="attach-file-input" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onchange="handleAttachFileChosen(event)">
                 </div>
                 <textarea id="msg-input" rows="1" placeholder="Type a message..." onkeydown="handleInputKey(event)" oninput="autoResize(this); handleTypingInput()"></textarea>
-                <button class="input-action-btn" id="voice-btn" title="Voice" onclick="toggleVoice()"><i data-lucide="microphone" style="width:20px;height:20px"></i></button>
+                <div class="voice-recording-bar" id="voice-recording-bar">
+                    <span class="voice-recording-dot"></span>
+                    <span class="voice-recording-time" id="voice-recording-time">0:00</span>
+                    <span class="voice-recording-hint">Recording voice note…</span>
+                    <button class="voice-cancel-btn" onclick="cancelVoiceRecording()">Cancel</button>
+                </div>
+                <button class="input-action-btn" id="voice-btn" title="Voice note" onclick="toggleVoice()"><i data-lucide="mic" style="width:20px;height:20px"></i></button>
                 <button class="send-btn" onclick="sendMessage()" title="Send"><i data-lucide="send" style="width:18px;height:18px"></i></button>
             </div>
         </div>
@@ -1675,7 +1712,7 @@ function mapApiConversation(row) {
         status: row.status === 'closed' ? 'resolved' : 'open',
         rawStatus: row.status, // 'open' | 'assigned' | 'closed' زي ما هو في السيرفر
         assignedTo: row.assigned_agent_name || null,
-        lastMsg: row.last_message_text || '',
+        lastMsg: row.last_message_text || (row.last_message_type && row.last_message_type !== 'text' ? mediaKindLabel(row.last_message_type) : ''),
         // الوقت المعروض بجانب اسم العميل في القايمة = وقت أول رسالة بعتها العميل
         // في المحادثة دي (created_at)، مش وقت آخر رسالة (last_message_at)
         time: row.created_at ? formatTime(row.created_at) : '',
@@ -1811,7 +1848,7 @@ async function pollConversationsSilently() {
             const hasNewMessage = rawTime && rawTime !== c._lastMessageAtRaw;
 
             if (hasNewMessage) {
-                c.lastMsg = row.last_message_text || '';
+                c.lastMsg = row.last_message_text || (row.last_message_type && row.last_message_type !== 'text' ? mediaKindLabel(row.last_message_type) : '');
                 // c.time بيفضل ثابت على وقت أول رسالة من العميل (created_at)، مش بيتحدث مع كل رسالة جديدة
                 c._lastMessageAtRaw = rawTime;
                 c._lastMessageDirection = row.last_message_direction || null;
@@ -1910,7 +1947,11 @@ function mapApiMessage(m) {
         time: formatMessageTimestamp(m.created_at),
         rawTime: m.created_at,
         senderName: m.sent_by_name || null,
-        phone: m.from_number || null
+        phone: m.from_number || null,
+        type: (m.message_type && m.message_type !== 'text') ? m.message_type : null,
+        mediaUrl: m.media_url || null,
+        mediaMime: m.media_mime || null,
+        fileName: m.media_filename || null
     };
 }
 
@@ -2105,14 +2146,21 @@ function initSocket() {
                     return;
                 }
 
-                // لو الرسالة صادرة (out) واحنا أصلاً ضفناها optimistically في sendMessage()،
-                // بنشيل الـ pending tag بس من غير ما نكررها، ونسجل الـ id الحقيقي بتاعها
+                // لو الرسالة صادرة (out) واحنا أصلاً ضفناها optimistically في sendMessage()
+                // أو sendMediaFile()، بنشيل الـ pending tag بس من غير ما نكررها، ونسجل
+                // الـ id والرابط الحقيقيين بتاعها. رسايل الوسائط بتتطابق بالـ client_id
+                // (فريد لكل رفع)، ورسايل النص العادي بتتطابق بالنص زي الأول
                 if (message.direction === 'out') {
-                    const pending = c.messages.find(m => m._pending && m.text === message.message_text);
+                    const pending = message.client_id
+                        ? c.messages.find(m => m._pending && m._clientId === message.client_id)
+                        : c.messages.find(m => m._pending && !m._clientId && m.text === message.message_text);
                     if (pending) {
                         delete pending._pending;
                         pending.id = message.id || null;
-                        c.lastMsg = message.message_text;
+                        if (message.media_url) pending.mediaUrl = message.media_url;
+                        if (message.media_mime) pending.mediaMime = message.media_mime;
+                        if (message.media_filename) pending.fileName = message.media_filename;
+                        c.lastMsg = message.message_text || (pending.type ? mediaKindLabel(pending.type) : '');
                         if (selectedChatId === c.id) renderMessages(c);
                         renderChatList(currentFilter, document.querySelector('.cl-search')?.value || '');
                         return;
@@ -2126,11 +2174,15 @@ function initSocket() {
                     time: formatMessageTimestamp(message.created_at),
                     rawTime: message.created_at,
                     senderName: message.sent_by_name || null,
-                    phone: message.from_number || null
+                    phone: message.from_number || null,
+                    type: (message.message_type && message.message_type !== 'text') ? message.message_type : null,
+                    mediaUrl: message.media_url || null,
+                    mediaMime: message.media_mime || null,
+                    fileName: message.media_filename || null
                 };
 
                 c.messages.push(newMsg);
-                c.lastMsg = message.message_text || '';
+                c.lastMsg = message.message_text || (newMsg.type ? mediaKindLabel(newMsg.type) : '');
                 // بنسجل الـ raw timestamp/direction عشان الـ polling الاحتياطي متزودش
                 // العداد تاني على نفس الرسالة اللي الـ socket وصلها فعلاً
                 c._lastMessageAtRaw = message.created_at || c._lastMessageAtRaw;
@@ -2148,11 +2200,13 @@ function initSocket() {
         });
 
         /* السيرفر بيبعتها في الحالة النادرة إن تسجيل/إرسال الرد فشل فعليًا في الخلفية
-           بعد ما رجّعنا رد فوري للإيجنت (شوف conversation.controller.js -> reply) */
-        socket.on('message_failed', ({ conversationId, text }) => {
+           بعد ما رجّعنا رد فوري للإيجنت (شوف conversation.controller.js -> reply/replyMedia) */
+        socket.on('message_failed', ({ conversationId, text, clientId }) => {
             const c = conversations.find(x => String(x.id) === String(conversationId));
             if (!c) return;
-            const pending = c.messages.find(m => m._pending && m.text === text);
+            const pending = clientId
+                ? c.messages.find(m => m._pending && m._clientId === clientId)
+                : c.messages.find(m => m._pending && m.text === text);
             if (pending) {
                 delete pending._pending;
                 pending.failed = true;
@@ -3077,8 +3131,56 @@ function messageSignature(m, c) {
     return JSON.stringify([
         m.from, m.text, m.time, m.senderName || null,
         m.from === 'customer' ? (findPhoneLabel(c, m.phone) || m.phone || c.phone || '') : null,
-        !!m._pending, !!m.failed
+        !!m._pending, !!m.failed, m.type || null, m.mediaUrl || null
     ]);
+}
+
+/* تسمية مختصرة لنوع الوسائط، مستخدمة كمعاينة (last message) في قايمة المحادثات */
+function mediaKindLabel(type) {
+    if (type === 'image' || type === 'sticker') return '📷 Photo';
+    if (type === 'video') return '🎥 Video';
+    if (type === 'audio') return '🎤 Voice message';
+    return '📎 Document';
+}
+
+/* بيرجع أيقونة/تسمية مناسبة لنوع مستند مش صورة/فيديو/صوت (PDF/Word/Excel...) */
+function docKindLabel(mimeType, fileName) {
+    const name = (fileName || '').toLowerCase();
+    const mime = (mimeType || '').toLowerCase();
+    if (mime.includes('pdf') || name.endsWith('.pdf')) return 'PDF';
+    if (mime.includes('word') || name.endsWith('.doc') || name.endsWith('.docx')) return 'Word';
+    if (mime.includes('sheet') || mime.includes('excel') || name.endsWith('.xls') || name.endsWith('.xlsx')) return 'Excel';
+    if (mime.includes('zip') || name.endsWith('.zip')) return 'ZIP';
+    return 'File';
+}
+
+/* بيبني الـ HTML الداخلي لبابل رسالة وسائط (صورة/فيديو/صوت/مستند) — بيتنادى
+   لكل من الرسايل الصادرة والواردة بنفس الشكل، الكابشن (لو موجود) بيتحط تحت الوسائط */
+function buildMediaBubbleInner(m) {
+    const caption = m.text ? `<div class="msg-media-caption">${escapeHtml(m.text)}</div>` : '';
+    if (!m.mediaUrl) {
+        return `<div class="msg-media-unavailable"><i data-lucide="file-warning" style="width:14px;height:14px"></i> Media unavailable</div>${caption}<div class="msg-time" style="padding:0 8px 6px">${m.time}</div>`;
+    }
+    let body;
+    if (m.type === 'image' || m.type === 'sticker') {
+        body = `<img class="msg-media-image" src="${escapeHtml(m.mediaUrl)}" alt="image" onclick="openMediaLightbox('${escapeHtml(m.mediaUrl)}')">`;
+    } else if (m.type === 'video') {
+        body = `<video class="msg-media-video" src="${escapeHtml(m.mediaUrl)}" controls preload="metadata"></video>`;
+    } else if (m.type === 'audio') {
+        body = `<audio class="msg-media-audio" src="${escapeHtml(m.mediaUrl)}" controls preload="metadata"></audio>`;
+    } else {
+        const kind = docKindLabel(m.mediaMime, m.fileName);
+        body = `
+            <a class="msg-media-doc" href="${escapeHtml(m.mediaUrl)}" target="_blank" rel="noopener">
+                <div class="msg-media-doc-icon"><i data-lucide="file-text" style="width:18px;height:18px"></i></div>
+                <div class="msg-media-doc-info">
+                    <span class="msg-media-doc-name">${escapeHtml(m.fileName || kind)}</span>
+                    <span class="msg-media-doc-hint">${kind} — tap to open</span>
+                </div>
+            </a>`;
+    }
+    const progress = m._pending ? `<div class="msg-upload-progress">${m.failed ? 'Failed' : 'Sending…'}</div>` : '';
+    return `${body}${progress}${caption}<div class="msg-time" style="padding:0 8px 6px">${m.time}</div>`;
 }
 
 function buildMessageRow(m, c) {
@@ -3097,6 +3199,18 @@ function buildMessageRow(m, c) {
             <div class="msg-row system-row fade-in">
                 <div class="system-bubble">${escapeHtml(m.text)}<div class="system-time">${m.time}</div></div>
             </div>`;
+    } else if (m.type && ['image', 'video', 'audio', 'document', 'sticker'].includes(m.type)) {
+        const bubbleClasses = ['msg-bubble', 'media-bubble', m._pending ? 'msg-pending' : '', m.failed ? 'msg-failed' : ''].filter(Boolean).join(' ');
+        html = `
+            <div class="msg-row ${m.from === 'agent' ? 'sent' : 'received'} fade-in">
+                <div class="msg-col">
+                    ${m.from === 'agent' && m.senderName ? `<div class="msg-sender-name">${escapeHtml(m.senderName)}</div>` : ''}
+                    ${m.from === 'customer' ? `<div class="msg-sender-name">${escapeHtml(findPhoneLabel(c, m.phone) || m.phone || c.phone || '')}</div>` : ''}
+                    <div class="${bubbleClasses}">
+                        ${buildMediaBubbleInner(m)}
+                    </div>
+                </div>
+            </div>`;
     } else {
         html = `
             <div class="msg-row ${m.from === 'agent' ? 'sent' : 'received'} fade-in">
@@ -3113,6 +3227,15 @@ function buildMessageRow(m, c) {
     const wrap = document.createElement('div');
     wrap.innerHTML = html.trim();
     return wrap.firstElementChild;
+}
+
+/* فتح الصورة full-screen بضغطة واحدة (lightbox بسيط) */
+function openMediaLightbox(url) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    overlay.onclick = () => overlay.remove();
+    overlay.innerHTML = `<img src="${escapeHtml(url)}" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.5)">`;
+    document.body.appendChild(overlay);
 }
 
 function renderMessages(c) {
@@ -3502,7 +3625,212 @@ async function generateAIReply() {
         lucide.createIcons();
     }
 }
-function toggleVoice() { showToast('Voice recording started', 'info'); }
+/* ============================================================
+   إرسال وسائط (صور/فيديوهات/صوتيات/مستندات) — مبني على نفس فلسفة
+   sendMessage() (إضافة optimistic فورية + تأكيد لاحق عن طريق الـ socket)،
+   بس هنا بيتبعت ملف فعلي بـ FormData بدل JSON عادي، وبيتطابق بـ client_id
+   بدل النص (لأن أكتر من ملف ممكن يتبعتوا بنفس اللحظة/الكابشن)
+============================================================ */
+function detectMediaKind(mimeType) {
+    if (!mimeType) return 'document';
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    return 'document';
+}
+
+function generateClientId() {
+    return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+}
+
+async function sendMediaFile(file, caption = '') {
+    if (!selectedChatId) return;
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c) return;
+
+    if (c.rawStatus === 'closed') {
+        showToast('المحادثة دي متقفلة (Resolved) — اعمل Reopen الأول عشان تقدر تبعت رسالة', 'error');
+        return;
+    }
+
+    const clientId = generateClientId();
+    const kind = detectMediaKind(file.type);
+    const localUrl = URL.createObjectURL(file);
+    const nowIso = new Date().toISOString();
+
+    c.messages.push({
+        from: 'agent',
+        text: caption,
+        time: formatMessageTimestamp(nowIso),
+        rawTime: nowIso,
+        senderName: AUTH_USER.display_name || AUTH_USER.email,
+        _pending: true,
+        _clientId: clientId,
+        type: kind,
+        mediaUrl: localUrl,
+        mediaMime: file.type,
+        fileName: file.name
+    });
+    c.lastMsg = caption || mediaKindLabel(kind);
+    renderMessages(c);
+    renderChatList(currentFilter, document.querySelector('.cl-search').value);
+
+    const pendingMsg = c.messages[c.messages.length - 1];
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file, file.name);
+        if (caption) formData.append('caption', caption);
+        formData.append('clientId', clientId);
+
+        // بنستخدم fetch مباشرة بدل apiFetch عشان apiFetch بتفرض Content-Type: application/json
+        // اللي بيكسر الـ multipart boundary — هنا لازم نسيب المتصفح يحطه لوحده
+        const res = await fetch(`${BACKEND_URL}/api/conversations/${c.id}/reply-media`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+            body: formData
+        });
+        if (res.status === 401) {
+            localStorage.removeItem('nilechat_token');
+            localStorage.removeItem('nilechat_user');
+            window.location.href = '/index.html';
+            return;
+        }
+        let data = null;
+        try { data = await res.json(); } catch (_) { /* ممكن الرد يكون فاضي */ }
+        if (!res.ok) throw new Error((data && data.error) || `فشل رفع الملف (HTTP ${res.status})`);
+        // زي sendMessage تمامًا: الـ socket هو اللي هيأكد الرسالة فعليًا (new_message)
+        // أو يعلّمها فشلت (message_failed) لما الرفع لواتساب يخلص فعليًا في الخلفية
+    } catch (err) {
+        console.error('[API] sendMediaFile error:', err);
+        showToast(err.message || 'فشل رفع الملف — تأكد من اتصال الباك إند', 'error');
+        if (pendingMsg && pendingMsg._pending) pendingMsg.failed = true;
+        renderMessages(c);
+    }
+}
+
+function handleAttachFileChosen(event) {
+    const input = event.target;
+    const file = input.files && input.files[0];
+    input.value = ''; // نصفّر القيمة عشان اختيار نفس الملف تاني كمان يشتغل
+    if (!file) return;
+
+    const MAX_SIZE = 30 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        showToast('الملف ده أكبر من 30MB — اختار ملف أصغر', 'error');
+        return;
+    }
+    sendMediaFile(file);
+}
+
+/* ============================================================
+   تسجيل ريكوردات صوتية (Voice notes) عن طريق MediaRecorder — أول ضغطة
+   على زرار المايك بتبدأ التسجيل (وبتظهر شريط التسجيل + العداد)، وتاني
+   ضغطة بتوقفه وتبعته تلقائيًا كملف صوتي. زرار "Cancel" بيلغي التسجيل
+   من غير ما يبعت حاجة
+============================================================ */
+let voiceRecorder = null;
+let voiceChunks = [];
+let voiceStream = null;
+let voiceStartedAt = null;
+let voiceTimerInterval = null;
+let voiceCancelled = false;
+
+function pickVoiceMimeType() {
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    for (const type of candidates) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return '';
+}
+
+async function toggleVoice() {
+    if (voiceRecorder && voiceRecorder.state === 'recording') {
+        voiceCancelled = false;
+        voiceRecorder.stop();
+        return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+        showToast('المتصفح ده مش بيدعم تسجيل الصوت', 'error');
+        return;
+    }
+    if (!selectedChatId) {
+        showToast('افتح محادثة الأول عشان تبعت ريكورد', 'error');
+        return;
+    }
+
+    try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+        showToast('مقدرناش نوصل للمايك — تأكد إنك سمحت للمتصفح بالوصول', 'error');
+        return;
+    }
+
+    const mimeType = pickVoiceMimeType();
+    voiceChunks = [];
+    voiceCancelled = false;
+    voiceRecorder = mimeType ? new MediaRecorder(voiceStream, { mimeType }) : new MediaRecorder(voiceStream);
+
+    voiceRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) voiceChunks.push(e.data); };
+    voiceRecorder.onstop = () => {
+        clearInterval(voiceTimerInterval);
+        voiceTimerInterval = null;
+        if (voiceStream) { voiceStream.getTracks().forEach(t => t.stop()); voiceStream = null; }
+        setVoiceRecordingUI(false);
+
+        if (!voiceCancelled && voiceChunks.length) {
+            const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || 'audio/webm' });
+            const ext = (voiceRecorder.mimeType || '').includes('mp4') ? 'm4a' : 'webm';
+            const file = new File([blob], `voice-note-${Date.now()}.${ext}`, { type: blob.type });
+            sendMediaFile(file);
+        }
+        voiceChunks = [];
+        voiceRecorder = null;
+    };
+
+    voiceRecorder.start();
+    voiceStartedAt = Date.now();
+    setVoiceRecordingUI(true);
+    voiceTimerInterval = setInterval(updateVoiceRecordingTime, 250);
+}
+
+function cancelVoiceRecording() {
+    if (voiceRecorder && voiceRecorder.state === 'recording') {
+        voiceCancelled = true;
+        voiceRecorder.stop();
+    }
+}
+
+function setVoiceRecordingUI(active) {
+    const bar = document.getElementById('voice-recording-bar');
+    const input = document.getElementById('msg-input');
+    const voiceBtn = document.getElementById('voice-btn');
+    const sendBtn = document.querySelector('.send-btn');
+    const attachBtn = document.getElementById('attach-btn');
+    if (bar) bar.classList.toggle('active', active);
+    if (input) input.style.display = active ? 'none' : '';
+    if (voiceBtn) {
+        voiceBtn.classList.toggle('recording', active);
+        voiceBtn.title = active ? 'Stop & send' : 'Voice note';
+        voiceBtn.innerHTML = active
+            ? '<i data-lucide="square" style="width:16px;height:16px"></i>'
+            : '<i data-lucide="mic" style="width:20px;height:20px"></i>';
+        if (window.lucide) lucide.createIcons();
+    }
+    if (sendBtn) sendBtn.style.display = active ? 'none' : '';
+    if (attachBtn) attachBtn.style.visibility = active ? 'hidden' : '';
+    if (active) updateVoiceRecordingTime();
+}
+
+function updateVoiceRecordingTime() {
+    const el = document.getElementById('voice-recording-time');
+    if (!el || !voiceStartedAt) return;
+    const seconds = Math.floor((Date.now() - voiceStartedAt) / 1000);
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+}
 
 /* ===== فتح/إغلاق لوحة العميل (فقط بالضغط على أيقونة البروفايل) ===== */
 function toggleCustomerPanel() {

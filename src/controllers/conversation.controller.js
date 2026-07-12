@@ -8,6 +8,7 @@ const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
 const groqAiService = require('../services/groqAi.service');
+const mediaStorage = require('../utils/mediaStorage');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
@@ -325,6 +326,79 @@ async function reply(req, res) {
     });
 }
 
+// أنواع MIME اللي بنقبلها وبنحولها لنوع رسالة واتساب مناسب (image/video/audio/document)
+function resolveWhatsappMessageType(mimeType) {
+  if (!mimeType) return 'document';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
+// بعت رد وسائط (صورة/فيديو/صوت/مستند) — نفس منطق reply() بالظبط بس للملفات،
+// بما فيه نفس تحقق القفل ونفس فلسفة "رجّع فورًا واستكمل في الخلفية"
+async function replyMedia(req, res) {
+  if (!req.file) return res.status(400).json({ error: 'لازم تبعت ملف' });
+
+  const caption = (req.body?.caption || '').trim() || null;
+  const clientId = req.body?.clientId || null;
+
+  const [conversation, sender] = await Promise.all([
+    conversationRepo.getConversationById(req.params.id),
+    userRepo.findUserById(req.user.userId),
+  ]);
+  if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
+  if (isConversationLocked(conversation)) {
+    return res.status(409).json({ error: LOCKED_ERROR });
+  }
+
+  const senderInfo = sender ? { id: sender.id, name: userRepo.resolveDisplayName(sender) } : null;
+  const messageType = resolveWhatsappMessageType(req.file.mimetype);
+
+  // بنخزن نسخة محلية من الملف فورًا (نفس الملف اللي هيترفع لواتساب) عشان
+  // تظهر في الشات على طول من غير ما تستنى رفع واتساب يخلص
+  const { publicUrl } = mediaStorage.saveBuffer(req.file.buffer, {
+    folder: 'outgoing',
+    mimeType: req.file.mimetype,
+    originalName: req.file.originalname,
+  });
+
+  const io = req.app.get('io');
+  res.json({ ok: true, clientId });
+
+  conversationService
+    .sendMediaReplyLive(
+      conversation,
+      {
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+        fileName: req.file.originalname,
+        messageType,
+        caption,
+        publicUrl,
+      },
+      senderInfo,
+      () => {}
+    )
+    .then((message) => {
+      if (io) io.emit('new_message', { conversationId: conversation.id, message: { ...message, client_id: clientId } });
+      webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_CREATED, {
+        conversation_id: conversation.id,
+        message: {
+          id: message.id,
+          type: messageType,
+          direction: 'out',
+          sent_by: senderInfo,
+          created_at: message.created_at,
+        },
+      }).catch((err) => logger.error('❌ فشل إرسال Webhook message_created:', err.message));
+    })
+    .catch((err) => {
+      logger.error('❌ فشل تسجيل/إرسال رد الوسائط:', err.message);
+      if (io) io.emit('message_failed', { conversationId: conversation.id, clientId });
+    });
+}
+
 // ===== WhatsApp Webhook =====
 
 // Meta بتعمل GET request مرة واحدة وقت الإعداد للتحقق من الـ webhook
@@ -375,6 +449,7 @@ module.exports = {
   resolve,
   reopen,
   reply,
+  replyMedia,
   addNote,
   generateReply,
   verifyWebhook,
