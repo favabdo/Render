@@ -310,6 +310,38 @@ async function ensureContactsTableExists() {
   `);
 }
 
+// كارت "عميل صيانة" (Add Customer، أدمن بس): مكان العميل، تاريخ التعاقد، وتاريخ
+// انتهاء عقد الصيانة. الأعمدة دي بتفضل NULL لأي كونتاكت عادي جاي من واتساب —
+// بتتملى بس لما الأدمن يضيف الكونتاكت من زرار "Add Contact" في صفحة Contacts
+async function ensureContactsHaveCustomerCardColumns() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'location'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD location NVARCHAR(300) NULL;
+    END
+
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'contract_date'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD contract_date DATE NULL;
+    END
+
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'maintenance_end_date'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD maintenance_end_date DATE NULL;
+    END
+  `);
+}
+
 async function ensureContactPhonesTableExists() {
   const pool = await getPool();
   await pool.request().query(`
@@ -757,6 +789,7 @@ async function ensureSchema() {
   await ensureConversationsHaveResolveColumns();
   await ensureConversationsHaveLockColumn();
   await ensureContactsTableExists();
+  await ensureContactsHaveCustomerCardColumns();
   await ensureContactPhonesTableExists();
   await ensureContactPhonesHaveLabelColumn();
   await ensureConversationsHaveContactColumn();
@@ -791,6 +824,7 @@ module.exports = {
   ensureConversationsHaveResolveColumns,
   ensureConversationsHaveLockColumn,
   ensureContactsTableExists,
+  ensureContactsHaveCustomerCardColumns,
   ensureContactPhonesTableExists,
   ensureContactPhonesHaveLabelColumn,
   ensureConversationsHaveContactColumn,

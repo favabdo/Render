@@ -89,4 +89,75 @@ async function linkConversationContact(req, res) {
   res.json({ ok: true, conversation: updated });
 }
 
-module.exports = { listContacts, getContact, getContactConversations, updateContact, updatePhoneLabel, linkConversationContact };
+// إضافة "كارت عميل صيانة" جديد (زرار Add Contact في صفحة Contacts) — أدمن بس
+// (متأكد منها فعليًا في الراوت بـ requireAdmin). بيطلب: اسم العميل، مكانه،
+// رقم تليفونه، تاريخ التعاقد، وتاريخ انتهاء عقد الصيانة
+async function createCustomerCard(req, res) {
+  const { name, location, phone, contractDate, maintenanceEndDate } = req.body || {};
+
+  const trimmedName = (name || '').trim();
+  const trimmedPhone = (phone || '').trim();
+  if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
+  if (!trimmedPhone) return res.status(400).json({ error: 'لازم تكتب رقم تليفون العميل' });
+
+  const existing = await contactRepo.findContactByPhone(trimmedPhone);
+  if (existing) {
+    return res.status(409).json({ error: 'الرقم ده مسجل بالفعل لعميل موجود' });
+  }
+
+  const contact = await contactRepo.createCustomerContact({
+    name: trimmedName,
+    phoneNumber: trimmedPhone,
+    location: (location || '').trim() || null,
+    contractDate: contractDate || null,
+    maintenanceEndDate: maintenanceEndDate || null,
+  });
+
+  const io = req.app.get('io');
+  if (io) io.emit('contact_created', contact);
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
+    contact_id: contact.id,
+    name: contact.name,
+    phone: trimmedPhone,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_created:', err.message));
+
+  res.status(201).json({ ok: true, contact });
+}
+
+// تعديل بيانات كارت عميل الصيانة (زرار Edit في صفحة التفاصيل) — أدمن بس
+async function updateCustomerCard(req, res) {
+  const { name, location, contractDate, maintenanceEndDate } = req.body || {};
+
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
+
+  const contact = await contactRepo.updateCustomerDetails(req.params.id, {
+    name: trimmedName,
+    location: (location || '').trim() || null,
+    contractDate: contractDate || null,
+    maintenanceEndDate: maintenanceEndDate || null,
+  });
+  if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const io = req.app.get('io');
+  if (io) io.emit('contact_updated', contact);
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: contact.id,
+    name: contact.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
+  res.json({ ok: true, contact });
+}
+
+module.exports = {
+  listContacts,
+  getContact,
+  getContactConversations,
+  updateContact,
+  updatePhoneLabel,
+  linkConversationContact,
+  createCustomerCard,
+  updateCustomerCard,
+};

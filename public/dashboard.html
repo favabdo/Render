@@ -125,6 +125,8 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
 .chat-header-status{font-size:12px;color:var(--success);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-header-labels{display:none;align-items:center;gap:8px;padding:8px 20px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12.5px;border-right:3px solid transparent}
 .chat-header-labels.show{display:flex}
+.chat-maintenance-banner{display:none;align-items:center;gap:8px;padding:8px 20px;background:rgba(239,68,68,0.12);color:var(--danger);border-bottom:1px solid rgba(239,68,68,0.3);font-size:12.5px;font-weight:600}
+.chat-maintenance-banner.show{display:flex}
 .chat-header-labels .chlbl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .chat-header-labels .chlbl-name{font-weight:700;flex-shrink:0;white-space:nowrap}
 .chat-header-labels .chlbl-desc{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -800,6 +802,10 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 </div>
             </div>
             <div class="chat-header-labels" id="chat-header-labels"></div>
+            <div class="chat-maintenance-banner" id="chat-maintenance-banner">
+                <i data-lucide="alert-triangle" style="width:15px;height:15px;flex-shrink:0"></i>
+                <span id="chat-maintenance-banner-text"></span>
+            </div>
             <div class="chat-search-bar" id="chat-search-bar">
                 <i data-lucide="search" style="width:15px;height:15px;color:var(--text-secondary);flex-shrink:0"></i>
                 <input type="text" id="chat-search-input" placeholder="ابحث في الرسايل..." oninput="performChatSearch(this.value)" onkeydown="handleChatSearchKey(event)">
@@ -1025,7 +1031,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     <div class="page-content">
         <div class="page-header">
             <h2>Contacts</h2>
-            <button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Contact</button>
+            <button class="page-btn" id="add-customer-btn" style="display:none" onclick="openAddCustomerModal()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Contact</button>
         </div>
         <div style="max-width:500px;margin-bottom:24px">
             <div class="cl-search-wrap">
@@ -1615,7 +1621,10 @@ function mapApiConversation(row) {
         // بنخزن الخام (raw) بتاع آخر رسالة عشان نقدر نكتشف "فيه رسالة جديدة"
         // بدقة أثناء الـ polling، حتى لو الوقت المعروض (time) اتنسق بنفس الشكل
         _lastMessageAtRaw: row.last_message_at || null,
-        _lastMessageDirection: row.last_message_direction || null
+        _lastMessageDirection: row.last_message_direction || null,
+        // تاريخ انتهاء عقد الصيانة بتاع العميل ده (لو مسجل كـ "كارت عميل صيانة") —
+        // بيستخدم عشان نعرض شريط تحذير أحمر فوق الشات لو العقد منتهي (شوف selectChat)
+        maintenanceEndDate: row.contact_maintenance_end_date || null,
     };
 }
 
@@ -2253,6 +2262,10 @@ function applyRoleVisibility() {
     const canSeeSettings = isOwnerOrAdmin();
     const settingsBtn = document.querySelector('.sidebar-btn[data-page="settings"]');
     if (settingsBtn) settingsBtn.style.display = canSeeSettings ? '' : 'none';
+
+    // زرار "Add Contact" في صفحة Contacts (كارت عميل الصيانة) — أدمن/أونر بس
+    const addCustomerBtn = document.getElementById('add-customer-btn');
+    if (addCustomerBtn) addCustomerBtn.style.display = canSeeSettings ? '' : 'none';
 
     // لو الإيجنت العادي كان واقف على صفحة settings (رابط قديم/مفتوحة قبل تحديث الرول)، رجّعه للشاتس
     if (!canSeeSettings && currentPage === 'settings') {
@@ -2895,6 +2908,7 @@ function selectChat(id) {
         document.getElementById('ch-status').style.color = c.status === 'open' ? 'var(--success)' : c.status === 'pending' ? 'var(--warning)' : 'var(--text-secondary)';
 
         applyConversationStatusUI(c);
+        applyMaintenanceBanner(c);
 
         renderMessages(c);
         if (!c._messagesLoaded) loadMessagesForConversation(c);
@@ -4859,12 +4873,27 @@ function renderContacts() {
         grid.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">لا توجد جهات اتصال لعرضها</div>';
         return;
     }
-    grid.innerHTML = contactsData.map(c => `
-        <div class="contact-card" onclick="openConversationForContact(${c.id})">
+    grid.innerHTML = contactsData.map(c => {
+        // كل كروت الـ Contacts دلوقتي بتوديك على صفحة التفاصيل (سواء العميل ده
+        // اتضاف يدوي من زرار Add Contact، أو اتسجل أوتوماتيك من واتساب) — ومن
+        // صفحة التفاصيل تقدر تفتح المحادثة بتاعته، أو (لو أدمن) تضيف/تعدّل بيانات
+        // عقد الصيانة حتى لو العميل ده مالوش بيانات عقد مسجلة أصلًا لسه
+        const hasMaintenanceInfo = !!c.maintenance_end_date;
+        const isExpired = hasMaintenanceInfo && new Date(c.maintenance_end_date) < new Date(new Date().toDateString());
+        const badge = hasMaintenanceInfo
+            ? `<div class="contact-card-info" style="margin-top:4px;font-weight:700;color:${isExpired ? 'var(--danger)' : 'var(--success)'}">
+                   <i data-lucide="${isExpired ? 'alert-triangle' : 'shield-check'}" style="width:12px;height:12px;vertical-align:-2px"></i>
+                   ${isExpired ? 'عقد الصيانة منتهي' : 'عميل صيانة'}
+               </div>`
+            : '';
+        return `
+        <div class="contact-card" onclick="openCustomerDetails(${c.id})">
             <div class="contact-card-avatar">${customerAvatarHtml(c.name, 'contact-' + c.id, 52)}</div>
-            <div><div class="contact-card-name">${escapeHtml(c.name || 'بدون اسم')}</div>${(c.phones || []).map(p => `<div class="contact-card-info">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>`).join('')}</div>
+            <div><div class="contact-card-name">${escapeHtml(c.name || 'بدون اسم')}</div>${(c.phones || []).map(p => `<div class="contact-card-info">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>`).join('')}${badge}</div>
         </div>
-    `).join('');
+    `;
+    }).join('');
+    lucide.createIcons();
 }
 
 /* بيدور على أحدث محادثة مرتبطة بالكونتاكت ده ويفتحها، أو بيرجعلك رسالة لو مفيش محادثات لسه */
@@ -4876,6 +4905,170 @@ function openConversationForContact(contactId) {
     }
     navigateTo('chats');
     setTimeout(() => selectChat(conv.id), 100);
+}
+
+/* ===== كارت "عميل صيانة" (Add Contact بمعلومات العقد — أدمن بس) ===== */
+let customerCardMode = 'add'; // 'add' | 'edit'
+let customerCardEditingId = null;
+
+function openAddCustomerModal() {
+    customerCardMode = 'add';
+    customerCardEditingId = null;
+    document.getElementById('customer-card-modal-title').textContent = 'Add Customer';
+    document.getElementById('customer-card-confirm-text').textContent = 'Add Customer';
+    document.getElementById('customer-card-name').value = '';
+    document.getElementById('customer-card-location').value = '';
+    document.getElementById('customer-card-phone').value = '';
+    document.getElementById('customer-card-phone').disabled = false;
+    document.getElementById('customer-card-contract-date').value = '';
+    document.getElementById('customer-card-maintenance-date').value = '';
+    document.getElementById('customer-card-error').textContent = '';
+    document.getElementById('customer-card-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+function closeCustomerCardModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('customer-card-overlay').classList.remove('show');
+}
+
+async function submitCustomerCard() {
+    const name = document.getElementById('customer-card-name').value.trim();
+    const location = document.getElementById('customer-card-location').value.trim();
+    const phone = document.getElementById('customer-card-phone').value.trim();
+    const contractDate = document.getElementById('customer-card-contract-date').value || null;
+    const maintenanceEndDate = document.getElementById('customer-card-maintenance-date').value || null;
+    const errorEl = document.getElementById('customer-card-error');
+    errorEl.textContent = '';
+
+    if (!name) return (errorEl.textContent = 'لازم تكتب اسم العميل');
+    if (customerCardMode === 'add' && !phone) return (errorEl.textContent = 'لازم تكتب رقم تليفون العميل');
+
+    const btn = document.getElementById('customer-card-confirm-btn');
+    btn.disabled = true;
+    try {
+        const url = customerCardMode === 'add'
+            ? '/api/contacts/customer-card'
+            : `/api/contacts/${customerCardEditingId}/customer-card`;
+        const method = customerCardMode === 'add' ? 'POST' : 'PATCH';
+        const body = customerCardMode === 'add'
+            ? { name, location, phone, contractDate, maintenanceEndDate }
+            : { name, location, contractDate, maintenanceEndDate };
+
+        const res = await apiFetch(url, { method, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'حصل خطأ');
+
+        closeCustomerCardModal();
+        showToast(customerCardMode === 'add' ? 'تم إضافة العميل' : 'تم تحديث بيانات العميل', 'success');
+        await loadContactsPage();
+
+        // لو كنا فاتحين صفحة التفاصيل بتاعة نفس العميل، حدّثها فورًا بالبيانات الجديدة
+        if (customerCardMode === 'edit' && document.getElementById('customer-details-overlay').classList.contains('show')) {
+            openCustomerDetails(customerCardEditingId);
+        }
+    } catch (err) {
+        console.error('[API] submitCustomerCard error:', err);
+        errorEl.textContent = err.message || 'حصل خطأ، حاول تاني';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/* بيحسب الفرق بين تاريخين بالأيام، وبيرجعه كنص واضح (أيام + تقريبًا شهور) */
+function formatDurationDays(fromDate, toDate) {
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+    from.setHours(0, 0, 0, 0);
+    to.setHours(0, 0, 0, 0);
+    const days = Math.round((to - from) / (1000 * 60 * 60 * 24));
+    if (isNaN(days)) return '-';
+    const months = Math.round(days / 30.44);
+    return `${days} يوم (~${months} شهر)`;
+}
+
+let customerDetailsCache = null;
+
+async function openCustomerDetails(contactId) {
+    try {
+        const res = await apiFetch(`/api/contacts/${contactId}`);
+        if (!res.ok) throw new Error('تعذر تحميل بيانات العميل');
+        const c = await res.json();
+        customerDetailsCache = c;
+
+        document.getElementById('customer-details-name').textContent = c.name || 'بدون اسم';
+        document.getElementById('customer-details-location').textContent = c.location || '-';
+        document.getElementById('customer-details-phone').textContent = (c.phones || []).map(p => p.phone_number).join(', ') || '-';
+        document.getElementById('customer-details-contract-date').textContent = formatSchedDate(c.contract_date);
+        document.getElementById('customer-details-maintenance-date').textContent = formatSchedDate(c.maintenance_end_date);
+
+        if (c.contract_date && c.maintenance_end_date) {
+            document.getElementById('customer-details-duration').textContent = formatDurationDays(c.contract_date, c.maintenance_end_date);
+        } else {
+            document.getElementById('customer-details-duration').textContent = '-';
+        }
+
+        const remainingEl = document.getElementById('customer-details-remaining');
+        if (c.maintenance_end_date) {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const end = new Date(c.maintenance_end_date); end.setHours(0, 0, 0, 0);
+            const diffDays = Math.round((end - today) / (1000 * 60 * 60 * 24));
+            if (diffDays >= 0) {
+                remainingEl.textContent = `متبقي ${diffDays} يوم`;
+                remainingEl.style.color = diffDays <= 7 ? 'var(--warning)' : 'var(--success)';
+            } else {
+                remainingEl.textContent = `منتهي من ${Math.abs(diffDays)} يوم`;
+                remainingEl.style.color = 'var(--danger)';
+            }
+        } else {
+            remainingEl.textContent = '-';
+            remainingEl.style.color = '';
+        }
+
+        // زرار التعديل بيظهر للأدمن/الأونر بس
+        document.getElementById('customer-details-edit-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
+
+        document.getElementById('customer-details-overlay').classList.add('show');
+        lucide.createIcons();
+    } catch (err) {
+        console.error('[API] openCustomerDetails error:', err);
+        showToast(err.message || 'تعذر تحميل بيانات العميل', 'error');
+    }
+}
+
+function closeCustomerDetailsModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('customer-details-overlay').classList.remove('show');
+}
+
+/* بيقفل مودال التفاصيل ويفتح المحادثة الحالية بتاعة نفس العميل (لو موجودة) */
+function gotoConversationFromDetails() {
+    if (!customerDetailsCache) return;
+    const contactId = customerDetailsCache.id;
+    closeCustomerDetailsModal();
+    openConversationForContact(contactId);
+}
+
+/* بيفتح نفس مودال الإضافة بس في وضع تعديل، متعبي ببيانات العميل الحالي بتاع صفحة التفاصيل */
+function editCurrentCustomerCard() {
+    if (!customerDetailsCache) return;
+    const c = customerDetailsCache;
+    customerCardMode = 'edit';
+    customerCardEditingId = c.id;
+
+    document.getElementById('customer-card-modal-title').textContent = 'Edit Customer';
+    document.getElementById('customer-card-confirm-text').textContent = 'Save Changes';
+    document.getElementById('customer-card-name').value = c.name || '';
+    document.getElementById('customer-card-location').value = c.location || '';
+    document.getElementById('customer-card-phone').value = (c.phones || []).map(p => p.phone_number).join(', ');
+    document.getElementById('customer-card-phone').disabled = true; // الرقم مش بيتعدل من هنا
+    document.getElementById('customer-card-contract-date').value = c.contract_date ? String(c.contract_date).slice(0, 10) : '';
+    document.getElementById('customer-card-maintenance-date').value = c.maintenance_end_date ? String(c.maintenance_end_date).slice(0, 10) : '';
+    document.getElementById('customer-card-error').textContent = '';
+
+    closeCustomerDetailsModal();
+    document.getElementById('customer-card-overlay').classList.add('show');
+    lucide.createIcons();
 }
 
 /* ===== سحب وترتيب عناصر القوائم (Drag & Drop) — بيتستخدم في Quick Replies و Problem Category =====
@@ -5899,6 +6092,100 @@ async function iwDeleteInbox(id) {
     </div>
 </div>
 
+<!-- كارت "عميل صيانة": إضافة/تعديل (أدمن بس) -->
+<div class="resolve-overlay" id="customer-card-overlay" onclick="closeCustomerCardModal(event)">
+    <div class="resolve-modal" id="customer-card-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" style="background:rgba(108,92,231,0.12);color:var(--primary)">
+                <i data-lucide="user-plus" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title" id="customer-card-modal-title">Add Customer</div>
+        </div>
+        <div class="resolve-modal-sub">بيانات عقد الصيانة الخاصة بالعميل ده</div>
+
+        <div class="resolve-cats-label">اسم العميل</div>
+        <input type="text" class="iw-input" id="customer-card-name" placeholder="اسم العميل" style="margin-bottom:12px">
+
+        <div class="resolve-cats-label">مكان العميل</div>
+        <input type="text" class="iw-input" id="customer-card-location" placeholder="العنوان / المكان" style="margin-bottom:12px">
+
+        <div class="resolve-cats-label">رقم التليفون</div>
+        <input type="text" class="iw-input" id="customer-card-phone" placeholder="رقم التليفون" style="margin-bottom:12px">
+
+        <div class="resolve-cats-label">تاريخ التعاقد</div>
+        <input type="date" class="iw-input" id="customer-card-contract-date" style="margin-bottom:12px">
+
+        <div class="resolve-cats-label">تاريخ انتهاء عقد الصيانة</div>
+        <input type="date" class="iw-input" id="customer-card-maintenance-date" style="margin-bottom:6px">
+
+        <div class="login-error" id="customer-card-error" style="color:var(--danger);font-size:12.5px;margin-top:8px;text-align:center"></div>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeCustomerCardModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="customer-card-confirm-btn" onclick="submitCustomerCard()">
+                <i data-lucide="check" style="width:16px;height:16px"></i>
+                <span id="customer-card-confirm-text">Add Customer</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- تفاصيل كارت "عميل صيانة" -->
+<div class="resolve-overlay" id="customer-details-overlay" onclick="closeCustomerDetailsModal(event)">
+    <div class="resolve-modal" id="customer-details-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" style="background:rgba(108,92,231,0.12);color:var(--primary)">
+                <i data-lucide="shield-check" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title" id="customer-details-name">-</div>
+        </div>
+        <div class="resolve-modal-sub">تفاصيل عقد الصيانة الخاص بالعميل ده</div>
+
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">المكان</div>
+                <div class="st-modal-readonly-value" id="customer-details-location">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">رقم التليفون</div>
+                <div class="st-modal-readonly-value" id="customer-details-phone">-</div>
+            </div>
+        </div>
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">تاريخ التعاقد</div>
+                <div class="st-modal-readonly-value" id="customer-details-contract-date">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">تاريخ انتهاء عقد الصيانة</div>
+                <div class="st-modal-readonly-value" id="customer-details-maintenance-date">-</div>
+            </div>
+        </div>
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">مدة التعاقد</div>
+                <div class="st-modal-readonly-value" id="customer-details-duration">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">الوقت المتبقي على انتهاء الصيانة</div>
+                <div class="st-modal-readonly-value" id="customer-details-remaining">-</div>
+            </div>
+        </div>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeCustomerDetailsModal()">إغلاق</button>
+            <button class="resolve-cancel-btn" id="customer-details-goto-btn" onclick="gotoConversationFromDetails()">
+                <i data-lucide="message-circle" style="width:16px;height:16px"></i>
+                فتح المحادثة
+            </button>
+            <button class="resolve-confirm-btn" id="customer-details-edit-btn" style="display:none" onclick="editCurrentCustomerCard()">
+                <i data-lucide="pencil" style="width:16px;height:16px"></i>
+                تعديل
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="resolve-overlay" id="resolve-overlay" onclick="closeResolveModal(event)">
     <div class="resolve-modal" id="resolve-modal">
         <div class="resolve-modal-header">
@@ -5973,6 +6260,35 @@ function applyConversationStatusUI(c) {
         if (resolvedBanner) resolvedBanner.classList.remove('show');
     }
     try { lucide.createIcons(); } catch (_) { /* مفيش دعوة، مش لازم توقف باقي التحديث */ }
+}
+
+/* لو العميل ده كارت "عميل صيانة" (له maintenanceEndDate) وعقد الصيانة بتاعه
+   عدى معاده، بنوري شريط تحذير أحمر فوق الشات عشان الإيجنت ياخد باله ومايكملش
+   معاه عادي من غير ما يعرف إن العقد منتهي. بتتنادى من selectChat() كل ما نفتح
+   محادثة، وبتتقفل تلقائي لو العميل مالوش عقد صيانة أو لسه ساري */
+function applyMaintenanceBanner(c) {
+    const banner = document.getElementById('chat-maintenance-banner');
+    const textEl = document.getElementById('chat-maintenance-banner-text');
+    if (!banner || !textEl) return;
+
+    if (!c.maintenanceEndDate) {
+        banner.classList.remove('show');
+        return;
+    }
+
+    const endDate = new Date(c.maintenanceEndDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today - endDate) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 0) {
+        const endDateStr = endDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        textEl.textContent = `عقد الصيانة الخاص بالعميل ده منتهي من ${diffDays} يوم (بتاريخ ${endDateStr}) — يرجى مراجعة الإدارة قبل الاستمرار في التعامل معاه`;
+        banner.classList.add('show');
+    } else {
+        banner.classList.remove('show');
+    }
 }
 
 // بتفتح تاني محادثة كانت اتعملها resolve — بتتسجل كـ رسالة نظام في الشات (زي الـ assign بالظبط)

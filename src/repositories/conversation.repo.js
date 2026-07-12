@@ -88,6 +88,9 @@ async function listConversations() {
       i.name AS inbox_name,
       ct.name AS contact_display_name,
       COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
+      ct.location AS contact_location,
+      ct.contract_date AS contact_contract_date,
+      ct.maintenance_end_date AS contact_maintenance_end_date,
       (
         SELECT TOP 1 m.message_text
         FROM [dbo].[${TABLE_NAME}] m
@@ -169,7 +172,10 @@ async function getConversationById(id) {
         COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
         i.name AS inbox_name,
         ct.name AS contact_display_name,
-        COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name
+        COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
+        ct.location AS contact_location,
+        ct.contract_date AS contact_contract_date,
+        ct.maintenance_end_date AS contact_maintenance_end_date
       FROM [dbo].[NileChat_Conversations_byA] c
       LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
       LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by

@@ -93,7 +93,11 @@ async function listContacts() {
   const pool = await getPool();
   const contactsResult = await pool
     .request()
-    .query(`SELECT id, name, created_at FROM [dbo].[NileChat_Contacts_byA] ORDER BY name ASC`);
+    .query(`
+      SELECT id, name, location, contract_date, maintenance_end_date, created_at
+      FROM [dbo].[NileChat_Contacts_byA]
+      ORDER BY name ASC
+    `);
   const phonesResult = await pool
     .request()
     .query(`SELECT contact_id, phone_number, label FROM [dbo].[NileChat_ContactPhones_byA] ORDER BY created_at ASC`);
@@ -156,9 +160,63 @@ async function deletePhonelessContact(contactId) {
   return true;
 }
 
+// بينشئ "كارت عميل صيانة" (Add Contact بتاع الأدمن): كونتاكت جديد بمكانه، تاريخ
+// تعاقده، وتاريخ انتهاء عقد الصيانة بتاعه — بالإضافة لرقم تليفونه العادي زي أي
+// كونتاكت تاني. القيم دي هي اللي بتفرّق الكارت ده عن كارت الكونتاكت العادي
+// الجاي أوتوماتيك من واتساب (اللي مالوش location/contract_date/maintenance_end_date)
+async function createCustomerContact({ name, phoneNumber, location, contractDate, maintenanceEndDate }) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('name', sql.NVarChar(200), name)
+    .input('location', sql.NVarChar(300), location || null)
+    .input('contractDate', sql.Date, contractDate || null)
+    .input('maintenanceEndDate', sql.Date, maintenanceEndDate || null)
+    .query(`
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, maintenance_end_date)
+      OUTPUT INSERTED.*
+      VALUES (@name, @location, @contractDate, @maintenanceEndDate)
+    `);
+  const contact = result.recordset[0];
+
+  await pool
+    .request()
+    .input('contactId', sql.BigInt, contact.id)
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .query(`
+      INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
+      VALUES (@contactId, @phone)
+    `);
+
+  return getContactByIdWithPhones(contact.id);
+}
+
+// تعديل بيانات كارت عميل الصيانة (أدمن بس) — الاسم، المكان، تاريخ التعاقد،
+// وتاريخ انتهاء عقد الصيانة
+async function updateCustomerDetails(id, { name, location, contractDate, maintenanceEndDate }) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('name', sql.NVarChar(200), name)
+    .input('location', sql.NVarChar(300), location || null)
+    .input('contractDate', sql.Date, contractDate || null)
+    .input('maintenanceEndDate', sql.Date, maintenanceEndDate || null)
+    .query(`
+      UPDATE [dbo].[NileChat_Contacts_byA]
+      SET name = @name, location = @location, contract_date = @contractDate, maintenance_end_date = @maintenanceEndDate
+      OUTPUT INSERTED.*
+      WHERE id = @id
+    `);
+  if (!result.recordset[0]) return null;
+  return getContactByIdWithPhones(id);
+}
+
 module.exports = {
   findContactByPhone,
   createContactWithPhone,
+  createCustomerContact,
+  updateCustomerDetails,
   getContactById,
   getContactByIdWithPhones,
   getPhonesForContact,
