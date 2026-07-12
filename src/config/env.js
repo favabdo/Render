@@ -24,6 +24,12 @@ module.exports = {
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   MAIL_FROM: process.env.MAIL_FROM || 'NileChat <onboarding@resend.dev>',
 
+  // مفتاح Groq (https://console.groq.com/keys) — بيتستخدم في زرار "Generate Reply" اللي
+  // بيقترح رد جاهز للإيجنت بالذكاء الاصطناعي بناءً على سياق المحادثة كامل. لو سيبته فاضي
+  // الزرار هيفضل موجود بس مش هيعمل حاجة لما يتدوس عليه (مفيش أي Error هيظهر للإيجنت)
+  GROQ_API_KEY: process.env.GROQ_API_KEY || '',
+  GROQ_MODEL: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+
   DB_TABLE_NAME: process.env.DB_TABLE_NAME || 'NileChat_byA',
   DB: {
     user: process.env.DB_USER,

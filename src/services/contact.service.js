@@ -85,4 +85,39 @@ async function linkContactToConversation(conversation, { mode, contactId, name }
   return targetContact;
 }
 
-module.exports = { findOrCreateContactForIncoming, linkContactToConversation };
+// بيفصل رقم تليفون من كونتاكت عنده أكتر من رقم، وينشئ كونتاكت جديد منفصل بيه
+// (بنفس الاسم افتراضيًا أو باسم تاني لو اتبعت)، وبينقل كل المحادثات القديمة
+// بتاعة الرقم ده تتبع الكونتاكت الجديد بدل القديم
+async function unlinkContactPhone(contactId, phoneNumber, newName) {
+  const phones = await contactRepo.getPhonesForContact(contactId);
+  if (phones.length <= 1) {
+    const err = new Error('العميل ده رقم واحد بس، مينفعش تفصله');
+    err.status = 400;
+    throw err;
+  }
+  const belongsToThisContact = phones.some((p) => p.phone_number === phoneNumber);
+  if (!belongsToThisContact) {
+    const err = new Error('الرقم ده مش تابع للعميل ده');
+    err.status = 404;
+    throw err;
+  }
+
+  const newContact = await contactRepo.unlinkPhoneToNewContact(contactId, phoneNumber, newName);
+  if (!newContact) {
+    const err = new Error('تعذر فصل الرقم');
+    err.status = 500;
+    throw err;
+  }
+
+  await conversationRepo.reassignConversationsContactByNumber(phoneNumber, newContact.id);
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
+    contact_id: newContact.id,
+    name: newContact.name,
+    phone: phoneNumber,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_created:', err.message));
+
+  return newContact;
+}
+
+module.exports = { findOrCreateContactForIncoming, linkContactToConversation, unlinkContactPhone };

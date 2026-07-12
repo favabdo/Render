@@ -13,5 +13,6 @@ router.post('/api/conversations/:id/resolve', asyncHandler(conversationControlle
 router.post('/api/conversations/:id/reopen', asyncHandler(conversationController.reopen));
 router.post('/api/conversations/:id/reply', asyncHandler(conversationController.reply));
 router.post('/api/conversations/:id/notes', asyncHandler(conversationController.addNote));
+router.post('/api/conversations/:id/generate-reply', asyncHandler(conversationController.generateReply));
 
 module.exports = router;

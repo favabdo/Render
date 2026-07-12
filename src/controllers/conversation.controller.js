@@ -7,6 +7,7 @@ const companyRepo = require('../repositories/company.repo');
 const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
+const groqAiService = require('../services/groqAi.service');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
@@ -251,6 +252,28 @@ async function addNote(req, res) {
     });
 }
 
+// زرار "Generate Reply" — بيقترح رد جاهز بالذكاء الاصطناعي (Groq) بناءً على كل
+// المحادثة زي ما هي بالظبط، عشان الإيجنت يرد بسرعة. لو مفيش GROQ_API_KEY متظبط في
+// الـ .env، بنرجع 204 (من غير أي body) والواجهة في الحالة دي مبتعملش أي حاجة خالص
+// (مفيش توست ولا Error) — الميزة دي بتبقى معطلة بس من غير ما تكسر حاجة.
+async function generateReply(req, res) {
+  if (!env.GROQ_API_KEY) {
+    return res.status(204).end();
+  }
+
+  const conversation = await conversationRepo.getConversationById(req.params.id);
+  if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
+
+  const messages = await conversationRepo.getMessagesForConversation(req.params.id);
+  const suggestion = await groqAiService.generateReplySuggestion(messages);
+
+  // ده مش المفروض يحصل عمليًا (لو دخلنا هنا يبقى الـ key موجود)، بس تحسبًا لأي تغيير
+  // في env وقت التشغيل نرجع 204 بدل ما نرمي Error يظهر للإيجنت
+  if (suggestion === null) return res.status(204).end();
+
+  res.json({ reply: suggestion });
+}
+
 async function reply(req, res) {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'لازم تبعت text' });
@@ -353,6 +376,7 @@ module.exports = {
   reopen,
   reply,
   addNote,
+  generateReply,
   verifyWebhook,
   receiveWebhook,
 };

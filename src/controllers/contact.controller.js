@@ -151,6 +151,24 @@ async function updateCustomerCard(req, res) {
   res.json({ ok: true, contact });
 }
 
+// بيفصل رقم تليفون من كونتاكت عنده أكتر من رقم، وبينشئ كونتاكت جديد منفصل بيه —
+// عكس linkConversationContact (اللي بيدمج). متاح لكل الصلاحيات زي الدمج بالظبط
+async function unlinkPhone(req, res) {
+  const { phone, name } = req.body || {};
+  if (!phone) return res.status(400).json({ error: 'لازم تبعت رقم التليفون' });
+
+  const newContact = await contactService.unlinkContactPhone(req.params.id, phone, name);
+  const updatedOldContact = await contactRepo.getContactByIdWithPhones(req.params.id);
+
+  const io = req.app.get('io');
+  if (io) {
+    io.emit('contact_created', newContact);
+    if (updatedOldContact) io.emit('contact_updated', updatedOldContact);
+  }
+
+  res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
+}
+
 module.exports = {
   listContacts,
   getContact,
@@ -158,6 +176,7 @@ module.exports = {
   updateContact,
   updatePhoneLabel,
   linkConversationContact,
+  unlinkPhone,
   createCustomerCard,
   updateCustomerCard,
 };

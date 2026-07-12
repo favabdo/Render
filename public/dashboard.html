@@ -84,10 +84,10 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
     .resolve-btn #resolve-btn-text{display:none}
     .ch-action-btn{width:34px;height:34px}
     .chat-search-bar{padding:8px 12px}
-    .chat-input-area{padding:10px 12px calc(12px + env(safe-area-inset-bottom));gap:6px}
+    .chat-input-area{padding:6px 12px calc(12px + env(safe-area-inset-bottom));gap:6px}
     .saved-replies-bar{padding:8px 12px}
     #emoji-btn,#voice-btn{display:none}
-    .note-toggle-bar{padding:6px 12px 0}
+    .note-toggle-bar{padding:6px 12px 4px;gap:6px}
     .note-toggle-btn{padding:6px 12px;font-size:11.5px}
 }
 .cl-header{padding:16px 20px 12px}
@@ -232,17 +232,21 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .resolved-banner{display:none;align-items:center;gap:8px;padding:8px 20px;background:rgba(100,116,139,0.08);color:var(--text-secondary);font-size:12.5px;font-weight:600;border-top:1px solid var(--border)}
 .resolved-banner.show{display:flex}
 .resolved-banner button{margin-inline-start:auto;border:1.5px solid var(--primary);background:transparent;color:var(--primary);border-radius:8px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.note-toggle-bar{padding:8px 20px 0;background:var(--surface)}
+.note-toggle-bar{padding:8px 20px 6px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .note-toggle-btn{width:fit-content;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-secondary);font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap}
 .note-toggle-btn:hover{border-color:#e0c46c;color:#8a6d1a}
 #note-mode-btn.active{color:#8a6d1a;background:#fff1c2;border-color:#e0c46c}
+#ai-generate-btn:hover{border-color:var(--primary-light);color:var(--primary)}
+#ai-generate-btn.loading{opacity:.65;cursor:wait;pointer-events:none}
+#ai-generate-btn .ai-spin{animation:ai-spin-anim .8s linear infinite}
+@keyframes ai-spin-anim{to{transform:rotate(360deg)}}
 
 .saved-replies-bar{padding:8px 20px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:8px;overflow-x:auto;align-items:center}
 .sr-chip{padding:6px 14px;border-radius:20px;border:1.5px solid var(--primary-light);background:rgba(108,92,231,0.06);color:var(--primary);font-size:12px;font-weight:500;white-space:nowrap;cursor:pointer;transition:all .15s;font-family:inherit}
 .sr-chip:hover{background:var(--primary);color:#fff}
 .sr-label{font-size:11px;color:var(--text-secondary);font-weight:600;white-space:nowrap;margin-right:4px}
 
-.chat-input-area{padding:12px 20px 16px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:flex-end;gap:10px}
+.chat-input-area{padding:6px 20px 16px;background:var(--surface);display:flex;align-items:flex-end;gap:10px}
 .input-actions{display:flex;gap:2px}
 .input-action-btn{width:38px;height:38px;border-radius:50%;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .input-action-btn:hover{color:var(--primary);background:rgba(108,92,231,0.08)}
@@ -825,6 +829,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <div class="note-toggle-bar">
                 <button class="note-toggle-btn" id="note-mode-btn" title="Private note (agents only, not sent to customer)" onclick="toggleNoteMode()">
                     <i data-lucide="lock" style="width:13px;height:13px"></i> Private Note
+                </button>
+                <button class="note-toggle-btn" id="ai-generate-btn" title="اقترح رد بالذكاء الاصطناعي بناءً على المحادثة" onclick="generateAIReply()">
+                    <i data-lucide="sparkles" style="width:13px;height:13px"></i> Generate Reply
                 </button>
             </div>
             <div class="resolved-banner" id="resolved-banner">
@@ -1488,8 +1495,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="st-modal-readonly-value" id="customer-details-location">-</div>
             </div>
             <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">رقم التليفون</div>
-                <div class="st-modal-readonly-value" id="customer-details-phone">-</div>
+                <div class="st-modal-readonly-label">أرقام التليفون</div>
+                <div id="customer-details-phones">-</div>
             </div>
         </div>
         <div class="st-modal-readonly-row">
@@ -3455,6 +3462,46 @@ function autoResize(el) {
     el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
 }
 function insertReply(idx) { document.getElementById('msg-input').value = savedReplies[idx].text; document.getElementById('msg-input').focus(); autoResize(document.getElementById('msg-input')); }
+
+/* ===== زرار "Generate Reply" — بيقترح رد جاهز بالذكاء الاصطناعي (Groq) بناءً على
+   كل المحادثة زي ما هي (السيرفر هو اللي بيجيب كل الرسايل ويبعتها للموديل كسياق كامل
+   عشان الرد يبقى مبني على المحادثة الحقيقية مش عشوائي). لو مفيش مفتاح Groq متظبط في
+   السيرفر، الـ endpoint بيرجع 204 وإحنا هنا ببساطة مش بنعمل أي حاجة (مفيش توست ولا
+   Error) — الزرار بيفضل موجود بس معطل فعليًا لحد ما يتحط مفتاح */
+async function generateAIReply() {
+    const btn = document.getElementById('ai-generate-btn');
+    if (!selectedChatId || !btn || btn.classList.contains('loading')) return;
+
+    const originalHtml = btn.innerHTML;
+    btn.classList.add('loading');
+    btn.innerHTML = '<i data-lucide="loader-2" class="ai-spin" style="width:13px;height:13px"></i> ...';
+    lucide.createIcons();
+
+    try {
+        const res = await apiFetch(`/api/conversations/${selectedChatId}/generate-reply`, { method: 'POST' });
+
+        // 204 = مفيش مفتاح Groq متحط في السيرفر أصلاً — نسيب الزرار زي ما هو من غير أي رسالة
+        if (res.status === 204) return;
+
+        let data = null;
+        try { data = await res.json(); } catch (_) { /* ممكن الرد يبقى فاضي */ }
+
+        if (!res.ok) throw new Error((data && data.error) || `تعذر توليد رد (HTTP ${res.status})`);
+        if (!data || !data.reply) return;
+
+        const input = document.getElementById('msg-input');
+        input.value = data.reply;
+        input.focus();
+        autoResize(input);
+    } catch (err) {
+        console.error('[API] generateAIReply error:', err);
+        showToast(err.message || 'تعذر توليد رد مقترح دلوقتي', 'error');
+    } finally {
+        btn.classList.remove('loading');
+        btn.innerHTML = originalHtml;
+        lucide.createIcons();
+    }
+}
 function toggleVoice() { showToast('Voice recording started', 'info'); }
 
 /* ===== فتح/إغلاق لوحة العميل (فقط بالضغط على أيقونة البروفايل) ===== */
@@ -5075,7 +5122,7 @@ async function openCustomerDetails(contactId) {
 
         document.getElementById('customer-details-name').textContent = c.name || 'بدون اسم';
         document.getElementById('customer-details-location').textContent = c.location || '-';
-        document.getElementById('customer-details-phone').textContent = (c.phones || []).map(p => p.phone_number).join(', ') || '-';
+        renderCustomerDetailsPhones(c);
         document.getElementById('customer-details-contract-date').textContent = formatSchedDate(c.contract_date);
         document.getElementById('customer-details-maintenance-date').textContent = formatSchedDate(c.maintenance_end_date);
 
@@ -5111,6 +5158,77 @@ async function openCustomerDetails(contactId) {
     } catch (err) {
         console.error('[API] openCustomerDetails error:', err);
         showToast(err.message || 'تعذر تحميل بيانات العميل', 'error');
+    }
+}
+
+/* بيعرض كل أرقام العميل كـ chips، وكل رقم زايد عن واحد بيظهر جمبه زرار "فصل"
+   عشان لو العميل ده كان عنده رقمين مدموجين وعايز يرجعهم عميلين منفصلين */
+function renderCustomerDetailsPhones(c) {
+    const wrap = document.getElementById('customer-details-phones');
+    const phones = c.phones || [];
+    if (!phones.length) {
+        wrap.innerHTML = '<div class="st-modal-readonly-value">-</div>';
+        return;
+    }
+    const canUnlink = phones.length > 1;
+    wrap.innerHTML = phones.map(p => `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div class="st-modal-readonly-value">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>
+            ${canUnlink ? `
+                <button class="resolve-cancel-btn" style="padding:4px 9px;font-size:11.5px" onclick="openUnlinkPhoneModal('${escapeHtml(p.phone_number)}')">
+                    <i data-lucide="unlink" style="width:12px;height:12px"></i> فصل
+                </button>
+            ` : ''}
+        </div>
+    `).join('');
+    lucide.createIcons();
+}
+
+/* ===== فصل رقم تليفون من عميل عنده أكتر من رقم =====
+   بيتحول الرقم المفصول لكارت عميل جديد منفصل (بنفس الاسم افتراضيًا)، والمحادثات
+   القديمة بتاعة الرقم ده بتتبع الكارت الجديد بدل القديم */
+let unlinkPhoneTarget = null;
+
+function openUnlinkPhoneModal(phone) {
+    if (!customerDetailsCache) return;
+    unlinkPhoneTarget = phone;
+    document.getElementById('unlink-phone-number').textContent = phone;
+    document.getElementById('unlink-phone-new-name').value = customerDetailsCache.name || '';
+    document.getElementById('unlink-phone-error').textContent = '';
+    document.getElementById('unlink-phone-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+function closeUnlinkPhoneModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('unlink-phone-overlay').classList.remove('show');
+}
+
+async function confirmUnlinkPhone() {
+    if (!customerDetailsCache || !unlinkPhoneTarget) return;
+    const errorEl = document.getElementById('unlink-phone-error');
+    const newName = document.getElementById('unlink-phone-new-name').value.trim();
+
+    const btn = document.getElementById('unlink-phone-confirm-btn');
+    btn.disabled = true;
+    try {
+        const res = await apiFetch(`/api/contacts/${customerDetailsCache.id}/phones/unlink`, {
+            method: 'POST',
+            body: JSON.stringify({ phone: unlinkPhoneTarget, name: newName || undefined }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل فصل الرقم');
+
+        closeUnlinkPhoneModal();
+        showToast('تم فصل الرقم لعميل جديد منفصل', 'success');
+        await loadContactsPage();
+        // نعيد تحميل صفحة تفاصيل نفس العميل (بعد ما رقمه قل واحد)
+        openCustomerDetails(customerDetailsCache.id);
+    } catch (err) {
+        console.error('[API] confirmUnlinkPhone error:', err);
+        errorEl.textContent = err.message || 'فشل فصل الرقم';
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -6459,6 +6577,35 @@ async function iwDeleteInbox(id) {
             <button class="resolve-confirm-btn" id="visit-modal-confirm-btn" onclick="submitVisit()">
                 <i data-lucide="check" style="width:16px;height:16px"></i>
                 إضافة الزيارة
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- فصل رقم تليفون من عميل عنده أكتر من رقم — بيتحول لكونتاكت جديد منفصل بيه -->
+<div class="resolve-overlay" id="unlink-phone-overlay" onclick="closeUnlinkPhoneModal(event)">
+    <div class="resolve-modal" id="unlink-phone-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" style="background:rgba(220,38,38,0.1);color:var(--danger)">
+                <i data-lucide="unlink" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title">فصل رقم تليفون</div>
+        </div>
+        <div class="resolve-modal-sub">
+            هيتفصل الرقم <b id="unlink-phone-number">-</b> عن العميل الحالي، وهيتحول لكارت عميل جديد منفصل
+            (المحادثات القديمة بتاعة الرقم ده هتفضل معاه في الكارت الجديد).
+        </div>
+
+        <div class="resolve-cats-label">اسم العميل الجديد (اختياري، هيتاخد نفس الاسم لو سبته فاضي)</div>
+        <input type="text" class="iw-input" id="unlink-phone-new-name" placeholder="اسم العميل الجديد" style="margin-bottom:6px">
+
+        <div class="login-error" id="unlink-phone-error" style="color:var(--danger);font-size:12.5px;margin-top:8px;text-align:center"></div>
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeUnlinkPhoneModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="unlink-phone-confirm-btn" onclick="confirmUnlinkPhone()" style="background:var(--danger)">
+                <i data-lucide="unlink" style="width:16px;height:16px"></i>
+                فصل الرقم
             </button>
         </div>
     </div>

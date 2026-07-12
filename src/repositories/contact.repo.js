@@ -160,6 +160,42 @@ async function deletePhonelessContact(contactId) {
   return true;
 }
 
+// بيفصل رقم تليفون واحد من كونتاكت عنده أكتر من رقم، وينشئ كونتاكت جديد منفصل
+// بيه (بنفس الاسم افتراضيًا، أو باسم تاني لو اتبعت). عكس linkPhoneToContact
+// تمامًا (اللي بيدمج رقم جوه كونتاكت موجود، ده بيفصله برة لكونتاكت جديد لوحده)
+async function unlinkPhoneToNewContact(contactId, phoneNumber, newName) {
+  const pool = await getPool();
+
+  // اتأكد إن الرقم ده فعلاً تابع للكونتاكت ده قبل ما نعمل أي حاجة
+  const check = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .query(`SELECT id FROM [dbo].[NileChat_ContactPhones_byA] WHERE contact_id = @contactId AND phone_number = @phone`);
+  if (!check.recordset.length) return null;
+
+  const oldContact = await getContactById(contactId);
+  const finalName = (newName && newName.trim()) || (oldContact && oldContact.name) || phoneNumber;
+
+  const insertResult = await pool
+    .request()
+    .input('name', sql.NVarChar(200), finalName)
+    .query(`
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name)
+      OUTPUT INSERTED.*
+      VALUES (@name)
+    `);
+  const newContact = insertResult.recordset[0];
+
+  await pool
+    .request()
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .input('newContactId', sql.BigInt, newContact.id)
+    .query(`UPDATE [dbo].[NileChat_ContactPhones_byA] SET contact_id = @newContactId WHERE phone_number = @phone`);
+
+  return getContactByIdWithPhones(newContact.id);
+}
+
 // بينشئ "كارت عميل صيانة" (Add Contact بتاع الأدمن): كونتاكت جديد بمكانه، تاريخ
 // تعاقده، وتاريخ انتهاء عقد الصيانة بتاعه — بالإضافة لرقم تليفونه العادي زي أي
 // كونتاكت تاني. القيم دي هي اللي بتفرّق الكارت ده عن كارت الكونتاكت العادي
@@ -224,5 +260,6 @@ module.exports = {
   listContacts,
   updateContactName,
   linkPhoneToContact,
+  unlinkPhoneToNewContact,
   deletePhonelessContact,
 };

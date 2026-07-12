@@ -71,6 +71,18 @@ async function setConversationContact(conversationId, contactId) {
     .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_id = @contactId WHERE id = @id`);
 }
 
+// بتنقل كل المحادثات المرتبطة برقم تليفون معين لكونتاكت تاني — تُستخدم لما الإيجنت
+// يفصل رقم من كونتاكت عنده أكتر من رقم (unlinkPhoneToNewContact)، عشان المحادثات
+// القديمة بتاعة الرقم ده تتبع الكونتاكت الجديد المنفصل مش القديم
+async function reassignConversationsContactByNumber(phoneNumber, contactId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .input('contactId', sql.BigInt, contactId)
+    .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_id = @contactId WHERE contact_number = @phone`);
+}
+
 async function touchConversation(conversationId) {
   const pool = await getPool();
   await pool
@@ -468,6 +480,7 @@ async function finalizeOutgoingMessage(id, { waMessageId = null, status }) {
 module.exports = {
   findOrCreateConversation,
   setConversationContact,
+  reassignConversationsContactByNumber,
   touchConversation,
   listConversations,
   getConversationById,
