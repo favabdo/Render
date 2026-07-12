@@ -3,6 +3,7 @@ const contactRepo = require('../repositories/contact.repo');
 const conversationRepo = require('../repositories/conversation.repo');
 const contactService = require('../services/contact.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
+const userRepo = require('../repositories/user.repo');
 const logger = require('../utils/logger');
 
 // كل الكونتاكتس الحقيقيين (لصفحة Contacts، وكمان لاختيار "اربط بكونتاكت موجود")
@@ -90,8 +91,9 @@ async function linkConversationContact(req, res) {
 }
 
 // إضافة "كارت عميل صيانة" جديد (زرار Add Contact في صفحة Contacts) — أدمن بس
-// (متأكد منها فعليًا في الراوت بـ requireAdmin). بيطلب: اسم العميل، مكانه،
-// رقم تليفونه، تاريخ التعاقد، وتاريخ انتهاء عقد الصيانة
+// (متأكد منها فعليًا في الراوت بـ requireAdmin). بيطلب: اسم العميل، مكانه، رقم
+// تليفونه، وممكن اختياريًا تاريخ بدء/انتهاء أول عقد صيانة ليه (لو مش عايز يحددها
+// دلوقتي، يقدر يضيفها بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل)
 async function createCustomerCard(req, res) {
   const { name, location, phone, contractDate, maintenanceEndDate } = req.body || {};
 
@@ -99,11 +101,17 @@ async function createCustomerCard(req, res) {
   const trimmedPhone = (phone || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
   if (!trimmedPhone) return res.status(400).json({ error: 'لازم تكتب رقم تليفون العميل' });
+  if (contractDate && maintenanceEndDate && new Date(maintenanceEndDate) < new Date(contractDate)) {
+    return res.status(400).json({ error: 'تاريخ انتهاء العقد لازم يكون بعد تاريخ البدء' });
+  }
 
   const existing = await contactRepo.findContactByPhone(trimmedPhone);
   if (existing) {
     return res.status(409).json({ error: 'الرقم ده مسجل بالفعل لعميل موجود' });
   }
+
+  const agent = await userRepo.findUserById(req.user.userId);
+  const agentName = agent ? userRepo.resolveDisplayName(agent) : (req.user.email || 'Unknown');
 
   const contact = await contactRepo.createCustomerContact({
     name: trimmedName,
@@ -111,6 +119,8 @@ async function createCustomerCard(req, res) {
     location: (location || '').trim() || null,
     contractDate: contractDate || null,
     maintenanceEndDate: maintenanceEndDate || null,
+    createdBy: req.user.userId,
+    createdByName: agentName,
   });
 
   const io = req.app.get('io');
@@ -125,9 +135,11 @@ async function createCustomerCard(req, res) {
   res.status(201).json({ ok: true, contact });
 }
 
-// تعديل بيانات كارت عميل الصيانة (زرار Edit في صفحة التفاصيل) — أدمن بس
+// تعديل بيانات كارت عميل الصيانة (زرار Edit في صفحة التفاصيل) — أدمن بس.
+// الاسم والمكان بس؛ عقود الصيانة بقت بتتضاف من سجل الصيانة نفسه (شوف
+// maintenanceContract.controller.js)
 async function updateCustomerCard(req, res) {
-  const { name, location, contractDate, maintenanceEndDate } = req.body || {};
+  const { name, location } = req.body || {};
 
   const trimmedName = (name || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
@@ -135,8 +147,6 @@ async function updateCustomerCard(req, res) {
   const contact = await contactRepo.updateCustomerDetails(req.params.id, {
     name: trimmedName,
     location: (location || '').trim() || null,
-    contractDate: contractDate || null,
-    maintenanceEndDate: maintenanceEndDate || null,
   });
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 

@@ -503,6 +503,44 @@ async function ensureVisitsTableExists() {
   logger.info('✅ جدول Visits جاهز.');
 }
 
+// سجل عقود الصيانة (Maintenance Contracts) — بديل عن فكرة "عقد واحد بس" اللي كانت
+// متخزنة كأعمدة على الكونتاكت نفسه (contract_date/maintenance_end_date). دلوقتي كل
+// عقد بيتسجل كصف منفصل هنا: تاريخ بدء، تاريخ انتهاء، وملاحظة اختيارية، فلو عقد عميل
+// انتهى ممكن نضيفله عقد جديد كامل من غير ما نمسح تاريخ العقود اللي فاتت. عمود
+// contract_date/maintenance_end_date على الكونتاكت بيفضل موجود بس مش بيتحدث تاني —
+// بدل منه بنجيب "العقد الحالي" (الساري لو موجود، وإلا آخر عقد انتهى) بـ OUTER APPLY
+// في استعلامات contact.repo.js، فالإحصائيات الظاهرة برة (فوق قسم الزيارات) بتفضل
+// شغالة زي ما هي بالظبط من غير ما نغيّر حاجة في الفرونت الخاص بيها.
+async function ensureMaintenanceContractsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_MaintenanceContracts_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_MaintenanceContracts_byA] (
+        id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+        contact_id      BIGINT NOT NULL,
+        start_date      DATE NOT NULL,
+        end_date        DATE NOT NULL,
+        notes           NVARCHAR(500) NULL,
+        created_by      BIGINT NULL,
+        created_by_name NVARCHAR(200) NULL,
+        created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+      CREATE INDEX IX_NileChat_MaintenanceContracts_byA_contact_id
+        ON [dbo].[NileChat_MaintenanceContracts_byA](contact_id);
+
+      -- ترحيل لمرة واحدة بس: أي عميل كان عنده عقد صيانة متسجل بالطريقة القديمة
+      -- (عمودين contract_date/maintenance_end_date على الكونتاكت) بياخد أول صف
+      -- في سجل العقود الجديد، عشان تاريخه القديم ميتلغيش
+      INSERT INTO [dbo].[NileChat_MaintenanceContracts_byA] (contact_id, start_date, end_date, notes)
+      SELECT id, contract_date, maintenance_end_date, N'تم ترحيله تلقائيًا من بيانات العميل القديمة'
+      FROM [dbo].[NileChat_Contacts_byA]
+      WHERE contract_date IS NOT NULL AND maintenance_end_date IS NOT NULL;
+    END
+  `);
+  logger.info('✅ جدول Maintenance Contracts جاهز.');
+}
+
 // الردود المحفوظة (Quick Replies / Canned Responses) — نصوص جاهزة الإيجنت بيدرجها بضغطة واحدة
 async function ensureCannedResponsesTableExists() {
   const pool = await getPool();
@@ -849,6 +887,7 @@ async function ensureSchema() {
   await ensureDevicesTableExists();
   await ensureScheduledTasksTableExists();
   await ensureVisitsTableExists();
+  await ensureMaintenanceContractsTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
   await ensureLabelsTableExists();
@@ -886,6 +925,7 @@ module.exports = {
   ensureDevicesTableExists,
   ensureScheduledTasksTableExists,
   ensureVisitsTableExists,
+  ensureMaintenanceContractsTableExists,
   ensureCannedResponsesTableExists,
   ensureResolveCategoriesTableExists,
   ensureLabelsTableExists,

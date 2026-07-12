@@ -15,6 +15,7 @@ const contactsRoutes = require('./routes/contacts.routes');
 const devicesRoutes = require('./routes/devices.routes');
 const scheduledTasksRoutes = require('./routes/scheduledTasks.routes');
 const visitsRoutes = require('./routes/visits.routes');
+const maintenanceContractsRoutes = require('./routes/maintenanceContracts.routes');
 const cannedResponsesRoutes = require('./routes/cannedResponses.routes');
 const resolveCategoriesRoutes = require('./routes/resolveCategories.routes');
 const labelsRoutes = require('./routes/labels.routes');
@@ -77,6 +78,9 @@ app.use('/', scheduledTasksRoutes);
 
 // الزيارات (Visits) الخاصة بكل عميل
 app.use('/', visitsRoutes);
+
+// سجل عقود الصيانة الكامل الخاص بكل عميل
+app.use('/', maintenanceContractsRoutes);
 
 // الردود المحفوظة (Quick Replies / Canned Responses) وتصنيفات الـ Resolve
 app.use('/', cannedResponsesRoutes);
