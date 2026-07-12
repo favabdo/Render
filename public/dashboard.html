@@ -2072,6 +2072,7 @@ function restoreChatHeaderStatus() {
 // حالة كتابة الإيجنت الحالي (اللي بيبعت الأحداث بره)
 let iAmTyping = false;
 let typingStopTimer = null;
+let typingHeartbeatTimer = null;
 function handleTypingInput() {
     if (!socket || !selectedChatId || noteMode) return;
     const input = document.getElementById('msg-input');
@@ -2081,6 +2082,17 @@ function handleTypingInput() {
         if (!iAmTyping) {
             iAmTyping = true;
             socket.emit('typing', { conversationId: selectedChatId, agentName: CURRENT_AGENT });
+            // نكرر بعت 'typing' كل شوية طول ما لسه بيكتب فعليًا (heartbeat)،
+            // عشان المؤشر يفضل ظاهر عند الإيجنتس التانيين طول مدة الكتابة
+            // ومايختفيش بعد الـ safety timeout (4 ثواني) عند أول توقف مؤقت بس
+            clearInterval(typingHeartbeatTimer);
+            typingHeartbeatTimer = setInterval(() => {
+                if (iAmTyping && socket && selectedChatId) {
+                    socket.emit('typing', { conversationId: selectedChatId, agentName: CURRENT_AGENT });
+                } else {
+                    clearInterval(typingHeartbeatTimer);
+                }
+            }, 2000);
         }
         clearTimeout(typingStopTimer);
         typingStopTimer = setTimeout(() => stopTypingNow(), 2500);
@@ -2090,6 +2102,7 @@ function handleTypingInput() {
 }
 function stopTypingNow() {
     clearTimeout(typingStopTimer);
+    clearInterval(typingHeartbeatTimer);
     if (iAmTyping && socket && selectedChatId) {
         iAmTyping = false;
         socket.emit('stop_typing', { conversationId: selectedChatId, agentName: CURRENT_AGENT });
