@@ -1031,12 +1031,15 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
     <div class="page-content">
         <div class="page-header">
             <h2>Contacts</h2>
-            <button class="page-btn" id="add-customer-btn" style="display:none" onclick="openAddCustomerModal()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Contact</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" onclick="openAddVisitModalStandalone()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> إضافة زيارة</button>
+                <button class="page-btn" id="add-customer-btn" style="display:none" onclick="openAddCustomerModal()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Contact</button>
+            </div>
         </div>
         <div style="max-width:500px;margin-bottom:24px">
             <div class="cl-search-wrap">
                 <i data-lucide="search" style="width:16px;height:16px" class="cl-search-icon"></i>
-                <input type="text" class="cl-search" placeholder="Search contacts...">
+                <input type="text" class="cl-search" id="contacts-search-input" placeholder="Search contacts..." oninput="onContactsSearchInput(this.value)">
             </div>
         </div>
         <div class="contacts-grid" id="contacts-grid"></div>
@@ -1453,6 +1456,68 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <h3>Security</h3>
             <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
             <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- CUSTOMER DETAILS PAGE (كارت العميل) — صفحة كاملة بدل ما كانت بوب أب، عشان
+     نقدر نضيف زرار "إضافة زيارة" وقايمة الزيارات السابقة من غير ما المساحة تضيق -->
+<div id="page-customer-details" class="page flex flex-1">
+    <div class="page-content">
+        <div class="page-header" style="flex-wrap:wrap;row-gap:12px">
+            <div style="display:flex;align-items:center;gap:12px;min-width:0">
+                <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border);padding:10px 14px" onclick="closeCustomerDetailsPage()">
+                    <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                </button>
+                <h2 id="customer-details-name" style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw">-</h2>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="page-btn" onclick="openAddVisitModalForCurrentCustomer()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> إضافة زيارة</button>
+                <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" id="customer-details-goto-btn" onclick="gotoConversationFromDetails()">
+                    <i data-lucide="message-circle" style="width:16px;height:16px"></i> فتح المحادثة
+                </button>
+                <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border);display:none" id="customer-details-edit-btn" onclick="editCurrentCustomerCard()">
+                    <i data-lucide="pencil" style="width:16px;height:16px"></i> تعديل
+                </button>
+            </div>
+        </div>
+
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">المكان</div>
+                <div class="st-modal-readonly-value" id="customer-details-location">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">رقم التليفون</div>
+                <div class="st-modal-readonly-value" id="customer-details-phone">-</div>
+            </div>
+        </div>
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">تاريخ التعاقد</div>
+                <div class="st-modal-readonly-value" id="customer-details-contract-date">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">تاريخ انتهاء عقد الصيانة</div>
+                <div class="st-modal-readonly-value" id="customer-details-maintenance-date">-</div>
+            </div>
+        </div>
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">مدة التعاقد</div>
+                <div class="st-modal-readonly-value" id="customer-details-duration">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">الوقت المتبقي على انتهاء الصيانة</div>
+                <div class="st-modal-readonly-value" id="customer-details-remaining">-</div>
+            </div>
+        </div>
+
+        <div class="cp-section-title-row" style="margin-top:12px">
+            <div class="cp-section-title">الزيارات</div>
+        </div>
+        <div id="customer-visits-list">
+            <div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">جاري التحميل...</div>
         </div>
     </div>
 </div>
@@ -4867,13 +4932,25 @@ async function loadContactsPage() {
     }
 }
 
+let contactsSearchQuery = '';
+function onContactsSearchInput(value) {
+    contactsSearchQuery = (value || '').trim().toLowerCase();
+    renderContacts();
+}
+
 function renderContacts() {
     const grid = document.getElementById('contacts-grid');
-    if (contactsData.length === 0) {
-        grid.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">لا توجد جهات اتصال لعرضها</div>';
+    const q = contactsSearchQuery;
+    const filteredContacts = !q ? contactsData : contactsData.filter(c => {
+        const nameMatch = (c.name || '').toLowerCase().includes(q);
+        const phoneMatch = (c.phones || []).some(p => (p.phone_number || '').toLowerCase().includes(q));
+        return nameMatch || phoneMatch;
+    });
+    if (filteredContacts.length === 0) {
+        grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${q ? 'لا توجد نتائج مطابقة' : 'لا توجد جهات اتصال لعرضها'}</div>`;
         return;
     }
-    grid.innerHTML = contactsData.map(c => {
+    grid.innerHTML = filteredContacts.map(c => {
         // كل كروت الـ Contacts دلوقتي بتوديك على صفحة التفاصيل (سواء العميل ده
         // اتضاف يدوي من زرار Add Contact، أو اتسجل أوتوماتيك من واتساب) — ومن
         // صفحة التفاصيل تقدر تفتح المحادثة بتاعته، أو (لو أدمن) تضيف/تعدّل بيانات
@@ -4964,7 +5041,7 @@ async function submitCustomerCard() {
         await loadContactsPage();
 
         // لو كنا فاتحين صفحة التفاصيل بتاعة نفس العميل، حدّثها فورًا بالبيانات الجديدة
-        if (customerCardMode === 'edit' && document.getElementById('customer-details-overlay').classList.contains('show')) {
+        if (customerCardMode === 'edit' && currentPage === 'customer-details' && customerDetailsCache && String(customerDetailsCache.id) === String(customerCardEditingId)) {
             openCustomerDetails(customerCardEditingId);
         }
     } catch (err) {
@@ -5028,7 +5105,8 @@ async function openCustomerDetails(contactId) {
         // زرار التعديل بيظهر للأدمن/الأونر بس
         document.getElementById('customer-details-edit-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
 
-        document.getElementById('customer-details-overlay').classList.add('show');
+        navigateTo('customer-details');
+        loadCustomerVisits(c.id);
         lucide.createIcons();
     } catch (err) {
         console.error('[API] openCustomerDetails error:', err);
@@ -5036,17 +5114,15 @@ async function openCustomerDetails(contactId) {
     }
 }
 
-function closeCustomerDetailsModal(event) {
-    if (event && event.target !== event.currentTarget) return;
-    document.getElementById('customer-details-overlay').classList.remove('show');
+/* رجوع من صفحة تفاصيل العميل لصفحة Contacts */
+function closeCustomerDetailsPage() {
+    navigateTo('contacts');
 }
 
-/* بيقفل مودال التفاصيل ويفتح المحادثة الحالية بتاعة نفس العميل (لو موجودة) */
+/* بيفتح المحادثة الحالية بتاعة نفس العميل (لو موجودة) */
 function gotoConversationFromDetails() {
     if (!customerDetailsCache) return;
-    const contactId = customerDetailsCache.id;
-    closeCustomerDetailsModal();
-    openConversationForContact(contactId);
+    openConversationForContact(customerDetailsCache.id);
 }
 
 /* بيفتح نفس مودال الإضافة بس في وضع تعديل، متعبي ببيانات العميل الحالي بتاع صفحة التفاصيل */
@@ -5066,10 +5142,214 @@ function editCurrentCustomerCard() {
     document.getElementById('customer-card-maintenance-date').value = c.maintenance_end_date ? String(c.maintenance_end_date).slice(0, 10) : '';
     document.getElementById('customer-card-error').textContent = '';
 
-    closeCustomerDetailsModal();
     document.getElementById('customer-card-overlay').classList.add('show');
     lucide.createIcons();
 }
+
+/* ===== الزيارات (Visits) =====
+   - من جوه صفحة تفاصيل العميل: اسم العميل بيتسجل تلقائي (مفيش اختيار)
+   - من الزرار البرّاني (جمب Add Contact في صفحة Contacts): لازم تكتب اسم العميل
+     أو تختاره من قايمة العملاء الموجودين (سيرش لايف زي "Assign to Agent") */
+let visitModalMode = 'contact'; // 'contact' | 'standalone'
+let visitModalContacts = [];
+let visitModalSelectedContactId = '';
+let visitModalSelectedContactName = '';
+
+function resetVisitFormFields() {
+    document.getElementById('visit-work-done').value = '';
+    document.getElementById('visit-arrival-time').value = '';
+    document.getElementById('visit-departure-time').value = '';
+    document.getElementById('visit-modal-error').textContent = '';
+    const dateInput = document.getElementById('visit-date');
+    dateInput.value = new Date().toISOString().slice(0, 10);
+    dateInput.max = new Date().toISOString().slice(0, 10);
+}
+
+/* فتح مودال إضافة زيارة من جوه صفحة تفاصيل العميل الحالية */
+function openAddVisitModalForCurrentCustomer() {
+    if (!customerDetailsCache) return;
+    visitModalMode = 'contact';
+    visitModalSelectedContactId = customerDetailsCache.id;
+    visitModalSelectedContactName = customerDetailsCache.name || 'بدون اسم';
+
+    document.getElementById('visit-modal-customer').style.display = '';
+    document.getElementById('visit-modal-customer').textContent = visitModalSelectedContactName;
+    document.getElementById('visit-modal-customer-picker').style.display = 'none';
+
+    resetVisitFormFields();
+    document.getElementById('visit-modal-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+/* فتح مودال إضافة زيارة من الزرار البرّاني (جمب Add Contact) — لازم تختار/تكتب اسم العميل */
+async function openAddVisitModalStandalone() {
+    visitModalMode = 'standalone';
+    visitModalSelectedContactId = '';
+    visitModalSelectedContactName = '';
+    visitModalContacts = [];
+
+    document.getElementById('visit-modal-customer').style.display = 'none';
+    const picker = document.getElementById('visit-modal-customer-picker');
+    picker.style.display = '';
+    const search = document.getElementById('visit-modal-customer-search');
+    search.value = '';
+    search.placeholder = 'جاري تحميل العملاء...';
+    document.getElementById('visit-modal-customer-dropdown-list').innerHTML = '';
+
+    resetVisitFormFields();
+    document.getElementById('visit-modal-overlay').classList.add('show');
+    lucide.createIcons();
+
+    try {
+        // بنستخدم قايمة الكونتاكتس اللي محملة بالفعل لو موجودة، أو بنجيبها لايف
+        const res = await apiFetch('/api/contacts');
+        if (!res.ok) throw new Error('فشل تحميل العملاء');
+        visitModalContacts = await res.json();
+        search.placeholder = 'اكتب اسم العميل...';
+    } catch (err) {
+        console.error('[API] openAddVisitModalStandalone error:', err);
+        search.placeholder = 'تعذر تحميل العملاء (تقدر تكتب اسم يدوي)';
+    }
+}
+
+/* بحث/اختيار العميل: بتكتب جزء من الاسم فتظهرلك ليستة مفلترة لايف، تدوس على واحد فيهم
+   يتحدد كـ كونتاكت موجود فعليًا، أو تسيب الاسم اللي كتبته يتسجل كاسم يدوي لو مش موجود */
+function renderVisitCustomerDropdown(filter) {
+    const list = document.getElementById('visit-modal-customer-dropdown-list');
+    if (!list) return;
+    const q = (filter || '').trim().toLowerCase();
+    const filtered = q ? visitModalContacts.filter(c => (c.name || '').toLowerCase().includes(q)) : visitModalContacts;
+    if (!filtered.length) {
+        list.innerHTML = `<div class="agent-dropdown-empty">${visitModalContacts.length ? 'مفيش عملاء مطابقين، وهيتسجل الاسم كما هو' : 'جاري التحميل...'}</div>`;
+        return;
+    }
+    list.innerHTML = filtered.map(c => `
+        <div class="agent-option" onclick="selectVisitCustomer('${c.id}')">
+            <div class="agent-option-avatar">${customerAvatarHtml(c.name || ('عميل #' + c.id), 'contact-' + c.id, 32)}</div>
+            <div style="font-weight:600;font-size:13px">${escapeHtml(c.name || ('عميل #' + c.id))}</div>
+        </div>
+    `).join('');
+}
+function openVisitCustomerDropdown() {
+    renderVisitCustomerDropdown(document.getElementById('visit-modal-customer-search').value);
+    document.getElementById('visit-modal-customer-dropdown').classList.add('open');
+}
+function filterVisitCustomerDropdown(v) {
+    // لو الإيجنت بيدور على اسم تاني بعد ما كان مختار عميل، بنشيل الاختيار القديم
+    // (هيتسجل بالاسم المكتوب لو محددش من القايمة تاني)
+    visitModalSelectedContactId = '';
+    renderVisitCustomerDropdown(v);
+    document.getElementById('visit-modal-customer-dropdown').classList.add('open');
+}
+function selectVisitCustomer(id) {
+    const c = visitModalContacts.find(x => String(x.id) === String(id));
+    if (!c) return;
+    visitModalSelectedContactId = c.id;
+    visitModalSelectedContactName = c.name || ('عميل #' + c.id);
+    document.getElementById('visit-modal-customer-search').value = visitModalSelectedContactName;
+    document.getElementById('visit-modal-customer-dropdown').classList.remove('open');
+}
+document.addEventListener('click', e => {
+    if (!e.target.closest('#visit-modal-customer-picker')) {
+        const dd = document.getElementById('visit-modal-customer-dropdown');
+        if (dd) dd.classList.remove('open');
+    }
+});
+
+function closeVisitModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('visit-modal-overlay').classList.remove('show');
+}
+
+async function submitVisit() {
+    const errorEl = document.getElementById('visit-modal-error');
+    errorEl.textContent = '';
+
+    const visitDate = document.getElementById('visit-date').value;
+    const workDone = document.getElementById('visit-work-done').value.trim();
+    const arrivalTime = document.getElementById('visit-arrival-time').value || null;
+    const departureTime = document.getElementById('visit-departure-time').value || null;
+
+    if (!visitDate) return (errorEl.textContent = 'لازم تحدد تاريخ الزيارة');
+    if (!workDone) return (errorEl.textContent = 'لازم تكتب اللي اتعمل في الزيارة');
+
+    let contactId = null;
+    let customerName = null;
+    let url = '/api/visits';
+
+    if (visitModalMode === 'contact') {
+        if (!visitModalSelectedContactId) return (errorEl.textContent = 'مفيش عميل محدد');
+        contactId = visitModalSelectedContactId;
+        url = `/api/contacts/${contactId}/visits`;
+    } else {
+        customerName = (document.getElementById('visit-modal-customer-search').value || '').trim();
+        contactId = visitModalSelectedContactId || null;
+        if (!contactId && !customerName) return (errorEl.textContent = 'لازم تكتب أو تختار اسم العميل');
+    }
+
+    const btn = document.getElementById('visit-modal-confirm-btn');
+    btn.disabled = true;
+    try {
+        const body = visitModalMode === 'contact'
+            ? { visitDate, workDone, arrivalTime, departureTime }
+            : { contactId, customerName, visitDate, workDone, arrivalTime, departureTime };
+
+        const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الزيارة');
+
+        closeVisitModal();
+        showToast('تم إضافة الزيارة', 'success');
+
+        // لو صفحة تفاصيل العميل بتاع نفس الزيارة كانت مفتوحة، حدّث قايمة الزيارات فورًا
+        if (currentPage === 'customer-details' && customerDetailsCache && contactId && String(customerDetailsCache.id) === String(contactId)) {
+            loadCustomerVisits(contactId);
+        }
+    } catch (err) {
+        console.error('[API] submitVisit error:', err);
+        errorEl.textContent = err.message || 'فشل إضافة الزيارة';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/* قايمة الزيارات السابقة — بتتعرض جوه صفحة تفاصيل العميل */
+async function loadCustomerVisits(contactId) {
+    const list = document.getElementById('customer-visits-list');
+    list.innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">جاري التحميل...</div>';
+    try {
+        const res = await apiFetch(`/api/contacts/${contactId}/visits`);
+        if (!res.ok) throw new Error('فشل تحميل الزيارات');
+        const visits = await res.json();
+        if (!visits.length) {
+            list.innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">مفيش زيارات مسجلة لسه</div>';
+            return;
+        }
+        list.innerHTML = visits.map(visitCardHtml).join('');
+        lucide.createIcons();
+    } catch (err) {
+        console.error('[API] loadCustomerVisits error:', err);
+        list.innerHTML = '<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px">تعذر تحميل الزيارات</div>';
+    }
+}
+
+function visitCardHtml(v) {
+    const timesParts = [];
+    if (v.arrival_time) timesParts.push(`وصول: ${v.arrival_time}`);
+    if (v.departure_time) timesParts.push(`انصراف: ${v.departure_time}`);
+    return `
+        <div class="sched-task-card">
+            <div class="sched-task-subrow">
+                <span><i data-lucide="calendar" style="width:13px;height:13px"></i>${formatSchedDate(v.visit_date)}</span>
+                <span><i data-lucide="user-round" style="width:13px;height:13px"></i>${escapeHtml(v.agent_name || 'Unknown')}</span>
+            </div>
+            <div class="sched-task-text">${escapeHtml(v.work_done)}</div>
+            ${timesParts.length ? `<div class="sched-task-meta"><i data-lucide="clock" style="width:13px;height:13px"></i>${timesParts.join(' · ')}</div>` : ''}
+        </div>
+    `;
+}
+
+
 
 /* ===== سحب وترتيب عناصر القوائم (Drag & Drop) — بيتستخدم في Quick Replies و Problem Category =====
    بيشتغل بالـ native HTML5 drag & drop، وبيحسب الترتيب الجديد من ترتيب العناصر
@@ -6130,61 +6410,60 @@ async function iwDeleteInbox(id) {
     </div>
 </div>
 
-<!-- تفاصيل كارت "عميل صيانة" -->
-<div class="resolve-overlay" id="customer-details-overlay" onclick="closeCustomerDetailsModal(event)">
-    <div class="resolve-modal" id="customer-details-modal">
+<!-- إضافة زيارة — نفس المودال ده بيتفتح من جوه صفحة تفاصيل العميل (اسم العميل تلقائي)
+     أو من زرار "إضافة زيارة" البرّاني جمب Add Contact (لازم تكتب/تختار اسم العميل) -->
+<div class="resolve-overlay" id="visit-modal-overlay" onclick="closeVisitModal(event)">
+    <div class="resolve-modal" id="visit-modal">
         <div class="resolve-modal-header">
             <div class="resolve-modal-icon" style="background:rgba(108,92,231,0.12);color:var(--primary)">
-                <i data-lucide="shield-check" style="width:22px;height:22px"></i>
+                <i data-lucide="calendar-plus" style="width:22px;height:22px"></i>
             </div>
-            <div class="resolve-modal-title" id="customer-details-name">-</div>
+            <div class="resolve-modal-title">إضافة زيارة</div>
         </div>
-        <div class="resolve-modal-sub">تفاصيل عقد الصيانة الخاص بالعميل ده</div>
+        <div class="resolve-modal-sub">سجّل تاريخ الزيارة واللي اتعمل فيها</div>
 
         <div class="st-modal-readonly-row">
-            <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">المكان</div>
-                <div class="st-modal-readonly-value" id="customer-details-location">-</div>
-            </div>
-            <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">رقم التليفون</div>
-                <div class="st-modal-readonly-value" id="customer-details-phone">-</div>
+            <div class="st-modal-readonly" style="flex:1">
+                <div class="st-modal-readonly-label">العميل</div>
+                <div class="st-modal-readonly-value" id="visit-modal-customer">-</div>
+                <div class="agent-select-wrap" id="visit-modal-customer-picker" style="display:none;margin-top:4px">
+                    <input type="text" class="iw-input" id="visit-modal-customer-search" placeholder="اكتب اسم العميل..." autocomplete="off" style="padding:6px 8px;font-size:12.5px" oninput="filterVisitCustomerDropdown(this.value)" onfocus="openVisitCustomerDropdown()">
+                    <div class="agent-dropdown" id="visit-modal-customer-dropdown">
+                        <div class="agent-dropdown-list" id="visit-modal-customer-dropdown-list"></div>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <div class="resolve-cats-label">تاريخ الزيارة</div>
+        <input type="date" class="iw-input" id="visit-date" style="margin-bottom:12px">
+
+        <div class="resolve-cats-label">اللي اتعمل في الزيارة</div>
+        <textarea class="resolve-notes" id="visit-work-done" placeholder="اكتب اللي اتعمل في الزيارة..." style="height:80px;margin-bottom:12px"></textarea>
+
         <div class="st-modal-readonly-row">
-            <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">تاريخ التعاقد</div>
-                <div class="st-modal-readonly-value" id="customer-details-contract-date">-</div>
+            <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
+                <div class="resolve-cats-label">ساعة الوصول (اختياري)</div>
+                <input type="time" class="iw-input" id="visit-arrival-time">
             </div>
-            <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">تاريخ انتهاء عقد الصيانة</div>
-                <div class="st-modal-readonly-value" id="customer-details-maintenance-date">-</div>
-            </div>
-        </div>
-        <div class="st-modal-readonly-row">
-            <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">مدة التعاقد</div>
-                <div class="st-modal-readonly-value" id="customer-details-duration">-</div>
-            </div>
-            <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">الوقت المتبقي على انتهاء الصيانة</div>
-                <div class="st-modal-readonly-value" id="customer-details-remaining">-</div>
+            <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
+                <div class="resolve-cats-label">ساعة الانصراف (اختياري)</div>
+                <input type="time" class="iw-input" id="visit-departure-time">
             </div>
         </div>
+
+        <div class="login-error" id="visit-modal-error" style="color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center"></div>
 
         <div class="resolve-modal-actions">
-            <button class="resolve-cancel-btn" onclick="closeCustomerDetailsModal()">إغلاق</button>
-            <button class="resolve-cancel-btn" id="customer-details-goto-btn" onclick="gotoConversationFromDetails()">
-                <i data-lucide="message-circle" style="width:16px;height:16px"></i>
-                فتح المحادثة
-            </button>
-            <button class="resolve-confirm-btn" id="customer-details-edit-btn" style="display:none" onclick="editCurrentCustomerCard()">
-                <i data-lucide="pencil" style="width:16px;height:16px"></i>
-                تعديل
+            <button class="resolve-cancel-btn" onclick="closeVisitModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="visit-modal-confirm-btn" onclick="submitVisit()">
+                <i data-lucide="check" style="width:16px;height:16px"></i>
+                إضافة الزيارة
             </button>
         </div>
     </div>
 </div>
+
 
 <div class="resolve-overlay" id="resolve-overlay" onclick="closeResolveModal(event)">
     <div class="resolve-modal" id="resolve-modal">

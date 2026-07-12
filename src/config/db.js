@@ -451,6 +451,36 @@ async function ensureScheduledTasksTableExists() {
   logger.info('✅ جدول Scheduled Tasks جاهز.');
 }
 
+// الزيارات (Visits) — سجل زيارات الإيجنتس للعملاء: تاريخ الزيارة، اللي اتعمل فيها،
+// وساعات الوصول/الانصراف (اختياري). الزيارة ممكن تتضاف مرتبطة بكونتاكت حقيقي
+// (contact_id) لو اتضافت من جوه صفحة تفاصيل العميل، أو باسم يدوي (customer_name)
+// بس لو اتضافت من زرار "إضافة زيارة" البرّاني (جمب Add Contact) والإيجنت كتب اسم
+// عميل مش متسجل أصلًا كـ كونتاكت. agent_id/agent_name بييجوا من الجلسة بتاعة
+// الإيجنت وقت الإضافة (مش من الفرونت) عشان محدش يقدر يزوّر مين اللي عمل الزيارة.
+async function ensureVisitsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Visits_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Visits_byA] (
+        id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+        contact_id      BIGINT NULL,
+        customer_name   NVARCHAR(200) NULL,
+        visit_date      DATE NOT NULL,
+        work_done       NVARCHAR(MAX) NOT NULL,
+        arrival_time    NVARCHAR(5) NULL,
+        departure_time  NVARCHAR(5) NULL,
+        agent_id        BIGINT NULL,
+        agent_name      NVARCHAR(200) NULL,
+        created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+      CREATE INDEX IX_NileChat_Visits_byA_contact_id
+        ON [dbo].[NileChat_Visits_byA](contact_id);
+    END
+  `);
+  logger.info('✅ جدول Visits جاهز.');
+}
+
 // الردود المحفوظة (Quick Replies / Canned Responses) — نصوص جاهزة الإيجنت بيدرجها بضغطة واحدة
 async function ensureCannedResponsesTableExists() {
   const pool = await getPool();
@@ -795,6 +825,7 @@ async function ensureSchema() {
   await ensureConversationsHaveContactColumn();
   await ensureDevicesTableExists();
   await ensureScheduledTasksTableExists();
+  await ensureVisitsTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
   await ensureLabelsTableExists();
@@ -830,6 +861,7 @@ module.exports = {
   ensureConversationsHaveContactColumn,
   ensureDevicesTableExists,
   ensureScheduledTasksTableExists,
+  ensureVisitsTableExists,
   ensureCannedResponsesTableExists,
   ensureResolveCategoriesTableExists,
   ensureLabelsTableExists,
