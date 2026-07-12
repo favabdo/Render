@@ -149,6 +149,12 @@ async function createUserAccount(req, res) {
     return res.status(400).json({ error: 'لازم تبعت email' });
   }
 
+  // نفس القاعدة: بس الأونر (role 0) يقدر يدعو حد بصلاحية Admin أو Owner.
+  // الأدمن العادي (role 1) يقدر يضيف إيجنتس بس بره Agent (role 2)
+  if (Number(role) !== 2 && req.user.role !== 0) {
+    return res.status(403).json({ error: 'تحديد رول Admin أو Owner للإيجنت الجديد متاح للأونر (Super Admin) بس' });
+  }
+
   const existing = await userRepo.findUserByEmail(email);
   if (existing) {
     return res.status(409).json({ error: 'فيه يوزر بنفس الإيميل ده بالفعل' });
@@ -232,6 +238,15 @@ async function acceptInvite(req, res) {
 
 async function updateUserAccount(req, res) {
   const { role, status, password, display_name } = req.body;
+
+  // تغيير الرول أو الحالة (تفعيل/إيقاف) بتاع أي إيجنت مسموح للأونر (role 0) بس.
+  // الأدمن (role 1) يقدر يتطلع على الإيجنتس ويعرف حالتهم، لكن مايقدرش يغيّرها —
+  // ده بنتأكد منه هنا في السيرفر (مش بس نخفي الكونترول في الواجهة) عشان يبقى فعليًا
+  // ممنوع حتى لو حد بعت الطلب على الـ API مباشرة.
+  if ((role !== undefined || status !== undefined) && req.user.role !== 0) {
+    return res.status(403).json({ error: 'تغيير الرول أو حالة الإيجنت متاح للأونر (Super Admin) بس' });
+  }
+
   const user = await userRepo.updateUser(req.params.id, { role, status, password, display_name });
   if (!user) return res.status(404).json({ error: 'اليوزر مش موجود' });
 

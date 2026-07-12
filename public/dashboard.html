@@ -2456,6 +2456,12 @@ let AGENT_INVITE_LINKS = {};
 function isOwnerOrAdmin() {
     return AUTH_USER.role <= 1;
 }
+/* تغيير رول أو حالة إيجنت مسموح بس للأونر (role 0) — الأدمن (role 1) يشوف بس
+   ومايقدرش يغيّر، شوف updateUserAccount في auth.controller.js للتفاصيل والتطبيق
+   الفعلي في السيرفر */
+function isOwner() {
+    return AUTH_USER.role === 0;
+}
 
 /* الـ Settings (Account Settings / Agents / Teams / Inboxes / ... إلخ) خاص بالمنظمة كلها،
    فبيظهر بس لـ Owner (role 0) و Admin (role 1). الإيجنت العادي (role 2) مش بيشوفه خالص من السايدبار،
@@ -2599,13 +2605,18 @@ function renderAgentsSettings() {
     }
 
     const canManage = isOwnerOrAdmin();
+    // تغيير الرول أو الحالة (Active/Inactive) مسموح للأونر بس. الأدمن يقدر يفتح صفحة
+    // الإعدادات دي ويشوف كل إيجنت ورولّه وحالته، لكن مش هيلاقي أي كونترول قدامه يغيّر بيه —
+    // هيبقى بادج ثابت زي أي إيجنت عادي (شوف isOwner() فوق)
+    const canEditRoleStatus = isOwner();
 
     tbody.innerHTML = AGENTS_SETTINGS_CACHE.map((a) => {
         const isMe = String(a.id) === String(AUTH_USER.id);
         const isActive = a.status === 'active';
-        const canEditThisAgent = canManage && !isMe; // الأدمن ميعدلش رول/حالة نفسه من هنا
+        const canEditThisAgent = canManage && !isMe; // الأدمن ميعدلش اسم/يمسح نفسه من هنا
+        const canEditRoleStatusForAgent = canEditRoleStatus && !isMe; // ولا حتى الأونر يغيّر رول/حالة نفسه من هنا
 
-        const roleCell = canEditThisAgent
+        const roleCell = canEditRoleStatusForAgent
             ? `<select class="iw-input" style="padding:6px 8px;font-size:12px;width:auto" onchange="changeAgentRole(${a.id}, this.value)">
                     <option value="2" ${a.role === 2 ? 'selected' : ''}>Agent</option>
                     <option value="1" ${a.role === 1 ? 'selected' : ''}>Admin</option>
@@ -2613,7 +2624,7 @@ function renderAgentsSettings() {
                 </select>`
             : `<span class="st-pill ${roleBadgeClass(a.role)}">${roleLabel(a.role)}</span>`;
 
-        const statusCell = canEditThisAgent
+        const statusCell = canEditRoleStatusForAgent
             ? `<select class="iw-input" style="padding:6px 8px;font-size:12px;width:auto" onchange="changeAgentStatus(${a.id}, this.value)">
                     <option value="active" ${isActive ? 'selected' : ''}>Active</option>
                     <option value="inactive" ${!isActive ? 'selected' : ''}>Inactive</option>
@@ -2710,6 +2721,10 @@ function openAddAgentModal() {
     document.getElementById('add-agent-name').value = '';
     document.getElementById('add-agent-email').value = '';
     document.getElementById('add-agent-role').value = '2';
+    // الأدمن (مش أونر) يقدر يضيف إيجنتس جداد بس بره Agent — تحديد رول Admin/Owner
+    // للإيجنت الجديد متاح للأونر بس (نفس القاعدة اللي في السيرفر، شوف createUserAccount)
+    const roleSelect = document.getElementById('add-agent-role');
+    roleSelect.disabled = !isOwner();
     document.getElementById('add-agent-overlay').classList.add('show');
     lucide.createIcons();
 }
@@ -6344,7 +6359,9 @@ async function saveEditQR(id) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل تعديل الرد');
-        const r = savedReplies.find(x => x.id === id);
+        // بنقارن بـ Number(x.id) لأن الـ id جاي من السيرفر كـ string (BIGINT) وممكن يوصل هنا كـ number من onclick
+        // عشان المقارنة x.id === id متفشلش وتخلي التعديل "مايتحفظش" في الواجهة
+        const r = savedReplies.find(x => Number(x.id) === Number(id));
         if (r) { r.label = data.label; r.text = data.message_text; }
         renderQuickReplies();
         showToast('تم تعديل الرد', 'success');
@@ -6354,7 +6371,9 @@ async function saveEditQR(id) {
     }
 }
 async function deleteQR(id) {
-    const idx = savedReplies.findIndex(x => x.id === id);
+    // بنقارن بـ Number(x.id) لأن الـ id جاي من السيرفر كـ string (BIGINT)، وبيوصل هنا كـ number
+    // من الـ onclick، فلو قارنا بـ === كانت بترجع -1 دايمًا ومكانتش بتنفذ الحذف خالص
+    const idx = savedReplies.findIndex(x => Number(x.id) === Number(id));
     if (idx === -1) return;
     try {
         const res = await apiFetch(`/api/canned-responses/${id}`, { method: 'DELETE' });
@@ -6460,7 +6479,8 @@ async function saveEditCat(id) {
     const desc = document.getElementById(`cat-edit-desc-${id}`).value.trim();
     if (!name) return showToast('الاسم مطلوب', 'error');
     try {
-        const c = problemCategories.find(x => x.id === id);
+        // بنقارن بـ Number(x.id) لأن الـ id جاي من السيرفر كـ string (BIGINT)
+        const c = problemCategories.find(x => Number(x.id) === Number(id));
         const res = await apiFetch(`/api/resolve-categories/${id}`, {
             method: 'PUT',
             body: JSON.stringify({ name, icon, description: desc, color: (c && c.color) || 'rgba(108,92,231,0.1)' }),
@@ -6476,7 +6496,9 @@ async function saveEditCat(id) {
     }
 }
 async function deleteCat(id) {
-    const idx = problemCategories.findIndex(x => x.id === id);
+    // بنقارن بـ Number(x.id) لأن الـ id جاي من السيرفر كـ string (BIGINT)، وبيوصل هنا كـ number
+    // من الـ onclick، فلو قارنا بـ === كانت بترجع -1 دايمًا ومكانتش بتنفذ الحذف خالص
+    const idx = problemCategories.findIndex(x => Number(x.id) === Number(id));
     if (idx === -1) return;
     try {
         const res = await apiFetch(`/api/resolve-categories/${id}`, { method: 'DELETE' });
