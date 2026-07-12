@@ -39,8 +39,11 @@ async function getContractById(contractId) {
   return result.recordset[0] || null;
 }
 
-// هل فيه عقد "active" لعميل معين دلوقتي؟ بنستخدمها قبل إضافة عقد جديد — مينفعش
-// نضيف عقد جديد لعميل عنده عقد active أصلًا، لازم الأدمن يوقفه الأول
+// هل فيه عقد "active" لعميل معين لسه ساري فعليًا (تاريخ النهارده لسه ماعداش
+// تاريخ انتهاءه)؟ بنستخدمها قبل إضافة عقد جديد — العقد اللي حالته active بس
+// خلصت مدته (منتهي بالتاريخ) مش لازم يتوقف الأول، أصلاً هو منتهي، فمينفعش يمنع
+// إضافة عقد جديد؛ العقد اللي لازم يتوقف الأول هو اللي لسه شغال فعلاً (ساري أو
+// لسه هيبدأ)
 async function getActiveContractForContact(contactId) {
   const pool = await getPool();
   const result = await pool
@@ -50,6 +53,7 @@ async function getActiveContractForContact(contactId) {
       SELECT TOP 1 ${SELECT_COLUMNS}
       FROM [dbo].[NileChat_MaintenanceContracts_byA]
       WHERE contact_id = @contactId AND status = 'active'
+        AND end_date >= CAST(SYSUTCDATETIME() AS DATE)
       ORDER BY created_at DESC, id DESC
     `);
   return result.recordset[0] || null;

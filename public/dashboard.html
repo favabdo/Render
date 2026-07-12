@@ -5963,10 +5963,16 @@ async function loadCustomerMaintenanceContracts(contactId) {
         if (!res.ok) throw new Error('فشل تحميل سجل الصيانة');
         const contracts = await res.json();
 
-        // زرار "إضافة عقد صيانة" بيتعطل لو لسه فيه عقد active شغال — لازم الأدمن
-        // يوقفه الأول (contracts جاية آخر عقد مضاف الأول، فبنفحص contracts[0] بس)
+        // زرار "إضافة عقد صيانة" بيتعطل لو لسه فيه عقد active شغال فعليًا (لسه ماخلصتش
+        // مدته) — لازم الأدمن يوقفه الأول. العقد اللي حالته active بس منتهي بالتاريخ
+        // مش بيمنع الإضافة (contracts جاية آخر عقد مضاف الأول، فبنفحص contracts[0] بس)
         const addBtn = document.getElementById('customer-details-add-contract-btn');
-        const hasActive = contracts.length > 0 && contracts[0].status === 'active';
+        let hasActive = false;
+        if (contracts.length > 0 && contracts[0].status === 'active') {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const end = new Date(contracts[0].end_date); end.setHours(0, 0, 0, 0);
+            hasActive = today <= end;
+        }
         if (addBtn) {
             addBtn.disabled = hasActive;
             addBtn.style.opacity = hasActive ? '.5' : '';
@@ -6002,11 +6008,15 @@ function maintenanceContractStatus(contract) {
 
 function maintenanceContractCardHtml(contract) {
     const status = maintenanceContractStatus(contract);
-    // زرار الإيقاف/المسح بيظهروا للأدمن/الأونر بس. الإيقاف متاح بس للعقد الشغال
-    // (status active)، والمسح متاح دايمًا
+    // زرار الإيقاف بيظهر بس للعقد اللي حالته active ولسه ماخلصتش مدته (ساري أو
+    // لسه هيبدأ) — العقد المنتهي بالتاريخ أصلاً منتهي ومش محتاج إيقاف، ليه زرار
+    // الحذف بس. المسح متاح دايمًا لأي عقد، والاتنين للأدمن/الأونر بس
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const end = new Date(contract.end_date); end.setHours(0, 0, 0, 0);
+    const canStop = contract.status === 'active' && today <= end;
     const adminActionsHtml = isOwnerOrAdmin() ? `
             <div class="sched-task-actions">
-                ${contract.status === 'active'
+                ${canStop
                     ? `<button class="sched-end-btn" onclick="stopMaintenanceContract(${contract.id})"><i data-lucide="octagon-pause" style="width:13px;height:13px"></i>إيقاف العقد</button>`
                     : ''}
                 <button class="sched-end-btn" style="background:var(--danger);margin-inline-start:8px" onclick="deleteMaintenanceContract(${contract.id})"><i data-lucide="trash-2" style="width:13px;height:13px"></i>حذف</button>
