@@ -4798,7 +4798,7 @@ function renderPhones(c) {
                 <span>${escapeHtml(p.number)}</span>
                 ${p.label ? `<span class="label-chip" style="background:rgba(108,92,231,0.1);color:var(--primary);padding:2px 9px;font-size:11px">${escapeHtml(p.label)}</span>` : ''}
             </div>
-            <button class="info-item-del" onclick="editPhoneLabel(${i})" title="حط/عدّل ليبل"><i data-lucide="tag" style="width:14px;height:14px"></i></button>
+            ${isOwnerOrAdmin() ? `<button class="info-item-del" onclick="editPhoneLabel(${i})" title="حط/عدّل ليبل"><i data-lucide="tag" style="width:14px;height:14px"></i></button>` : ''}
         </div>
     `).join('');
     lucide.createIcons();
@@ -4879,6 +4879,9 @@ async function loadContactDetails(c) {
             renderContactNameRow(c.name);
             renderPhones(c);
             renderPrevConvs(c);
+            // إضافة رقم / دمج بكونتاكت موجود — أدمن/أونر بس، مش أي إيجنت
+            document.getElementById('add-phone-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
+            document.getElementById('merge-contact-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
             // مهم: بدون السطر ده، شاشة الشات نفسها كانت بتفضل عارضة رقم العميل الخام
             // (لأنها اترسمت قبل ما الليبل الحقيقي يوصل من السيرفر) لحد ما حاجة تانية
             // (زي إرسال رسالة) تعمل renderMessages من جديد بالصدفة
@@ -4890,13 +4893,13 @@ async function loadContactDetails(c) {
     }
 }
 
-/* ===== تعديل اسم العميل ===== */
+/* ===== تعديل اسم العميل ===== (أدمن/أونر بس — إيجنت عادي بيشوف بس من غير زرار تعديل) */
 function renderContactNameRow(name) {
     const row = document.getElementById('cp-name-row');
     if (!row) return;
     row.innerHTML = `
         <div class="cp-name" id="cp-name">${escapeHtml(name)}</div>
-        <button class="st-icon-btn" onclick="startContactNameEdit()" title="Edit name" style="width:22px;height:22px"><i data-lucide="pencil" style="width:12px;height:12px"></i></button>`;
+        ${isOwnerOrAdmin() ? `<button class="st-icon-btn" onclick="startContactNameEdit()" title="Edit name" style="width:22px;height:22px"><i data-lucide="pencil" style="width:12px;height:12px"></i></button>` : ''}`;
     lucide.createIcons();
 }
 
@@ -5804,11 +5807,15 @@ async function addCustomerDetailsPhone() {
 function renderCustomerDetailsPhones(c) {
     const wrap = document.getElementById('customer-details-phones');
     const phones = c.phones || [];
+    const addRow = document.getElementById('customer-details-add-phone-row');
+    const addHint = document.getElementById('customer-details-new-phone-hint');
+    if (addRow) addRow.style.display = isOwnerOrAdmin() ? '' : 'none';
+    if (addHint) addHint.style.display = isOwnerOrAdmin() ? '' : 'none';
     if (!phones.length) {
         wrap.innerHTML = '<div class="st-modal-readonly-value">-</div>';
         return;
     }
-    const canUnlink = phones.length > 1;
+    const canUnlink = phones.length > 1 && isOwnerOrAdmin();
     wrap.innerHTML = phones.map(p => `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <div class="st-modal-readonly-value">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>
