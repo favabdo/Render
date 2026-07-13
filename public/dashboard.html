@@ -5521,6 +5521,20 @@ function openConversationForContact(contactId) {
 let customerCardMode = 'add'; // 'add' | 'edit'
 let customerCardEditingId = null;
 
+// نفس صيغة رقم تليفون العميل بتاعة كارت الصيانة: كود الدولة 20 وبعده رقم
+// الموبايل المصري من غير الصفر اللي في الأول (يعني 12 رقم بالظبط، بيبدأ بـ 2010/2011/2012/2015)
+const CUSTOMER_PHONE_REGEX = /^201[0125]\d{8}$/;
+
+function validateCustomerCardPhone() {
+    const input = document.getElementById('customer-card-phone');
+    const hint = document.getElementById('customer-card-phone-hint');
+    if (input.disabled) return true; // في وضع التعديل الرقم مقفول، مفيش داعي نتحقق منه
+    const value = input.value.trim();
+    const valid = !value || CUSTOMER_PHONE_REGEX.test(value);
+    if (hint) hint.style.color = valid ? '' : 'var(--danger)';
+    return valid;
+}
+
 function openAddCustomerModal() {
     customerCardMode = 'add';
     customerCardEditingId = null;
@@ -5530,6 +5544,11 @@ function openAddCustomerModal() {
     document.getElementById('customer-card-location').value = '';
     document.getElementById('customer-card-phone').value = '';
     document.getElementById('customer-card-phone').disabled = false;
+    document.getElementById('customer-card-contract-start').value = '';
+    document.getElementById('customer-card-contract-end').value = '';
+    document.getElementById('customer-card-contract-row').style.display = '';
+    document.getElementById('customer-card-contract-hint').style.display = '';
+    document.getElementById('customer-card-phone-hint').style.color = '';
     document.getElementById('customer-card-error').textContent = '';
     document.getElementById('customer-card-overlay').classList.add('show');
     lucide.createIcons();
@@ -5549,6 +5568,19 @@ async function submitCustomerCard() {
 
     if (!name) return (errorEl.textContent = 'لازم تكتب اسم العميل');
     if (customerCardMode === 'add' && !phone) return (errorEl.textContent = 'لازم تكتب رقم تليفون العميل');
+    if (customerCardMode === 'add' && !CUSTOMER_PHONE_REGEX.test(phone)) {
+        validateCustomerCardPhone();
+        return (errorEl.textContent = 'رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696');
+    }
+
+    const contractStart = customerCardMode === 'add' ? document.getElementById('customer-card-contract-start').value : '';
+    const contractEnd = customerCardMode === 'add' ? document.getElementById('customer-card-contract-end').value : '';
+    if (customerCardMode === 'add' && (contractStart || contractEnd) && !(contractStart && contractEnd)) {
+        return (errorEl.textContent = 'لو هتحدد عقد صيانة، لازم تحدد تاريخ البدء والانتهاء مع بعض');
+    }
+    if (customerCardMode === 'add' && contractStart && contractEnd && new Date(contractEnd) < new Date(contractStart)) {
+        return (errorEl.textContent = 'تاريخ انتهاء العقد لازم يكون بعد تاريخ البدء');
+    }
 
     const btn = document.getElementById('customer-card-confirm-btn');
     btn.disabled = true;
@@ -5558,7 +5590,7 @@ async function submitCustomerCard() {
             : `/api/contacts/${customerCardEditingId}/customer-card`;
         const method = customerCardMode === 'add' ? 'POST' : 'PATCH';
         const body = customerCardMode === 'add'
-            ? { name, location, phone }
+            ? { name, location, phone, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined }
             : { name, location };
 
         const res = await apiFetch(url, { method, body: JSON.stringify(body) });
@@ -5756,6 +5788,9 @@ function editCurrentCustomerCard() {
     document.getElementById('customer-card-location').value = c.location || '';
     document.getElementById('customer-card-phone').value = (c.phones || []).map(p => p.phone_number).join(', ');
     document.getElementById('customer-card-phone').disabled = true; // الرقم مش بيتعدل من هنا
+    document.getElementById('customer-card-phone-hint').style.color = '';
+    document.getElementById('customer-card-contract-row').style.display = 'none'; // عقد الصيانة بيتضاف/يتجدد من صفحة التفاصيل مش من هنا
+    document.getElementById('customer-card-contract-hint').style.display = 'none';
     document.getElementById('customer-card-error').textContent = '';
 
     document.getElementById('customer-card-overlay').classList.add('show');
@@ -7212,7 +7247,24 @@ async function iwDeleteInbox(id) {
         <input type="text" class="iw-input" id="customer-card-location" placeholder="العنوان / المكان" style="margin-bottom:12px">
 
         <div class="resolve-cats-label">رقم التليفون</div>
-        <input type="text" class="iw-input" id="customer-card-phone" placeholder="رقم التليفون" style="margin-bottom:6px">
+        <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 201010293696" maxlength="12" oninput="validateCustomerCardPhone()" style="margin-bottom:4px">
+        <div class="resolve-modal-sub" id="customer-card-phone-hint" style="margin:0 0 12px;font-size:11.5px">
+            لازم يبقى بالصيغة الدولية من غير + ومن غير مسافات، يعني رمز مصر <b>20</b> وبعده الرقم من غير الصفر اللي في الأول — مثال: <b dir="ltr">201010293696</b>
+        </div>
+
+        <div class="st-modal-readonly-row" id="customer-card-contract-row">
+            <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
+                <div class="resolve-cats-label">تاريخ بدء عقد الصيانة (اختياري)</div>
+                <input type="date" class="iw-input" id="customer-card-contract-start">
+            </div>
+            <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
+                <div class="resolve-cats-label">تاريخ انتهاء عقد الصيانة (اختياري)</div>
+                <input type="date" class="iw-input" id="customer-card-contract-end">
+            </div>
+        </div>
+        <div class="resolve-modal-sub" id="customer-card-contract-hint" style="margin:2px 0 12px;font-size:11.5px">
+            لو حددت التاريخين، هيتسجل أول عقد صيانة للعميل فورًا مربوط بنفس الكارت ده (بدل ما يتضاف بعدين من صفحة تفاصيل العميل).
+        </div>
 
         <div class="login-error" id="customer-card-error" style="color:var(--danger);font-size:12.5px;margin-top:8px;text-align:center"></div>
 

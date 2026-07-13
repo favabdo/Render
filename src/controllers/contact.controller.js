@@ -94,6 +94,10 @@ async function linkConversationContact(req, res) {
 // (متأكد منها فعليًا في الراوت بـ requireAdmin). بيطلب: اسم العميل، مكانه، رقم
 // تليفونه، وممكن اختياريًا تاريخ بدء/انتهاء أول عقد صيانة ليه (لو مش عايز يحددها
 // دلوقتي، يقدر يضيفها بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل)
+// نفس الصيغة اللي بنفرضها في الفرونت إند: كود مصر الدولي (20) وبعده رقم
+// الموبايل من غير الصفر اللي في الأول، يعني 12 رقم بالظبط (مثال: 201010293696)
+const EGYPT_PHONE_REGEX = /^201[0125]\d{8}$/;
+
 async function createCustomerCard(req, res) {
   const { name, location, phone, contractDate, maintenanceEndDate } = req.body || {};
 
@@ -101,6 +105,12 @@ async function createCustomerCard(req, res) {
   const trimmedPhone = (phone || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
   if (!trimmedPhone) return res.status(400).json({ error: 'لازم تكتب رقم تليفون العميل' });
+  if (!EGYPT_PHONE_REGEX.test(trimmedPhone)) {
+    return res.status(400).json({ error: 'رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696' });
+  }
+  if ((contractDate && !maintenanceEndDate) || (!contractDate && maintenanceEndDate)) {
+    return res.status(400).json({ error: 'لو هتحدد عقد صيانة، لازم تحدد تاريخ البدء والانتهاء مع بعض' });
+  }
   if (contractDate && maintenanceEndDate && new Date(maintenanceEndDate) < new Date(contractDate)) {
     return res.status(400).json({ error: 'تاريخ انتهاء العقد لازم يكون بعد تاريخ البدء' });
   }
