@@ -514,6 +514,12 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .coming-soon-box p{font-size:13.5px}
 
 .contacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.contacts-pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:24px;flex-wrap:wrap}
+.contacts-pagination button{min-width:34px;height:34px;padding:0 10px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.contacts-pagination button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.contacts-pagination button.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.contacts-pagination button:disabled{opacity:.4;cursor:not-allowed}
+.contacts-pagination .cp-ellipsis{color:var(--text-secondary);font-size:13px;padding:0 4px}
 .contact-card{background:var(--surface);border-radius:16px;padding:20px;border:1px solid var(--border);display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s}
 .contact-card:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,0.08);border-color:var(--primary-light)}
 .contact-card-avatar{width:52px;height:52px;border-radius:50%;overflow:hidden;flex-shrink:0}
@@ -1135,6 +1141,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             </div>
         </div>
         <div class="contacts-grid" id="contacts-grid"></div>
+        <div class="contacts-pagination" id="contacts-pagination" style="display:none"></div>
     </div>
 </div>
 
@@ -2394,11 +2401,11 @@ function initSocket() {
    - agents            -> حقيقية فعليًا من GET /api/inboxes-available-agents (شوف loadAgentsFromAPI)
    - savedReplies      -> حقيقية فعليًا من GET /api/canned-responses (شوف loadCannedResponsesFromAPI)
    - problemCategories -> حقيقية فعليًا من GET /api/resolve-categories (شوف loadResolveCategoriesFromAPI)
-   - contactsData      -> حقيقية فعليًا من GET /api/contacts (شوف loadContactsPage) */
+   - contactsData      -> حقيقية فعليًا من GET /api/contacts-paginated بصفحات (شوف loadContactsPage) */
 let agents = []; // هتتعبى فعليًا من /api/inboxes-available-agents جوه loadAgentsFromAPI()
 let savedReplies = []; // هتتعبى فعليًا من /api/canned-responses جوه loadCannedResponsesFromAPI()
 let problemCategories = []; // هتتعبى فعليًا من /api/resolve-categories جوه loadResolveCategoriesFromAPI()
-let contactsData = []; // هتتعبى فعليًا من /api/contacts جوه loadContactsPage()
+let contactsData = []; // هتتعبى فعليًا من /api/contacts-paginated (صفحة 20 بس) جوه loadContactsPage()
 
 // بيحول شكل الرد الجاي من السيرفر (label, message_text) لنفس الشكل اللي الواجهة مستخدمة بيه من زمان (label, text)
 function mapCannedResponse(r) {
@@ -5513,38 +5520,52 @@ async function endScheduledTask(taskId, contactId) {
 }
 
 /* ===== صفحات أخرى ===== */
-async function loadContactsPage() {
+const CONTACTS_PAGE_SIZE = 20;
+let contactsCurrentPage = 1;
+let contactsTotalPages = 1;
+let contactsSearchQuery = '';
+let contactsSearchDebounceTimer = null;
+
+// بيجيب صفحة واحدة بس (أقصى حاجة 20 عميل) من /api/contacts-paginated، مش كل
+// العملاء دفعة واحدة — لو فيه بحث بيتبعت للسيرفر نفسه (@q) عشان النتيجة تشمل
+// كل العملاء المطابقين مش بس اللي في الصفحة الحالية
+async function loadContactsPage(page = 1) {
     const grid = document.getElementById('contacts-grid');
+    const pager = document.getElementById('contacts-pagination');
+    if (grid) grid.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">جاري التحميل...</div>';
+    if (pager) pager.style.display = 'none';
     try {
-        const res = await apiFetch('/api/contacts');
+        const params = new URLSearchParams({ page: String(page), pageSize: String(CONTACTS_PAGE_SIZE) });
+        if (contactsSearchQuery) params.set('q', contactsSearchQuery);
+        const res = await apiFetch(`/api/contacts-paginated?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to fetch contacts');
-        contactsData = await res.json();
+        const data = await res.json();
+        contactsData = data.contacts || [];
+        contactsCurrentPage = data.page || 1;
+        contactsTotalPages = data.totalPages || 1;
         renderContacts();
+        renderContactsPagination();
     } catch (err) {
         console.error('[API] loadContactsPage error:', err);
         if (grid) grid.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">تعذر تحميل جهات الاتصال</div>';
     }
 }
 
-let contactsSearchQuery = '';
+// البحث بقى من السيرفر مش فلترة محلية على صفحة واحدة بس — عشان لو النتيجة في
+// صفحة تانية غير الحالية برضو تظهر. مع debounce بسيط عشان ميبعتش طلب مع كل حرف
 function onContactsSearchInput(value) {
-    contactsSearchQuery = (value || '').trim().toLowerCase();
-    renderContacts();
+    contactsSearchQuery = (value || '').trim();
+    clearTimeout(contactsSearchDebounceTimer);
+    contactsSearchDebounceTimer = setTimeout(() => loadContactsPage(1), 350);
 }
 
 function renderContacts() {
     const grid = document.getElementById('contacts-grid');
-    const q = contactsSearchQuery;
-    const filteredContacts = !q ? contactsData : contactsData.filter(c => {
-        const nameMatch = (c.name || '').toLowerCase().includes(q);
-        const phoneMatch = (c.phones || []).some(p => (p.phone_number || '').toLowerCase().includes(q));
-        return nameMatch || phoneMatch;
-    });
-    if (filteredContacts.length === 0) {
-        grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${q ? 'لا توجد نتائج مطابقة' : 'لا توجد جهات اتصال لعرضها'}</div>`;
+    if (contactsData.length === 0) {
+        grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${contactsSearchQuery ? 'لا توجد نتائج مطابقة' : 'لا توجد جهات اتصال لعرضها'}</div>`;
         return;
     }
-    grid.innerHTML = filteredContacts.map(c => {
+    grid.innerHTML = contactsData.map(c => {
         // كل كروت الـ Contacts دلوقتي بتوديك على صفحة التفاصيل (سواء العميل ده
         // اتضاف يدوي من زرار Add Contact، أو اتسجل أوتوماتيك من واتساب) — ومن
         // صفحة التفاصيل تقدر تفتح المحادثة بتاعته، أو (لو أدمن) تضيف/تعدّل بيانات
@@ -5567,7 +5588,31 @@ function renderContacts() {
     lucide.createIcons();
 }
 
-/* بيدور على أحدث محادثة مرتبطة بالكونتاكت ده ويفتحها، أو بيرجعلك رسالة لو مفيش محادثات لسه */
+// بار التنقل بين الصفحات تحت الشبكة — بيظهر بس لو فيه أكتر من صفحة واحدة، مع
+// أرقام مختصرة (أول صفحة، آخر صفحة، وجمب الصفحة الحالية) وعلامة "…" للباقي
+function renderContactsPagination() {
+    const pager = document.getElementById('contacts-pagination');
+    if (!pager) return;
+    if (contactsTotalPages <= 1) { pager.style.display = 'none'; pager.innerHTML = ''; return; }
+
+    const cur = contactsCurrentPage;
+    const total = contactsTotalPages;
+    const pageSet = new Set([1, total, cur, cur - 1, cur + 1].filter(p => p >= 1 && p <= total));
+    const sortedPages = [...pageSet].sort((a, b) => a - b);
+
+    let html = `<button onclick="loadContactsPage(${cur - 1})" ${cur <= 1 ? 'disabled' : ''}>‹ Previous</button>`;
+    let prevPage = 0;
+    for (const p of sortedPages) {
+        if (prevPage && p - prevPage > 1) html += `<span class="cp-ellipsis">…</span>`;
+        html += `<button class="${p === cur ? 'active' : ''}" onclick="loadContactsPage(${p})">${p}</button>`;
+        prevPage = p;
+    }
+    html += `<button onclick="loadContactsPage(${cur + 1})" ${cur >= total ? 'disabled' : ''}>Next ›</button>`;
+
+    pager.style.display = 'flex';
+    pager.innerHTML = html;
+}
+
 function openConversationForContact(contactId) {
     const conv = conversations.find(x => String(x.contactId) === String(contactId));
     if (!conv) {

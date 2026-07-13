@@ -4,17 +4,18 @@
 // (تاريخ بدء/انتهاء جديدين) من غير ما نلمس أو نمسح تاريخ العقود اللي فاتت —
 // عكس الطريقة القديمة اللي كانت بتستبدل تاريخ العقد الواحد المتسجل على الكونتاكت.
 //
-// عمود status (active/stopped): العقد بيتولد "active" افتراضيًا. الأدمن بس هو
-// اللي يقدر يوقفه (status='stopped') أو يمسحه خالص. ما دام فيه عقد "active"
-// لعميل معين، مينفعش يتضاف عقد جديد ليه غير لو الأدمن وقف الحالي الأول —
-// اتأكد منها في الكنترولر قبل الإضافة.
+// "إيقاف" عقد (Stop): الأدمن/الأونر بس اللي يقدر يوقف عقد ساري — العقد بيفضل في
+// السجل (تاريخه محفوظ)، لكن بيتحسب بعدها "موقوف" مش "ساري" حتى لو تاريخ نهايته
+// لسه ما جاش. ده الشرط الوحيد اللي بيسمح بإضافة عقد جديد: مينفعش تضيف عقد جديد
+// وفيه عقد ساري (جوه مدته) ومش موقوف.
 const { getPool, sql } = require('../config/db');
 
 const SELECT_COLUMNS = `
-  id, contact_id, start_date, end_date, notes, status, created_by, created_by_name, created_at
+  id, contact_id, start_date, end_date, notes, created_by, created_by_name,
+  created_at, stopped_at, stopped_by, stopped_by_name
 `;
 
-// كل عقود الصيانة الخاصة بعميل معين، آخر عقد اتضاف الأول (بيتعرضوا في سيكشن
+// كل عقود الصيانة الخاصة بعميل معين، الأحدث بدايةً الأول (بيتعرضوا في سيكشن
 // "سجل الصيانة" جمب سيكشن الزيارات في صفحة تفاصيل العميل)
 async function listContractsForContact(contactId) {
   const pool = await getPool();
@@ -25,7 +26,7 @@ async function listContractsForContact(contactId) {
       SELECT ${SELECT_COLUMNS}
       FROM [dbo].[NileChat_MaintenanceContracts_byA]
       WHERE contact_id = @contactId
-      ORDER BY created_at DESC, id DESC
+      ORDER BY start_date DESC, created_at DESC
     `);
   return result.recordset;
 }
@@ -39,28 +40,28 @@ async function getContractById(contractId) {
   return result.recordset[0] || null;
 }
 
-// هل فيه عقد "active" لعميل معين لسه ساري فعليًا (تاريخ النهارده لسه ماعداش
-// تاريخ انتهاءه)؟ بنستخدمها قبل إضافة عقد جديد — العقد اللي حالته active بس
-// خلصت مدته (منتهي بالتاريخ) مش لازم يتوقف الأول، أصلاً هو منتهي، فمينفعش يمنع
-// إضافة عقد جديد؛ العقد اللي لازم يتوقف الأول هو اللي لسه شغال فعلاً (ساري أو
-// لسه هيبدأ)
-async function getActiveContractForContact(contactId) {
+// فيه عقد "ساري ومش موقوف" لعميل معين دلوقتي؟ (تاريخ النهارده بين بدايته
+// ونهايته، و stopped_at لسه NULL) — ده الشرط اللي بيمنع إضافة عقد جديد، بيتنادى
+// عليه من الكنترولر قبل ما يسمح بـ addContract
+async function hasActiveUnstoppedContract(contactId) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('contactId', sql.BigInt, contactId)
     .query(`
-      SELECT TOP 1 ${SELECT_COLUMNS}
+      SELECT TOP 1 id
       FROM [dbo].[NileChat_MaintenanceContracts_byA]
-      WHERE contact_id = @contactId AND status = 'active'
-        AND end_date >= CAST(SYSUTCDATETIME() AS DATE)
-      ORDER BY created_at DESC, id DESC
+      WHERE contact_id = @contactId
+        AND stopped_at IS NULL
+        AND CAST(SYSUTCDATETIME() AS DATE) BETWEEN start_date AND end_date
     `);
-  return result.recordset[0] || null;
+  return !!result.recordset[0];
 }
 
-// إضافة عقد صيانة جديد لعميل — أدمن/أونر بس (متأكد منها فعليًا في الراوت بـ
-// requireAdmin)، وممنوع لو فيه عقد active لسه لنفس العميل (متأكد منها في الكنترولر)
+// إضافة عقد صيانة جديد لعميل (سواء عقده القديم لسه ساري بعد ما اتوقف يدويًا أو
+// خلص من مدته) — أدمن/أونر بس (متأكد منها فعليًا في الراوت بـ requireAdmin)،
+// وممنوع لو فيه عقد ساري مش موقوف (اتأكد منها في الكنترولر بـ
+// hasActiveUnstoppedContract قبل ما يوصل هنا)
 async function addContract({ contactId, startDate, endDate, notes, createdBy, createdByName }) {
   const pool = await getPool();
   const result = await pool
@@ -73,49 +74,49 @@ async function addContract({ contactId, startDate, endDate, notes, createdBy, cr
     .input('createdByName', sql.NVarChar(200), createdByName || null)
     .query(`
       INSERT INTO [dbo].[NileChat_MaintenanceContracts_byA]
-        (contact_id, start_date, end_date, notes, status, created_by, created_by_name)
+        (contact_id, start_date, end_date, notes, created_by, created_by_name)
       OUTPUT INSERTED.id
-      VALUES (@contactId, @startDate, @endDate, @notes, 'active', @createdBy, @createdByName)
+      VALUES (@contactId, @startDate, @endDate, @notes, @createdBy, @createdByName)
     `);
   return getContractById(result.recordset[0].id);
 }
 
-// إيقاف عقد صيانة (status -> 'stopped') — أدمن/أونر بس. بمجرد ما يتوقف، يبقى
-// ينفع يتضاف عقد جديد للعميل ده، والعقد الموقوف ده بيفضل موقوف (مش بيرجع active
-// تاني تلقائيًا)
-async function stopContract(contractId) {
+// بيوقف عقد ساري (أدمن/أونر بس) — العقد بيفضل في السجل بتاريخه زي ما هو، لكن
+// بيتحط عليه stopped_at عشان يبطل يتحسب "ساري" في أي حسبة تانية (ومنها إمكانية
+// إضافة عقد جديد)
+async function stopContract(contractId, { stoppedBy, stoppedByName } = {}) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('id', sql.BigInt, contractId)
+    .input('stoppedBy', sql.BigInt, stoppedBy || null)
+    .input('stoppedByName', sql.NVarChar(200), stoppedByName || null)
     .query(`
       UPDATE [dbo].[NileChat_MaintenanceContracts_byA]
-      SET status = 'stopped'
+      SET stopped_at = SYSUTCDATETIME(), stopped_by = @stoppedBy, stopped_by_name = @stoppedByName
       OUTPUT INSERTED.id
-      WHERE id = @id AND status = 'active'
+      WHERE id = @id AND stopped_at IS NULL
     `);
   if (!result.recordset[0]) return null;
   return getContractById(result.recordset[0].id);
 }
 
-// مسح عقد صيانة خالص من السجل — أدمن/أونر بس
+// مسح عقد صيانة نهائيًا من السجل (أدمن/أونر بس)
 async function deleteContract(contractId) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('id', sql.BigInt, contractId)
-    .query(`
-      DELETE FROM [dbo].[NileChat_MaintenanceContracts_byA]
-      OUTPUT DELETED.id
-      WHERE id = @id
-    `);
-  return result.recordset[0] || null;
+    .query(`DELETE FROM [dbo].[NileChat_MaintenanceContracts_byA] OUTPUT DELETED.id WHERE id = @id`);
+  return !!result.recordset[0];
 }
 
-// "العقد الحالي" بتاع عميل معين: دايمًا آخر عقد اتضاف (بغض النظر عن حالته
-// active/stopped أو تواريخه) — ده اللي بيتعرض في إحصائيات العميل الظاهرة برة
-// (فوق سيكشن الزيارات) وفي بادچ "عميل صيانة" في شبكة الكونتاكتس، نفس منطق
-// OUTER APPLY المستخدم في contact.repo.js لكن كدالة مستقلة لو احتجناها لعميل واحد بس
+// "العقد الحالي" بتاع عميل معين: دلوقتي بقى دايمًا آخر عقد اتضاف (الأحدث
+// created_at)، مش أحسن عقد بالتاريخ — عشان الأدمن هو اللي متحكم في السلسلة (يوقف
+// عقد قبل ما يضيف التاني)، فآخر عقد مضاف هو مصدر الحقيقة دايمًا لإحصائيات العميل
+// الظاهرة برة (فوق سيكشن الزيارات) وبادچ "عميل صيانة" في شبكة الكونتاكتس — نفس
+// منطق OUTER APPLY المستخدم في contact.repo.js لكن كدالة مستقلة لو احتجناها
+// لعميل واحد بس
 async function getCurrentContractForContact(contactId) {
   const pool = await getPool();
   const result = await pool
@@ -133,8 +134,8 @@ async function getCurrentContractForContact(contactId) {
 module.exports = {
   listContractsForContact,
   getContractById,
-  getActiveContractForContact,
   getCurrentContractForContact,
+  hasActiveUnstoppedContract,
   addContract,
   stopContract,
   deleteContract,

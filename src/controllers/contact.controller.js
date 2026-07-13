@@ -12,6 +12,17 @@ async function listContacts(req, res) {
   res.json(contacts);
 }
 
+// نسخة بصفحات لشبكة العملاء في صفحة Contacts — أقصى حاجة 20 عميل في كل طلب،
+// مع دعم البحث بالاسم أو رقم التليفون على مستوى السيرفر نفسه
+async function listContactsPaginated(req, res) {
+  const result = await contactRepo.listContactsPage({
+    page: req.query.page,
+    pageSize: req.query.pageSize,
+    search: req.query.q,
+  });
+  res.json(result);
+}
+
 async function getContact(req, res) {
   const contact = await contactRepo.getContactByIdWithPhones(req.params.id);
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
@@ -94,10 +105,6 @@ async function linkConversationContact(req, res) {
 // (متأكد منها فعليًا في الراوت بـ requireAdmin). بيطلب: اسم العميل، مكانه، رقم
 // تليفونه، وممكن اختياريًا تاريخ بدء/انتهاء أول عقد صيانة ليه (لو مش عايز يحددها
 // دلوقتي، يقدر يضيفها بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل)
-// نفس الصيغة اللي بنفرضها في الفرونت إند: كود مصر الدولي (20) وبعده رقم
-// الموبايل من غير الصفر اللي في الأول، يعني 12 رقم بالظبط (مثال: 201010293696)
-const EGYPT_PHONE_REGEX = /^201[0125]\d{8}$/;
-
 async function createCustomerCard(req, res) {
   const { name, location, phone, contractDate, maintenanceEndDate } = req.body || {};
 
@@ -105,12 +112,6 @@ async function createCustomerCard(req, res) {
   const trimmedPhone = (phone || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
   if (!trimmedPhone) return res.status(400).json({ error: 'لازم تكتب رقم تليفون العميل' });
-  if (!EGYPT_PHONE_REGEX.test(trimmedPhone)) {
-    return res.status(400).json({ error: 'رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696' });
-  }
-  if ((contractDate && !maintenanceEndDate) || (!contractDate && maintenanceEndDate)) {
-    return res.status(400).json({ error: 'لو هتحدد عقد صيانة، لازم تحدد تاريخ البدء والانتهاء مع بعض' });
-  }
   if (contractDate && maintenanceEndDate && new Date(maintenanceEndDate) < new Date(contractDate)) {
     return res.status(400).json({ error: 'تاريخ انتهاء العقد لازم يكون بعد تاريخ البدء' });
   }
@@ -189,49 +190,13 @@ async function unlinkPhone(req, res) {
   res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
 }
 
-// بيضيف رقم تليفون جديد لكونتاكت موجود (من صفحة تفاصيل العميل أو من تاب Info
-// في المحادثة) — من غير ما يحتاج ميرج، ومن غير ما يحتاج الرقم يبعت رسالة واتساب
-// الأول. متاح لكل الصلاحيات زي فصل/دمج الأرقام بالظبط
-async function addPhone(req, res) {
-  const { phone } = req.body || {};
-  const trimmedPhone = (phone || '').trim();
-  if (!trimmedPhone) return res.status(400).json({ error: 'لازم تكتب رقم التليفون' });
-  if (!EGYPT_PHONE_REGEX.test(trimmedPhone)) {
-    return res.status(400).json({ error: 'رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696' });
-  }
-
-  const contact = await contactRepo.getContactById(req.params.id);
-  if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
-
-  const existing = await contactRepo.findContactByPhone(trimmedPhone);
-  if (existing) {
-    return res.status(409).json({
-      error: String(existing.id) === String(contact.id)
-        ? 'الرقم ده متسجل بالفعل على نفس العميل'
-        : 'الرقم ده متسجل بالفعل لعميل تاني — استخدم زرار الدمج لو عايز تربطه بالعميل ده',
-    });
-  }
-
-  const updated = await contactRepo.addPhoneToContact(req.params.id, trimmedPhone);
-
-  const io = req.app.get('io');
-  if (io) io.emit('contact_updated', updated);
-
-  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
-    contact_id: updated.id,
-    name: updated.name,
-  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
-
-  res.status(201).json({ ok: true, contact: updated });
-}
-
 module.exports = {
   listContacts,
+  listContactsPaginated,
   getContact,
   getContactConversations,
   updateContact,
   updatePhoneLabel,
-  addPhone,
   linkConversationContact,
   unlinkPhone,
   createCustomerCard,

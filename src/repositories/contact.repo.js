@@ -4,11 +4,12 @@ const maintenanceContractRepo = require('./maintenanceContract.repo');
 // نفس منطق "العقد الحالي" الموجود في maintenanceContract.repo.getCurrentContractForContact
 // لكن كـ OUTER APPLY جوه استعلام واحد، عشان نجيب العقد الحالي لكل الكونتاكتس دفعة
 // واحدة من غير ما نعمل query منفصل لكل عميل (N+1).
-// "العقد الحالي" = دايمًا آخر عقد اتضاف (بغض النظر عن حالته active/stopped) —
-// الأرقام الظاهرة في كل الكروت لازم تتحدث دايمًا على آخر عقد مضاف
+// "العقد الحالي" هنا هو آخر عقد اتضاف (created_at DESC) مش أحسن عقد بالتاريخ —
+// عشان الأدمن هو اللي متحكم في السلسلة (لازم يوقف العقد الساري قبل ما يضيف عقد
+// جديد)، فآخر عقد مضاف هو مصدر الحقيقة دايمًا للإحصائيات الظاهرة برة
 const CURRENT_CONTRACT_APPLY = `
   OUTER APPLY (
-    SELECT TOP 1 start_date, end_date, status
+    SELECT TOP 1 start_date, end_date, stopped_at
     FROM [dbo].[NileChat_MaintenanceContracts_byA] m
     WHERE m.contact_id = c.id
     ORDER BY m.created_at DESC, m.id DESC
@@ -82,7 +83,7 @@ async function getContactByIdWithCurrentContract(id) {
     .query(`
       SELECT c.id, c.name, c.location, c.created_at,
              mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
-             mc.status AS contract_status
+             mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
       WHERE c.id = @id
@@ -130,8 +131,8 @@ async function getContactByIdWithPhones(id) {
 }
 
 // كل الكونتاكتس (تُستخدم في صفحة Contacts وفي قايمة اختيار "اربط بكونتاكت موجود")
-// contract_date/maintenance_end_date هنا بييجوا من "العقد الحالي" بتاع كل عميل
-// (الساري لو موجود، وإلا آخر عقد انتهى) — نفس منطق getContactByIdWithCurrentContract
+// contract_date/maintenance_end_date هنا بييجوا من "العقد الحالي" (آخر عقد اتضاف)
+// بتاع كل عميل — نفس منطق getContactByIdWithCurrentContract
 async function listContacts() {
   const pool = await getPool();
   const contactsResult = await pool
@@ -139,7 +140,7 @@ async function listContacts() {
     .query(`
       SELECT c.id, c.name, c.location, c.created_at,
              mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
-             mc.status AS contract_status
+             mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
       ORDER BY c.name ASC
@@ -155,6 +156,71 @@ async function listContacts() {
   }
 
   return contactsResult.recordset.map((c) => ({ ...c, phones: phonesByContact[c.id] || [] }));
+}
+
+// نفس listContacts فوق، لكن بصفحات (Pagination) عشان لو العملاء كتروا الصفحة ميعلقش
+// تحميلها ولا تجيب كل الصفوف والأرقام مرة واحدة. كل صفحة أقصى حاجة 20 عميل،
+// والبحث (بالاسم أو رقم التليفون) بيتعمل على مستوى السيرفر نفسه مش بعد التحميل،
+// عشان لو حد بحث عن حاجة مش في أول صفحة يلاقيها برضو
+const MAX_CONTACTS_PAGE_SIZE = 20;
+
+async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '' } = {}) {
+  const pool = await getPool();
+  const safePage = Math.max(1, parseInt(page, 10) || 1);
+  const safePageSize = Math.min(MAX_CONTACTS_PAGE_SIZE, Math.max(1, parseInt(pageSize, 10) || MAX_CONTACTS_PAGE_SIZE));
+  const offset = (safePage - 1) * safePageSize;
+  const q = (search || '').trim();
+
+  const contactsResult = await pool
+    .request()
+    .input('q', sql.NVarChar(200), q ? `%${q}%` : null)
+    .input('offset', sql.Int, offset)
+    .input('pageSize', sql.Int, safePageSize)
+    .query(`
+      SELECT c.id, c.name, c.location, c.created_at,
+             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
+             mc.stopped_at AS maintenance_stopped_at,
+             COUNT(*) OVER() AS total_count
+      FROM [dbo].[NileChat_Contacts_byA] c
+      ${CURRENT_CONTRACT_APPLY}
+      WHERE @q IS NULL
+         OR c.name LIKE @q
+         OR EXISTS (
+              SELECT 1 FROM [dbo].[NileChat_ContactPhones_byA] p
+              WHERE p.contact_id = c.id AND p.phone_number LIKE @q
+            )
+      ORDER BY c.name ASC
+      OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+    `);
+
+  const rows = contactsResult.recordset;
+  const total = rows[0] ? rows[0].total_count : 0;
+  const contactIds = rows.map((r) => r.id);
+
+  let phonesByContact = {};
+  if (contactIds.length) {
+    const idsCsv = contactIds.join(',');
+    const phonesResult = await pool
+      .request()
+      .query(`
+        SELECT contact_id, phone_number, label
+        FROM [dbo].[NileChat_ContactPhones_byA]
+        WHERE contact_id IN (${idsCsv})
+        ORDER BY created_at ASC
+      `);
+    for (const row of phonesResult.recordset) {
+      if (!phonesByContact[row.contact_id]) phonesByContact[row.contact_id] = [];
+      phonesByContact[row.contact_id].push({ phone_number: row.phone_number, label: row.label || null });
+    }
+  }
+
+  return {
+    contacts: rows.map(({ total_count, ...c }) => ({ ...c, phones: phonesByContact[c.id] || [] })),
+    page: safePage,
+    pageSize: safePageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+  };
 }
 
 async function updateContactName(id, name) {
@@ -304,22 +370,6 @@ async function updateCustomerDetails(id, { name, location }) {
   return getContactByIdWithPhones(id);
 }
 
-// بيضيف رقم تليفون جديد لكونتاكت موجود بالفعل (من غير ميرج) — يعني العميل نفسه
-// عنده أكتر من رقم فعليًا (موبايل شخصي + شغل مثلاً) ومحتاج الاتنين يفضلوا تحت
-// نفس الكارت من غير ما يحتاج يستنى رسالة واتساب توصل من الرقم التاني الأول
-async function addPhoneToContact(contactId, phoneNumber) {
-  const pool = await getPool();
-  await pool
-    .request()
-    .input('contactId', sql.BigInt, contactId)
-    .input('phone', sql.NVarChar(30), phoneNumber)
-    .query(`
-      INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
-      VALUES (@contactId, @phone)
-    `);
-  return getContactByIdWithPhones(contactId);
-}
-
 module.exports = {
   findContactByPhone,
   createContactWithPhone,
@@ -330,8 +380,8 @@ module.exports = {
   getContactByIdWithPhones,
   getPhonesForContact,
   updatePhoneLabel,
-  addPhoneToContact,
   listContacts,
+  listContactsPage,
   updateContactName,
   linkPhoneToContact,
   unlinkPhoneToNewContact,

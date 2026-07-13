@@ -522,7 +522,6 @@ async function ensureMaintenanceContractsTableExists() {
         start_date      DATE NOT NULL,
         end_date        DATE NOT NULL,
         notes           NVARCHAR(500) NULL,
-        status          NVARCHAR(20) NOT NULL DEFAULT 'active',
         created_by      BIGINT NULL,
         created_by_name NVARCHAR(200) NULL,
         created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
@@ -538,16 +537,24 @@ async function ensureMaintenanceContractsTableExists() {
       FROM [dbo].[NileChat_Contacts_byA]
       WHERE contract_date IS NOT NULL AND maintenance_end_date IS NOT NULL;
     END
-    ELSE IF NOT EXISTS (
-      SELECT * FROM sys.columns
-      WHERE object_id = OBJECT_ID('[dbo].[NileChat_MaintenanceContracts_byA]') AND name = 'status'
-    )
-    BEGIN
-      -- ترقية للجداول القديمة اللي كانت متعملة قبل إضافة فكرة "إيقاف العقد": بنضيف
-      -- عمود status (active/stopped) وكل العقود القديمة بتتحسب "active" افتراضيًا
-      ALTER TABLE [dbo].[NileChat_MaintenanceContracts_byA]
-        ADD status NVARCHAR(20) NOT NULL DEFAULT 'active';
-    END
+  `);
+
+  // عمود "إيقاف العقد" — الأدمن/الأونر بس اللي يقدر يوقف عقد ساري (بدل ما يمسحه
+  // نهائي ويفقد تاريخه). العقد الموقوف بيفضل في السجل لكن مبيتحسبش "ساري" تاني
+  // حتى لو تاريخه لسه جوه المدة، وده اللي بيسمح بإضافة عقد جديد بعد كده. لازم
+  // تكون ALTER في batch منفصل زي باقي الأعمدة المتأخرة في الملف ده عشان
+  // "Invalid column name" وقت الـ compile
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_MaintenanceContracts_byA') AND name = 'stopped_at')
+      ALTER TABLE [dbo].[NileChat_MaintenanceContracts_byA] ADD stopped_at DATETIME2 NULL;
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_MaintenanceContracts_byA') AND name = 'stopped_by')
+      ALTER TABLE [dbo].[NileChat_MaintenanceContracts_byA] ADD stopped_by BIGINT NULL;
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_MaintenanceContracts_byA') AND name = 'stopped_by_name')
+      ALTER TABLE [dbo].[NileChat_MaintenanceContracts_byA] ADD stopped_by_name NVARCHAR(200) NULL;
   `);
   logger.info('✅ جدول Maintenance Contracts جاهز.');
 }
