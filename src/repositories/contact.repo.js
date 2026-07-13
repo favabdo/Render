@@ -304,6 +304,22 @@ async function updateCustomerDetails(id, { name, location }) {
   return getContactByIdWithPhones(id);
 }
 
+// بيضيف رقم تليفون جديد لكونتاكت موجود بالفعل (من غير ميرج) — يعني العميل نفسه
+// عنده أكتر من رقم فعليًا (موبايل شخصي + شغل مثلاً) ومحتاج الاتنين يفضلوا تحت
+// نفس الكارت من غير ما يحتاج يستنى رسالة واتساب توصل من الرقم التاني الأول
+async function addPhoneToContact(contactId, phoneNumber) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .query(`
+      INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
+      VALUES (@contactId, @phone)
+    `);
+  return getContactByIdWithPhones(contactId);
+}
+
 module.exports = {
   findContactByPhone,
   createContactWithPhone,
@@ -314,6 +330,7 @@ module.exports = {
   getContactByIdWithPhones,
   getPhonesForContact,
   updatePhoneLabel,
+  addPhoneToContact,
   listContacts,
   updateContactName,
   linkPhoneToContact,

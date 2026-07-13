@@ -189,12 +189,49 @@ async function unlinkPhone(req, res) {
   res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
 }
 
+// بيضيف رقم تليفون جديد لكونتاكت موجود (من صفحة تفاصيل العميل أو من تاب Info
+// في المحادثة) — من غير ما يحتاج ميرج، ومن غير ما يحتاج الرقم يبعت رسالة واتساب
+// الأول. متاح لكل الصلاحيات زي فصل/دمج الأرقام بالظبط
+async function addPhone(req, res) {
+  const { phone } = req.body || {};
+  const trimmedPhone = (phone || '').trim();
+  if (!trimmedPhone) return res.status(400).json({ error: 'لازم تكتب رقم التليفون' });
+  if (!EGYPT_PHONE_REGEX.test(trimmedPhone)) {
+    return res.status(400).json({ error: 'رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696' });
+  }
+
+  const contact = await contactRepo.getContactById(req.params.id);
+  if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const existing = await contactRepo.findContactByPhone(trimmedPhone);
+  if (existing) {
+    return res.status(409).json({
+      error: String(existing.id) === String(contact.id)
+        ? 'الرقم ده متسجل بالفعل على نفس العميل'
+        : 'الرقم ده متسجل بالفعل لعميل تاني — استخدم زرار الدمج لو عايز تربطه بالعميل ده',
+    });
+  }
+
+  const updated = await contactRepo.addPhoneToContact(req.params.id, trimmedPhone);
+
+  const io = req.app.get('io');
+  if (io) io.emit('contact_updated', updated);
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: updated.id,
+    name: updated.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
+  res.status(201).json({ ok: true, contact: updated });
+}
+
 module.exports = {
   listContacts,
   getContact,
   getContactConversations,
   updateContact,
   updatePhoneLabel,
+  addPhone,
   linkConversationContact,
   unlinkPhone,
   createCustomerCard,
