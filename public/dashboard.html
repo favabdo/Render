@@ -1061,6 +1061,17 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="cp-section">
                     <div class="cp-section-title">Phone Numbers</div>
                     <div class="info-list" id="phone-list"></div>
+                    <button class="add-btn" onclick="showAddPhone()" id="add-phone-btn" style="margin-top:8px">
+                        <i data-lucide="plus" style="width:16px;height:16px"></i> Add Phone Number
+                    </button>
+                    <div class="add-form" id="add-phone-form">
+                        <input type="text" placeholder="مثال: 201001234567" id="new-phone-number" maxlength="12" oninput="validateNewPhoneNumber()">
+                        <div class="iw-form-hint" id="new-phone-hint">لازم يبدأ بكود مصر 20 وبدون + وبدون مسافات (مثال: 201001234567)</div>
+                        <div class="add-form-actions">
+                            <button class="add-confirm" onclick="addPhoneNumber()">Add</button>
+                            <button class="add-cancel" onclick="hideAddPhone()">Cancel</button>
+                        </div>
+                    </div>
                     <button class="add-btn" onclick="showMergeContact()" id="merge-contact-btn">
                         <i data-lucide="link-2" style="width:16px;height:16px"></i> Merge with Existing Contact
                     </button>
@@ -1571,6 +1582,13 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">أرقام التليفون</div>
                 <div id="customer-details-phones">-</div>
+                <div id="customer-details-add-phone-row" style="display:flex;gap:6px;margin-top:6px">
+                    <input type="text" class="iw-input" id="customer-details-new-phone" placeholder="مثال: 201001234567" maxlength="12" oninput="validateCustomerDetailsPhone()" style="flex:1;padding:6px 8px;font-size:12.5px">
+                    <button class="resolve-cancel-btn" style="padding:4px 9px;font-size:11.5px;white-space:nowrap" onclick="addCustomerDetailsPhone()">
+                        <i data-lucide="plus" style="width:12px;height:12px"></i> إضافة رقم
+                    </button>
+                </div>
+                <div class="iw-form-hint" id="customer-details-new-phone-hint">لازم يبدأ بكود مصر 20 وبدون + وبدون مسافات (مثال: 201001234567)</div>
             </div>
         </div>
         <div class="st-modal-readonly-row">
@@ -5121,6 +5139,55 @@ async function addDevice() {
         showToast(err.message || 'فشل إضافة الجهاز', 'error');
     }
 }
+/* بيفتح/يقفل فورم "إضافة رقم تليفون" لنفس العميل بتاع المحادثة الحالية —
+   منفصل تمامًا عن الدمج (Merge): ده لعميل عنده أصلاً أكتر من رقم شخصي وعايز
+   الاتنين يفضلوا تحت نفس الكارت، من غير ما يستنى رسالة توصل من الرقم التاني */
+function showAddPhone() {
+    document.getElementById('add-phone-btn').style.display = 'none';
+    document.getElementById('add-phone-form').classList.add('show');
+    document.getElementById('new-phone-hint').style.color = '';
+    document.getElementById('new-phone-number').focus();
+}
+function hideAddPhone() {
+    document.getElementById('add-phone-btn').style.display = '';
+    document.getElementById('add-phone-form').classList.remove('show');
+    document.getElementById('new-phone-number').value = '';
+    document.getElementById('new-phone-hint').style.color = '';
+}
+function validateNewPhoneNumber() {
+    const input = document.getElementById('new-phone-number');
+    const hint = document.getElementById('new-phone-hint');
+    const value = input.value.trim();
+    const valid = !value || CUSTOMER_PHONE_REGEX.test(value);
+    if (hint) hint.style.color = valid ? '' : 'var(--danger)';
+    return valid;
+}
+async function addPhoneNumber() {
+    const c = conversations.find(x => x.id === selectedChatId);
+    if (!c || !c.contactId) return showToast('اربط المحادثة بعميل الأول', 'error');
+    const phone = document.getElementById('new-phone-number').value.trim();
+    if (!phone) return showToast('لازم تكتب رقم التليفون', 'error');
+    if (!CUSTOMER_PHONE_REGEX.test(phone)) {
+        validateNewPhoneNumber();
+        return showToast('رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696', 'error');
+    }
+    try {
+        const res = await apiFetch(`/api/contacts/${c.contactId}/phones`, {
+            method: 'POST',
+            body: JSON.stringify({ phone }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الرقم');
+
+        c.phones = data.contact.phones.map(ph => ({ number: ph.phone_number, label: ph.label || null }));
+        renderPhones(c);
+        hideAddPhone();
+        showToast('تم إضافة الرقم بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] addPhoneNumber error:', err);
+        showToast(err.message || 'فشل إضافة الرقم', 'error');
+    }
+}
 async function removeDevice(deviceId) {
     const c = conversations.find(x => x.id === selectedChatId);
     if (!c || !c.contactId) return;
@@ -5691,6 +5758,45 @@ function switchCustomerDetailsTab(tab) {
     document.querySelectorAll('.cd-tab').forEach(el => el.classList.toggle('active', el.dataset.cdtab === tab));
     document.querySelectorAll('.cd-tab-content').forEach(el => el.classList.remove('active'));
     document.getElementById(`cdtab-${tab}`).classList.add('active');
+}
+
+function validateCustomerDetailsPhone() {
+    const input = document.getElementById('customer-details-new-phone');
+    const hint = document.getElementById('customer-details-new-phone-hint');
+    const value = input.value.trim();
+    const valid = !value || CUSTOMER_PHONE_REGEX.test(value);
+    if (hint) hint.style.color = valid ? '' : 'var(--danger)';
+    return valid;
+}
+
+/* بيضيف رقم تليفون جديد للعميل المفتوح دلوقتي في صفحة تفاصيل العميل — من غير
+   ميرج، ومن غير ما يستنى رسالة واتساب توصل من الرقم الجديد */
+async function addCustomerDetailsPhone() {
+    if (!customerDetailsCache) return;
+    const input = document.getElementById('customer-details-new-phone');
+    const phone = input.value.trim();
+    if (!phone) return showToast('لازم تكتب رقم التليفون', 'error');
+    if (!CUSTOMER_PHONE_REGEX.test(phone)) {
+        validateCustomerDetailsPhone();
+        return showToast('رقم التليفون لازم يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696', 'error');
+    }
+    try {
+        const res = await apiFetch(`/api/contacts/${customerDetailsCache.id}/phones`, {
+            method: 'POST',
+            body: JSON.stringify({ phone }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة الرقم');
+
+        customerDetailsCache = data.contact;
+        renderCustomerDetailsPhones(data.contact);
+        input.value = '';
+        document.getElementById('customer-details-new-phone-hint').style.color = '';
+        showToast('تم إضافة الرقم بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] addCustomerDetailsPhone error:', err);
+        showToast(err.message || 'فشل إضافة الرقم', 'error');
+    }
 }
 
 /* بيعرض كل أرقام العميل كـ chips، وكل رقم زايد عن واحد بيظهر جمبه زرار "فصل"
