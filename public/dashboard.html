@@ -1330,7 +1330,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <!-- ============ 1. ACCOUNT SETTINGS (General) ============ -->
         <div class="settings-content-section active" id="settings-sec-general">
         <div class="page-content" style="max-width:700px">
-            <div class="settings-top-row"><div><h2>Account Settings</h2><div class="settings-top-desc">General settings for your organization</div></div></div>
+            <div class="settings-top-row"><div><h2>Account Settings</h2><div class="settings-top-desc">General settings for your organization</div></div><button class="page-btn" id="account-settings-save-btn" style="display:none" onclick="saveAccountSettings()">Update Settings</button></div>
             <div class="settings-section">
                 <h3>General</h3>
                 <div class="setting-row">
@@ -1355,9 +1355,6 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                     </select>
                 </div>
                 <div class="setting-row"><div><div class="setting-label">Account ID</div><div class="setting-desc">This ID is required if you are building an API based integration</div></div><span id="account-id-display" style="font-size:13px;color:var(--primary);font-weight:600;background:rgba(108,92,231,0.08);padding:4px 10px;border-radius:8px">#1</span></div>
-            </div>
-            <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:16px;display:flex;justify-content:flex-end">
-                <button class="page-btn" id="account-settings-save-btn" style="display:none" onclick="saveAccountSettings()">Update Settings</button>
             </div>
         </div>
         </div>
