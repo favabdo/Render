@@ -1524,28 +1524,132 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 <!-- PROFILE PAGE (خاص بكل إيجنت، منفصل عن Settings العامة بتاعة المنظمة) -->
 <div id="page-profile" class="page flex flex-1">
     <div class="page-content" style="max-width:700px;margin:0 auto;padding:32px 24px;overflow-y:auto;width:100%">
-        <div class="settings-top-row"><div><h2>Profile</h2><div class="settings-top-desc">Your personal account details</div></div></div>
+        <div class="settings-top-row"><div><h2>Profile Settings</h2><div class="settings-top-desc">Your personal account details</div></div></div>
 
+        <!-- ============ 1. Profile Picture ============ -->
         <div class="settings-section">
-            <div style="display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-                <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light)" id="profile-avatar"></div>
-                <div><div id="profile-display-name" style="font-weight:700;font-size:16px"></div><div id="profile-email" style="font-size:13px;color:var(--text-secondary)"></div></div>
+            <h3>Profile Picture</h3>
+            <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+                <div style="width:76px;height:76px;border-radius:50%;overflow:hidden;border:3px solid var(--primary-light);flex-shrink:0" id="profile-avatar"></div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                        <button class="page-btn" type="button" onclick="document.getElementById('profile-avatar-input').click()">
+                            <i data-lucide="upload" style="width:14px;height:14px"></i> Upload Photo
+                        </button>
+                        <button class="page-btn" type="button" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" id="profile-avatar-remove-btn" onclick="removeProfileAvatar()" title="Remove photo">
+                            Remove
+                        </button>
+                    </div>
+                    <input type="file" id="profile-avatar-input" accept="image/*" style="display:none" onchange="handleProfileAvatarSelected(event)">
+                    <div class="iw-form-hint" id="profile-avatar-hint">JPG, PNG, GIF or WEBP. Max 5MB.</div>
+                </div>
             </div>
-            <div class="setting-row"><div><div class="setting-label">Display Name</div><div class="setting-desc">Visible to customers instead of your email</div></div><span id="profile-display-name-row" style="font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:8px"></span></div>
-            <div class="setting-row"><div><div class="setting-label">Role</div><div class="setting-desc">Your permission level</div></div><span id="profile-role" style="font-size:14px;color:var(--primary);font-weight:600"></span></div>
         </div>
 
+        <!-- ============ 2. Name & Email ============ -->
         <div class="settings-section">
-            <h3>Notifications</h3>
-            <div class="setting-row"><div><div class="setting-label">New Message Alerts</div><div class="setting-desc">Play sound for incoming messages</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-            <div class="setting-row"><div><div class="setting-label">Desktop Notifications</div><div class="setting-desc">Show browser notifications</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-            <div class="setting-row"><div><div class="setting-label">Email Digest</div><div class="setting-desc">Daily summary of conversations</div></div><button class="toggle" onclick="this.classList.toggle('on')"></button></div>
+            <div class="settings-section-header">
+                <div class="settings-section-header-info"><div><h3 style="margin:0">Personal Information</h3></div></div>
+                <button class="page-btn" type="button" onclick="saveProfileInfo()"><i data-lucide="check" style="width:14px;height:14px"></i> Save Changes</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+                <div>
+                    <div class="setting-label" style="margin-bottom:6px">Your full name</div>
+                    <input type="text" class="iw-input" id="profile-fullname-input" maxlength="100" placeholder="e.g. Ahmed Mostafa">
+                </div>
+                <div>
+                    <div class="setting-label" style="margin-bottom:6px">Display name</div>
+                    <input type="text" class="iw-input" id="profile-displayname-input" maxlength="100" placeholder="Shown to customers instead of your full name (optional)">
+                    <div class="iw-form-hint">Leave empty to show your full name instead.</div>
+                </div>
+                <div>
+                    <div class="setting-label" style="margin-bottom:6px">Your email address</div>
+                    <input type="email" class="iw-input" id="profile-email-input" maxlength="200" placeholder="you@example.com">
+                </div>
+            </div>
         </div>
 
+        <!-- ============ 3. Password ============ -->
         <div class="settings-section">
-            <h3>Security</h3>
-            <div class="setting-row"><div><div class="setting-label">Two-Factor Authentication</div><div class="setting-desc">Add extra security to your account</div></div><button class="toggle on" onclick="this.classList.toggle('on')"></button></div>
-            <div class="setting-row"><div><div class="setting-label">Session Timeout</div><div class="setting-desc">Auto-logout after inactivity</div></div><span style="font-size:14px;color:var(--text-secondary)">30 minutes</span></div>
+            <div class="settings-section-header">
+                <div class="settings-section-header-info"><div><h3 style="margin:0">Password</h3></div></div>
+                <button class="page-btn" type="button" onclick="submitPasswordChange()"><i data-lucide="lock" style="width:14px;height:14px"></i> Update Password</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+                <div>
+                    <div class="setting-label" style="margin-bottom:6px">Current password</div>
+                    <input type="password" class="iw-input" id="profile-current-password-input" autocomplete="current-password">
+                </div>
+                <div>
+                    <div class="setting-label" style="margin-bottom:6px">New password</div>
+                    <input type="password" class="iw-input" id="profile-new-password-input" autocomplete="new-password">
+                    <div class="iw-form-hint">At least 6 characters.</div>
+                </div>
+                <div>
+                    <div class="setting-label" style="margin-bottom:6px">Confirm new password</div>
+                    <input type="password" class="iw-input" id="profile-confirm-password-input" autocomplete="new-password">
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 4. Notification preferences ============ -->
+        <div class="settings-section">
+            <div class="settings-section-header">
+                <div class="settings-section-header-info"><div><h3 style="margin:0">Notification preferences</h3></div></div>
+                <button class="page-btn" type="button" onclick="saveNotificationPrefs()"><i data-lucide="check" style="width:14px;height:14px"></i> Save Preferences</button>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="settings-table" id="notification-prefs-table">
+                    <thead>
+                        <tr>
+                            <th>Notification type</th>
+                            <th style="text-align:center">Email</th>
+                            <th style="text-align:center">Push notification</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr data-pref-key="conversation_created">
+                            <td>A new conversation is created</td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="email"></td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="push"></td>
+                        </tr>
+                        <tr data-pref-key="conversation_assigned">
+                            <td>A conversation is assigned to you</td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="email"></td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="push"></td>
+                        </tr>
+                        <tr data-pref-key="conversation_mention">
+                            <td>You are mentioned in a conversation</td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="email"></td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="push"></td>
+                        </tr>
+                        <tr data-pref-key="assigned_conversation_message">
+                            <td>A new message is created in an assigned conversation</td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="email"></td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="push"></td>
+                        </tr>
+                        <tr data-pref-key="participating_conversation_message">
+                            <td>A new message is created in a participating conversation</td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="email"></td>
+                            <td style="text-align:center"><input type="checkbox" class="pref-checkbox" data-channel="push"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============ 5. Access Token ============ -->
+        <div class="settings-section">
+            <h3>Access Token</h3>
+            <div class="setting-desc" style="margin-bottom:14px">This token can be used if you are building an API based integration</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="text" class="iw-input" id="profile-access-token-input" readonly style="flex:1;min-width:220px;font-family:monospace;font-size:12.5px" value="••••••••••••••••••••••••••••••••">
+                <button class="st-icon-btn" type="button" id="profile-access-token-toggle-btn" onclick="toggleAccessTokenVisibility()" title="Show/Hide"><i data-lucide="eye" style="width:16px;height:16px"></i></button>
+                <button class="st-icon-btn" type="button" onclick="copyAccessToken()" title="Copy"><i data-lucide="copy" style="width:16px;height:16px"></i></button>
+                <button class="page-btn" type="button" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" onclick="confirmRegenerateAccessToken()">
+                    <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Regenerate
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -2879,6 +2983,44 @@ async function confirmAgentNameEdit(id) {
     }
 }
 
+/* بيبعت اسم العرض الجديد بتاع اليوزر الحالي للسيرفر (مستخدمة من صف الإيجنت نفسه
+   جوه جدول Account Settings -> Agents)، وبتحدّث كل الأماكن اللي بتعرضه في
+   الواجهة فورًا (السايد بار وجدول الإيجنتس) */
+async function submitDisplayNameChange(newName) {
+    const trimmed = (newName || '').trim();
+    if (!trimmed) {
+        showToast('اكتب اسم الأول', 'error');
+        renderAgentsSettings();
+        return false;
+    }
+    if (trimmed.length < 2) {
+        showToast('الاسم قصير جدًا', 'error');
+        renderAgentsSettings();
+        return false;
+    }
+    try {
+        const res = await apiFetch('/api/me', { method: 'PATCH', body: JSON.stringify({ display_name: trimmed }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحديث الاسم');
+
+        AUTH_USER.display_name = data.user.display_name;
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+        updateSidebarAvatar();
+
+        showToast('تم تحديث اسمك بنجاح', 'success');
+
+        const myEntry = AGENTS_SETTINGS_CACHE.find((a) => String(a.id) === String(AUTH_USER.id));
+        if (myEntry) myEntry.display_name = AUTH_USER.display_name;
+        renderAgentsSettings();
+        return true;
+    } catch (err) {
+        console.error('[API] submitDisplayNameChange error:', err);
+        showToast(err.message || 'فشل تحديث الاسم', 'error');
+        renderAgentsSettings();
+        return false;
+    }
+}
+
 /* بيسمح للأدمن/الأونر يغيّر اسم أي إيجنت تاني (عكس submitDisplayNameChange اللي
    بتغيّر اسم اليوزر نفسه بس عن طريق /api/me) — بيستخدم PATCH /api/users/:id
    اللي أصلاً بيقبل display_name، لكن محجوز بـ requireAdmin في الراوت */
@@ -2913,93 +3055,314 @@ async function submitOtherAgentNameChange(id, newName) {
 }
 
 /* ============================================================
-   صفحة الإعدادات -> Profile: نفس فكرة تعديل الاسم، بس من صفحة البروفايل
+   صفحة الإعدادات -> Profile Settings
+   الترتيب: صورة البروفايل -> الاسم/الإيميل -> كلمة السر -> تفضيلات
+   الإشعارات -> توكن الوصول الشخصي — كل قسم بيتكلم مباشرة مع الـ API الحقيقي
 ============================================================ */
-function renderProfileSection() {
-    const name = AUTH_USER.display_name || AUTH_USER.email;
-    const nameEl = document.getElementById('profile-display-name');
-    const emailEl = document.getElementById('profile-email');
-    const roleEl = document.getElementById('profile-role');
-    const avatarEl = document.getElementById('profile-avatar');
-    if (nameEl) nameEl.textContent = name;
-    if (emailEl) emailEl.textContent = AUTH_USER.email;
-    if (roleEl) roleEl.textContent = roleLabel(AUTH_USER.role);
-    if (avatarEl) avatarEl.innerHTML = customerAvatarHtml(name, 'agent-' + AUTH_USER.id, 64);
-    renderProfileNameRow(name);
-}
+let PROFILE_ACCESS_TOKEN_CACHE = null;
+let PROFILE_ACCESS_TOKEN_VISIBLE = false;
 
-function renderProfileNameRow(name) {
-    const row = document.getElementById('profile-display-name-row');
-    if (!row) return;
-    row.innerHTML = `<span>${escapeHtml(name)}</span><button class="st-icon-btn" onclick="startProfileNameEdit()" title="Edit"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>`;
-    lucide.createIcons();
-}
+async function loadProfilePage() {
+    try {
+        const res = await apiFetch('/api/me');
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحميل البروفايل');
 
-let _profileNameEditOriginal = '';
-function startProfileNameEdit() {
-    const row = document.getElementById('profile-display-name-row');
-    if (!row) return;
-    _profileNameEditOriginal = AUTH_USER.display_name || AUTH_USER.email;
-    row.innerHTML = `
-        <input type="text" class="agent-name-edit-input" id="profile-name-input" maxlength="100">
-        <span class="agent-name-edit-actions">
-            <button class="st-icon-btn" onclick="confirmProfileNameEdit()" title="Save"><i data-lucide="check" style="width:14px;height:14px"></i></button>
-            <button class="st-icon-btn" onclick="renderProfileNameRow(_profileNameEditOriginal)" title="Cancel"><i data-lucide="x" style="width:14px;height:14px"></i></button>
-        </span>`;
-    lucide.createIcons();
-    const input = document.getElementById('profile-name-input');
-    input.value = _profileNameEditOriginal;
-    input.focus();
-    input.select();
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); confirmProfileNameEdit(); }
-        if (e.key === 'Escape') { e.preventDefault(); renderProfileNameRow(_profileNameEditOriginal); }
-    });
-}
+        AUTH_USER.display_name = data.display_name;
+        AUTH_USER.full_name = data.full_name;
+        AUTH_USER.email = data.email;
+        AUTH_USER.avatar_url = data.avatar_url;
+        AUTH_USER.role = data.role;
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
 
-async function confirmProfileNameEdit() {
-    const input = document.getElementById('profile-name-input');
-    if (!input) return;
-    await submitDisplayNameChange(input.value);
-}
+        renderProfileAvatar();
+        const fullNameInput = document.getElementById('profile-fullname-input');
+        const displayNameInput = document.getElementById('profile-displayname-input');
+        const emailInput = document.getElementById('profile-email-input');
+        if (fullNameInput) fullNameInput.value = data.full_name || '';
+        // getMe بيرجع display_name بعد ما يتحل (resolveDisplayName) يعني ممكن يكون
+        // نفس full_name أو الإيميل لو مفيش override حقيقي متسجل — في الحالة دي
+        // نسيب خانة "Display name" فاضية بدل ما نعرض نفس الاسم مرتين
+        if (displayNameInput) {
+            const resolved = data.display_name || '';
+            const isRealOverride = resolved && resolved !== data.full_name && resolved !== data.email;
+            displayNameInput.value = isRealOverride ? resolved : '';
+        }
+        if (emailInput) emailInput.value = data.email || '';
 
-/* بيبعت اسم العرض الجديد للسيرفر، وبيحدّث كل الأماكن اللي بتعرضه في الواجهة فورًا */
-async function submitDisplayNameChange(newName) {
-    const trimmed = (newName || '').trim();
-    if (!trimmed) {
-        showToast('اكتب اسم الأول', 'error');
-        return false;
+        applyRoleVisibility();
+    } catch (err) {
+        console.error('[API] loadProfilePage error:', err);
+        showToast(err.message || 'فشل تحميل بيانات البروفايل', 'error');
     }
-    if (trimmed.length < 2) {
-        showToast('الاسم قصير جدًا', 'error');
-        return false;
+
+    loadNotificationPrefsIntoTable();
+    loadAccessTokenMasked();
+}
+
+function renderProfileAvatar() {
+    const avatarEl = document.getElementById('profile-avatar');
+    if (!avatarEl) return;
+    const name = AUTH_USER.display_name || AUTH_USER.full_name || AUTH_USER.email;
+    if (AUTH_USER.avatar_url) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(AUTH_USER.avatar_url)}" style="width:100%;height:100%;object-fit:cover" alt="avatar">`;
+    } else {
+        avatarEl.innerHTML = customerAvatarHtml(name, 'agent-' + AUTH_USER.id, 76);
+    }
+}
+
+/* ===== 1. صورة البروفايل ===== */
+async function handleProfileAvatarSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showToast('لازم تختار صورة', 'error');
+        return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('حجم الصورة أكبر من 5 ميجا', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+        const res = await fetch('/api/me/avatar', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل رفع الصورة');
+
+        AUTH_USER.avatar_url = data.avatar_url;
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+        renderProfileAvatar();
+        updateSidebarAvatar();
+        showToast('تم تحديث صورة البروفايل بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] handleProfileAvatarSelected error:', err);
+        showToast(err.message || 'فشل رفع الصورة', 'error');
+    }
+}
+
+async function removeProfileAvatar() {
+    if (!AUTH_USER.avatar_url) {
+        showToast('مفيش صورة بروفايل أصلاً', 'info');
+        return;
     }
     try {
-        const res = await apiFetch('/api/me', { method: 'PATCH', body: JSON.stringify({ display_name: trimmed }) });
+        const res = await apiFetch('/api/me/avatar', { method: 'DELETE' });
         const data = await res.json();
-        if (!res.ok) throw new Error((data && data.error) || 'فشل تحديث الاسم');
+        if (!res.ok) throw new Error((data && data.error) || 'فشل حذف الصورة');
 
-        AUTH_USER.display_name = data.user.display_name;
+        AUTH_USER.avatar_url = null;
         localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
-        const avatarEl = document.getElementById('my-avatar');
-        if (avatarEl) {
-            avatarEl.title = AUTH_USER.display_name;
-            avatarEl.innerHTML = customerAvatarHtml(AUTH_USER.display_name, 'agent-' + AUTH_USER.id, 36);
-        }
+        renderProfileAvatar();
+        updateSidebarAvatar();
+        showToast('تم حذف صورة البروفايل', 'success');
+    } catch (err) {
+        console.error('[API] removeProfileAvatar error:', err);
+        showToast(err.message || 'فشل حذف الصورة', 'error');
+    }
+}
 
-        showToast('تم تحديث اسمك بنجاح', 'success');
-        renderProfileSection();
+function updateSidebarAvatar() {
+    const avatarEl = document.getElementById('my-avatar');
+    if (!avatarEl) return;
+    const name = AUTH_USER.display_name || AUTH_USER.full_name || AUTH_USER.email;
+    avatarEl.title = name;
+    avatarEl.innerHTML = AUTH_USER.avatar_url
+        ? `<img src="${escapeHtml(AUTH_USER.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="avatar">`
+        : customerAvatarHtml(name, 'agent-' + AUTH_USER.id, 36);
+}
+
+/* ===== 2. الاسم الكامل / الاسم المعروض / الإيميل ===== */
+async function saveProfileInfo() {
+    const fullName = (document.getElementById('profile-fullname-input').value || '').trim();
+    const displayName = (document.getElementById('profile-displayname-input').value || '').trim();
+    const email = (document.getElementById('profile-email-input').value || '').trim();
+
+    if (!fullName || fullName.length < 2) {
+        showToast('اكتب اسمك الكامل (حرفين على الأقل)', 'error');
+        return;
+    }
+    if (!email) {
+        showToast('اكتب إيميلك', 'error');
+        return;
+    }
+
+    try {
+        const res = await apiFetch('/api/me', {
+            method: 'PATCH',
+            body: JSON.stringify({ full_name: fullName, display_name: displayName, email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحديث البيانات');
+
+        AUTH_USER.full_name = data.user.full_name;
+        AUTH_USER.display_name = data.user.display_name;
+        AUTH_USER.email = data.user.email;
+        localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
+        updateSidebarAvatar();
+        renderProfileAvatar();
+        showToast('تم تحديث بيانات البروفايل بنجاح', 'success');
 
         const myEntry = AGENTS_SETTINGS_CACHE.find((a) => String(a.id) === String(AUTH_USER.id));
         if (myEntry) {
-            myEntry.display_name = AUTH_USER.display_name;
-            renderAgentsSettings();
+            myEntry.display_name = data.user.display_name;
+            myEntry.email = data.user.email;
         }
-        return true;
     } catch (err) {
-        console.error('[API] submitDisplayNameChange error:', err);
-        showToast(err.message || 'فشل تحديث الاسم', 'error');
-        return false;
+        console.error('[API] saveProfileInfo error:', err);
+        showToast(err.message || 'فشل تحديث البيانات', 'error');
+    }
+}
+
+/* ===== 3. كلمة السر ===== */
+async function submitPasswordChange() {
+    const current = document.getElementById('profile-current-password-input').value;
+    const next = document.getElementById('profile-new-password-input').value;
+    const confirm = document.getElementById('profile-confirm-password-input').value;
+
+    if (!current || !next || !confirm) {
+        showToast('لازم تملأ كل خانات كلمة السر', 'error');
+        return;
+    }
+    if (next.length < 6) {
+        showToast('كلمة السر الجديدة لازم تكون 6 حروف على الأقل', 'error');
+        return;
+    }
+    if (next !== confirm) {
+        showToast('كلمة السر الجديدة وتأكيدها مش متطابقين', 'error');
+        return;
+    }
+
+    try {
+        const res = await apiFetch('/api/me/change-password', {
+            method: 'POST',
+            body: JSON.stringify({ current_password: current, new_password: next }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تغيير كلمة السر');
+
+        document.getElementById('profile-current-password-input').value = '';
+        document.getElementById('profile-new-password-input').value = '';
+        document.getElementById('profile-confirm-password-input').value = '';
+        showToast('تم تغيير كلمة السر بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] submitPasswordChange error:', err);
+        showToast(err.message || 'فشل تغيير كلمة السر', 'error');
+    }
+}
+
+/* ===== 4. تفضيلات الإشعارات ===== */
+async function loadNotificationPrefsIntoTable() {
+    try {
+        const res = await apiFetch('/api/me/notification-prefs');
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحميل تفضيلات الإشعارات');
+
+        const table = document.getElementById('notification-prefs-table');
+        if (!table) return;
+        table.querySelectorAll('tr[data-pref-key]').forEach((row) => {
+            const key = row.getAttribute('data-pref-key');
+            const pref = (data.prefs && data.prefs[key]) || { email: false, push: false };
+            const emailBox = row.querySelector('input[data-channel="email"]');
+            const pushBox = row.querySelector('input[data-channel="push"]');
+            if (emailBox) emailBox.checked = !!pref.email;
+            if (pushBox) pushBox.checked = !!pref.push;
+        });
+    } catch (err) {
+        console.error('[API] loadNotificationPrefsIntoTable error:', err);
+    }
+}
+
+async function saveNotificationPrefs() {
+    const table = document.getElementById('notification-prefs-table');
+    if (!table) return;
+    const prefs = {};
+    table.querySelectorAll('tr[data-pref-key]').forEach((row) => {
+        const key = row.getAttribute('data-pref-key');
+        const emailBox = row.querySelector('input[data-channel="email"]');
+        const pushBox = row.querySelector('input[data-channel="push"]');
+        prefs[key] = { email: !!(emailBox && emailBox.checked), push: !!(pushBox && pushBox.checked) };
+    });
+
+    try {
+        const res = await apiFetch('/api/me/notification-prefs', {
+            method: 'PUT',
+            body: JSON.stringify({ prefs }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ تفضيلات الإشعارات');
+        showToast('تم حفظ تفضيلات الإشعارات بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] saveNotificationPrefs error:', err);
+        showToast(err.message || 'فشل حفظ تفضيلات الإشعارات', 'error');
+    }
+}
+
+/* ===== 5. توكن الوصول الشخصي (Access Token) ===== */
+async function loadAccessTokenMasked() {
+    try {
+        const res = await apiFetch('/api/me/access-token');
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحميل التوكن');
+        PROFILE_ACCESS_TOKEN_CACHE = data.access_token;
+        PROFILE_ACCESS_TOKEN_VISIBLE = false;
+        renderAccessTokenInput();
+    } catch (err) {
+        console.error('[API] loadAccessTokenMasked error:', err);
+    }
+}
+
+function renderAccessTokenInput() {
+    const input = document.getElementById('profile-access-token-input');
+    if (!input || !PROFILE_ACCESS_TOKEN_CACHE) return;
+    input.value = PROFILE_ACCESS_TOKEN_VISIBLE
+        ? PROFILE_ACCESS_TOKEN_CACHE
+        : '•'.repeat(Math.min(PROFILE_ACCESS_TOKEN_CACHE.length, 40));
+}
+
+function toggleAccessTokenVisibility() {
+    if (!PROFILE_ACCESS_TOKEN_CACHE) return;
+    PROFILE_ACCESS_TOKEN_VISIBLE = !PROFILE_ACCESS_TOKEN_VISIBLE;
+    renderAccessTokenInput();
+    const btn = document.getElementById('profile-access-token-toggle-btn');
+    if (btn) btn.innerHTML = `<i data-lucide="${PROFILE_ACCESS_TOKEN_VISIBLE ? 'eye-off' : 'eye'}" style="width:16px;height:16px"></i>`;
+    lucide.createIcons();
+}
+
+async function copyAccessToken() {
+    if (!PROFILE_ACCESS_TOKEN_CACHE) return;
+    try {
+        await navigator.clipboard.writeText(PROFILE_ACCESS_TOKEN_CACHE);
+        showToast('تم نسخ التوكن', 'success');
+    } catch (err) {
+        showToast('فشل النسخ — انسخه يدويًا', 'error');
+    }
+}
+
+async function confirmRegenerateAccessToken() {
+    if (!confirm('هل أنت متأكد؟ التوكن القديم هيبقى غير صالح فورًا وأي تكامل شغال بيه هيتوقف.')) return;
+    try {
+        const res = await apiFetch('/api/me/access-token/regenerate', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل توليد توكن جديد');
+        PROFILE_ACCESS_TOKEN_CACHE = data.access_token;
+        PROFILE_ACCESS_TOKEN_VISIBLE = true;
+        renderAccessTokenInput();
+        const btn = document.getElementById('profile-access-token-toggle-btn');
+        if (btn) btn.innerHTML = `<i data-lucide="eye-off" style="width:16px;height:16px"></i>`;
+        lucide.createIcons();
+        showToast('تم توليد توكن جديد بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] confirmRegenerateAccessToken error:', err);
+        showToast(err.message || 'فشل توليد توكن جديد', 'error');
     }
 }
 
@@ -3010,19 +3373,17 @@ async function refreshCurrentUser() {
         if (!res.ok) return;
         const data = await res.json();
         AUTH_USER.display_name = data.display_name;
+        AUTH_USER.full_name = data.full_name;
+        AUTH_USER.avatar_url = data.avatar_url;
         AUTH_USER.role = data.role;
         localStorage.setItem('nilechat_user', JSON.stringify(AUTH_USER));
-        renderProfileSection();
         applyRoleVisibility();
-        const avatarEl = document.getElementById('my-avatar');
-        if (avatarEl) {
-            avatarEl.title = AUTH_USER.display_name;
-            avatarEl.innerHTML = customerAvatarHtml(AUTH_USER.display_name, 'agent-' + AUTH_USER.id, 36);
-        }
+        updateSidebarAvatar();
     } catch (err) {
         console.error('[API] refreshCurrentUser error:', err);
     }
 }
+
 
 /* ===== المتغيرات ===== */
 let currentPage = 'chats';
@@ -3061,7 +3422,7 @@ function navigateTo(page) {
 
     if (page === 'contacts') loadContactsPage();
     if (page === 'scheduled-tasks') loadScheduledTasksPage();
-    if (page === 'profile') renderProfileSection();
+    if (page === 'profile') loadProfilePage();
     if (page === 'settings') loadAccountSettings();
 }
 
@@ -3081,7 +3442,7 @@ function navigateSettingsSection(section, el) {
     if (section === 'teams') loadTeams();
     if (section === 'automation') loadAutomationSettings();
     if (section === 'integrations') loadWebhooksCardMeta();
-    if (section === 'profile' || section === 'general') renderProfileSection();
+    if (section === 'profile' || section === 'general') loadProfilePage();
 }
 
 /* ===== تابات لوحة العميل ===== */
@@ -6729,11 +7090,9 @@ function init() {
     document.querySelectorAll('.page').forEach(p => {
         p.style.display = p.classList.contains('active') ? 'flex' : 'none';
     });
-    document.getElementById('my-avatar').title = AUTH_USER.display_name || AUTH_USER.email;
-    document.getElementById('my-avatar').innerHTML = customerAvatarHtml(AUTH_USER.display_name || AUTH_USER.email, 'agent-' + AUTH_USER.id, 36);
+    updateSidebarAvatar();
     applyRoleVisibility();
     renderChatList('open', '');
-    renderProfileSection();
     renderContacts();
 
     // جيب المحادثات الحقيقية من الباك إند + فعّل الـ realtime

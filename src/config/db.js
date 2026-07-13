@@ -750,6 +750,30 @@ async function ensureUsersHaveCompanyAssigned() {
   `);
 }
 
+// أعمدة صفحة البروفايل الشخصي: الاسم الكامل، صورة البروفايل، تفضيلات
+// الإشعارات (JSON)، وتوكن الوصول الشخصي (Access Token) لأي تكامل عن طريق الـ API
+async function ensureUsersHaveProfileColumns() {
+  const pool = await getPool();
+  const columns = [
+    { name: 'full_name', def: 'NVARCHAR(200) NULL' },
+    { name: 'avatar_url', def: 'NVARCHAR(500) NULL' },
+    { name: 'notification_prefs', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'access_token', def: 'NVARCHAR(200) NULL' },
+  ];
+  for (const col of columns) {
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.NileChat_Users_byA') AND name = '${col.name}'
+      )
+      BEGIN
+        ALTER TABLE [dbo].[NileChat_Users_byA] ADD ${col.name} ${col.def};
+      END
+    `);
+  }
+  logger.info('✅ أعمدة صفحة البروفايل (full_name/avatar_url/notification_prefs/access_token) جاهزة.');
+}
+
 // جدول التيمز (Teams) — بيتجمع فيه شوية إيجنتس تحت مسمى واحد لتسهيل التوزيع
 // (زي "Tech Support" أو "Billing")، وكل تيم ليه استراتيجية توزيع اختيارية
 async function ensureTeamsTableExists() {
@@ -912,6 +936,7 @@ async function ensureSchema() {
   await ensureConversationLabelsTableExists();
   await ensureCompaniesTableExists();
   await ensureUsersHaveCompanyAssigned();
+  await ensureUsersHaveProfileColumns();
   await ensureCompaniesHaveAutomationColumns();
   await ensureTeamsTableExists();
   await ensureTeamMembersTableExists();
@@ -950,6 +975,7 @@ module.exports = {
   ensureConversationLabelsTableExists,
   ensureCompaniesTableExists,
   ensureUsersHaveCompanyAssigned,
+  ensureUsersHaveProfileColumns,
   ensureCompaniesHaveAutomationColumns,
   generateCompanyCode,
   ensureTeamsTableExists,

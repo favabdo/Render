@@ -35,11 +35,24 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'لازم تسجل دخول' });
   }
 
+  // نجرب الأول كـ JWT عادي (تسجيل دخول من لوحة التحكم)
   let payload;
   try {
     payload = jwt.verify(token, env.JWT_SECRET);
   } catch (err) {
-    return res.status(401).json({ error: 'الجلسة منتهية، سجل دخول تاني' });
+    // مش JWT صحيح — ممكن يكون توكن وصول شخصي (Access Token) من صفحة
+    // البروفايل، مستخدم في تكامل خارجي عن طريق الـ API
+    userRepo
+      .findUserByAccessToken(token)
+      .then((user) => {
+        if (!user || user.status !== 'active') {
+          return res.status(401).json({ error: 'التوكن غير صحيح أو الحساب غير مفعّل' });
+        }
+        req.user = { userId: user.id, email: user.email, role: user.role };
+        next();
+      })
+      .catch(next);
+    return;
   }
 
   getUserStatus(payload.userId)

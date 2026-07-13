@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { getPool, sql } = require('../config/db');
 
 async function findUserByEmail(email) {
@@ -14,7 +15,37 @@ async function findUserById(id) {
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
-    .query(`SELECT id, email, role, status, display_name, company_id, company_code FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
+    .query(`
+      SELECT id, email, role, status, display_name, full_name, avatar_url,
+             notification_prefs, access_token, company_id, company_code
+      FROM [dbo].[NileChat_Users_byA] WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+// نفس findUserById بس بيرجع كلمة السر كمان — مستخدمة بس وقت التحقق من كلمة
+// السر الحالية (تغيير كلمة السر من صفحة البروفايل)
+async function findUserByIdWithPassword(id) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .query(`SELECT * FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
+  return result.recordset[0] || null;
+}
+
+// بيدور على اليوزر بتوكن الوصول الشخصي (Access Token) بتاعه — مستخدم في
+// الـ middleware عشان أي تكامل خارجي يقدر يستخدم التوكن ده بدل الـ JWT
+async function findUserByAccessToken(token) {
+  if (!token) return null;
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('token', sql.NVarChar(200), token)
+    .query(`
+      SELECT id, email, role, status, display_name, full_name
+      FROM [dbo].[NileChat_Users_byA] WHERE access_token = @token
+    `);
   return result.recordset[0] || null;
 }
 
@@ -29,7 +60,30 @@ async function listUsers() {
 // الاسم اللي المفروض يتعرض في الواجهة: اسم العرض لو الإيجنت حدده، وإلا الإيميل
 function resolveDisplayName(user) {
   if (!user) return null;
-  return (user.display_name && user.display_name.trim()) || user.email;
+  return (
+    (user.display_name && user.display_name.trim()) ||
+    (user.full_name && user.full_name.trim()) ||
+    user.email
+  );
+}
+
+// القيم الافتراضية لتفضيلات الإشعارات — لو اليوزر لسه معملش أي تعديل عليها
+const DEFAULT_NOTIFICATION_PREFS = {
+  conversation_created: { email: true, push: true },
+  conversation_assigned: { email: true, push: true },
+  conversation_mention: { email: true, push: true },
+  assigned_conversation_message: { email: true, push: true },
+  participating_conversation_message: { email: false, push: true },
+};
+
+function parseNotificationPrefs(raw) {
+  if (!raw) return { ...DEFAULT_NOTIFICATION_PREFS };
+  try {
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_NOTIFICATION_PREFS, ...parsed };
+  } catch (err) {
+    return { ...DEFAULT_NOTIFICATION_PREFS };
+  }
 }
 
 async function createUser({ email, password, role = 1, status = 'active', company_id = null, company_code = null }) {
@@ -112,6 +166,131 @@ async function verifyPassword(plainPassword, storedPassword) {
   return plainPassword === storedPassword;
 }
 
+// تحديث بيانات البروفايل الشخصي (الاسم الكامل / الاسم المعروض / الإيميل)
+// بيرجع null لو مفيش أي حقل اتبعت
+async function updateProfile(id, { full_name, display_name, email } = {}) {
+  const pool = await getPool();
+  const req = pool.request().input('id', sql.BigInt, id);
+  const sets = [];
+
+  if (full_name !== undefined) {
+    req.input('full_name', sql.NVarChar(200), full_name);
+    sets.push('full_name = @full_name');
+  }
+  if (display_name !== undefined) {
+    req.input('display_name', sql.NVarChar(200), display_name);
+    sets.push('display_name = @display_name');
+  }
+  if (email !== undefined) {
+    req.input('email', sql.NVarChar(200), email);
+    sets.push('email = @email');
+  }
+
+  if (sets.length === 0) return null;
+
+  const result = await req.query(`
+    UPDATE [dbo].[NileChat_Users_byA]
+    SET ${sets.join(', ')}
+    OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.status,
+           INSERTED.display_name, INSERTED.full_name, INSERTED.avatar_url
+    WHERE id = @id
+  `);
+  return result.recordset[0] || null;
+}
+
+// تحديث صورة البروفايل (بعد ما بترفع على الديسك بواسطة mediaStorage)
+async function updateAvatar(id, avatarUrl) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('avatar_url', sql.NVarChar(500), avatarUrl)
+    .query(`
+      UPDATE [dbo].[NileChat_Users_byA]
+      SET avatar_url = @avatar_url
+      OUTPUT INSERTED.id, INSERTED.avatar_url
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+// تغيير كلمة السر (بعد ما يتأكد الكونترولر إن كلمة السر الحالية صح)
+async function updatePassword(id, newPassword) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('password', sql.NVarChar(200), newPassword) // plain text مؤقتاً زي باقي النظام
+    .query(`
+      UPDATE [dbo].[NileChat_Users_byA]
+      SET password = @password
+      OUTPUT INSERTED.id
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+// بيرجع تفضيلات الإشعارات الحالية (مع دمجها بالقيم الافتراضية لأي حدث جديد
+// لسه مخزنش له قيمة)
+async function getNotificationPrefs(id) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .query(`SELECT notification_prefs FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
+  const row = result.recordset[0];
+  if (!row) return null;
+  return parseNotificationPrefs(row.notification_prefs);
+}
+
+async function updateNotificationPrefs(id, prefs) {
+  const merged = { ...DEFAULT_NOTIFICATION_PREFS, ...prefs };
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('prefs', sql.NVarChar(sql.MAX), JSON.stringify(merged))
+    .query(`
+      UPDATE [dbo].[NileChat_Users_byA]
+      SET notification_prefs = @prefs
+      WHERE id = @id
+    `);
+  return merged;
+}
+
+// بيولّد توكن وصول شخصي عشوائي وآمن (32 بايت = 64 حرف hex)
+function generateAccessTokenValue() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// بيرجع توكن الوصول الحالي، ولو مفيش واحد لسه بيولّد واحد جديد ويخزنه
+async function ensureAccessToken(id) {
+  const pool = await getPool();
+  const existing = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .query(`SELECT access_token FROM [dbo].[NileChat_Users_byA] WHERE id = @id`);
+  const current = existing.recordset[0] && existing.recordset[0].access_token;
+  if (current) return current;
+  return regenerateAccessToken(id);
+}
+
+// بيولّد توكن جديد ويستبدل القديم (مثلاً لو التوكن القديم اتسرب)
+async function regenerateAccessToken(id) {
+  const token = generateAccessTokenValue();
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('token', sql.NVarChar(200), token)
+    .query(`
+      UPDATE [dbo].[NileChat_Users_byA]
+      SET access_token = @token
+      WHERE id = @id
+    `);
+  return token;
+}
+
 // بنسجل توكن الدعوة (اللي بيتبعت في لينك الإيميل) وتاريخ انتهاء صلاحيته
 async function setInviteToken(id, token, expiresAt) {
   const pool = await getPool();
@@ -178,10 +357,19 @@ async function countUsers() {
 module.exports = {
   findUserByEmail,
   findUserById,
+  findUserByIdWithPassword,
+  findUserByAccessToken,
   listUsers,
   createUser,
   updateUser,
   updateDisplayName,
+  updateProfile,
+  updateAvatar,
+  updatePassword,
+  getNotificationPrefs,
+  updateNotificationPrefs,
+  ensureAccessToken,
+  regenerateAccessToken,
   resolveDisplayName,
   verifyPassword,
   countUsers,

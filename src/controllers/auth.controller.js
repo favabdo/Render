@@ -7,6 +7,7 @@ const env = require('../config/env');
 const userRepo = require('../repositories/user.repo');
 const companyRepo = require('../repositories/company.repo');
 const mailer = require('../services/mailer.service');
+const mediaStorage = require('../utils/mediaStorage');
 const { invalidateUserStatusCache } = require('../middlewares/auth');
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // الدعوة صالحة لمدة 7 أيام
@@ -102,21 +103,125 @@ async function getMe(req, res) {
   res.json({ ...user, display_name: userRepo.resolveDisplayName(user) });
 }
 
-// الإيجنت بيغيّر الاسم اللي بيتعرض بيه هو بس (بدل ما يفضل الإيميل ظاهر)
+// الإيجنت بيعدّل بيانات البروفايل بتاعته: الاسم الكامل / الاسم المعروض
+// (اختياري، بيظهر بدل الاسم الكامل) / الإيميل. أي حقل من التلاتة اختياري في
+// الطلب — بنحدّث بس اللي اتبعت فعلاً
 async function updateMe(req, res) {
-  const { display_name } = req.body || {};
-  const trimmed = (display_name || '').trim();
+  const { full_name, display_name, email } = req.body || {};
+  const fields = {};
 
-  if (!trimmed) {
-    return res.status(400).json({ error: 'لازم تكتب اسم' });
-  }
-  if (trimmed.length < 2 || trimmed.length > 100) {
-    return res.status(400).json({ error: 'الاسم لازم يكون بين 2 و 100 حرف' });
+  if (full_name !== undefined) {
+    const trimmed = String(full_name).trim();
+    if (!trimmed || trimmed.length < 2 || trimmed.length > 100) {
+      return res.status(400).json({ error: 'الاسم الكامل لازم يكون بين 2 و 100 حرف' });
+    }
+    fields.full_name = trimmed;
   }
 
-  const user = await userRepo.updateDisplayName(req.user.userId, trimmed);
+  if (display_name !== undefined) {
+    const trimmed = String(display_name).trim();
+    if (trimmed && (trimmed.length < 2 || trimmed.length > 100)) {
+      return res.status(400).json({ error: 'الاسم المعروض لازم يكون بين 2 و 100 حرف' });
+    }
+    // ممكن يبعت قيمة فاضية عشان يمسح الاسم المعروض ويرجع يستخدم الاسم الكامل
+    fields.display_name = trimmed || null;
+  }
+
+  if (email !== undefined) {
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailPattern.test(trimmedEmail)) {
+      return res.status(400).json({ error: 'الإيميل غير صحيح' });
+    }
+    const existing = await userRepo.findUserByEmail(trimmedEmail);
+    if (existing && String(existing.id) !== String(req.user.userId)) {
+      return res.status(409).json({ error: 'فيه يوزر بنفس الإيميل ده بالفعل' });
+    }
+    fields.email = trimmedEmail;
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return res.status(400).json({ error: 'مفيش أي بيانات اتبعتت للتحديث' });
+  }
+
+  const user = await userRepo.updateProfile(req.user.userId, fields);
   if (!user) return res.status(404).json({ error: 'اليوزر مش موجود' });
   res.json({ ok: true, user: { ...user, display_name: userRepo.resolveDisplayName(user) } });
+}
+
+// رفع/تغيير صورة البروفايل
+async function uploadAvatar(req, res) {
+  if (!req.file) return res.status(400).json({ error: 'لازم تختار صورة' });
+  if (!req.file.mimetype || !req.file.mimetype.startsWith('image/')) {
+    return res.status(400).json({ error: 'الملف لازم يكون صورة' });
+  }
+
+  const { publicUrl } = mediaStorage.saveBuffer(req.file.buffer, {
+    folder: 'avatars',
+    mimeType: req.file.mimetype,
+    originalName: req.file.originalname,
+  });
+
+  const updated = await userRepo.updateAvatar(req.user.userId, publicUrl);
+  if (!updated) return res.status(404).json({ error: 'اليوزر مش موجود' });
+  res.json({ ok: true, avatar_url: updated.avatar_url });
+}
+
+// شيل صورة البروفايل (يرجع لأفتار الحروف الافتراضي)
+async function removeAvatar(req, res) {
+  const updated = await userRepo.updateAvatar(req.user.userId, null);
+  if (!updated) return res.status(404).json({ error: 'اليوزر مش موجود' });
+  res.json({ ok: true });
+}
+
+// تغيير كلمة السر — لازم يبعت كلمة السر الحالية عشان نتأكد إنه فعلاً صاحب الحساب
+async function changePassword(req, res) {
+  const { current_password, new_password } = req.body || {};
+
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: 'لازم تبعت كلمة السر الحالية والجديدة' });
+  }
+  if (new_password.length < 6) {
+    return res.status(400).json({ error: 'كلمة المرور الجديدة لازم تكون 6 حروف على الأقل' });
+  }
+
+  const user = await userRepo.findUserByIdWithPassword(req.user.userId);
+  if (!user) return res.status(404).json({ error: 'اليوزر مش موجود' });
+
+  const valid = await userRepo.verifyPassword(current_password, user.password);
+  if (!valid) {
+    return res.status(401).json({ error: 'كلمة السر الحالية غلط' });
+  }
+
+  await userRepo.updatePassword(user.id, new_password);
+  res.json({ ok: true });
+}
+
+// ===== تفضيلات الإشعارات (Email / Push لكل نوع حدث) =====
+async function getNotificationPreferences(req, res) {
+  const prefs = await userRepo.getNotificationPrefs(req.user.userId);
+  if (!prefs) return res.status(404).json({ error: 'اليوزر مش موجود' });
+  res.json({ prefs });
+}
+
+async function updateNotificationPreferences(req, res) {
+  const { prefs } = req.body || {};
+  if (!prefs || typeof prefs !== 'object') {
+    return res.status(400).json({ error: 'لازم تبعت prefs كـ object' });
+  }
+  const saved = await userRepo.updateNotificationPrefs(req.user.userId, prefs);
+  res.json({ ok: true, prefs: saved });
+}
+
+// ===== توكن الوصول الشخصي (Access Token) لأي تكامل عن طريق الـ API =====
+async function getAccessToken(req, res) {
+  const token = await userRepo.ensureAccessToken(req.user.userId);
+  res.json({ access_token: token });
+}
+
+async function regenerateAccessToken(req, res) {
+  const token = await userRepo.regenerateAccessToken(req.user.userId);
+  res.json({ access_token: token });
 }
 
 // قايمة الإيجنتس الحقيقيين المسجلين — متاحة لأي إيجنت مسجل دخول (مش admin بس)
@@ -290,6 +395,13 @@ module.exports = {
   createFirstUser,
   getMe,
   updateMe,
+  uploadAvatar,
+  removeAvatar,
+  changePassword,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  getAccessToken,
+  regenerateAccessToken,
   listAgents,
   listUsers,
   createUserAccount,
