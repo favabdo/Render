@@ -155,7 +155,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 /* Resolve Popup Overlay */
 .resolve-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
 .resolve-overlay.show{opacity:1;pointer-events:all}
-.resolve-modal{background:var(--surface);border-radius:20px;padding:28px 28px 24px;width:440px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);transform:translateY(16px) scale(0.97);transition:transform .25s,opacity .25s;opacity:0;border:1px solid var(--border)}
+.resolve-modal{background:var(--surface);border-radius:20px;padding:28px 28px 24px;width:440px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);transform:translateY(16px) scale(0.97);transition:transform .25s,opacity .25s;opacity:0;border:1px solid var(--border)}
 .resolve-overlay.show .resolve-modal{transform:translateY(0) scale(1);opacity:1}
 .resolve-modal-header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .resolve-modal-icon{width:44px;height:44px;border-radius:12px;background:rgba(16,185,129,0.12);display:flex;align-items:center;justify-content:center;color:var(--success);flex-shrink:0}
@@ -488,6 +488,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .sched-page-tab .sched-subhead-count{color:inherit;font-weight:600}
 .st-modal-readonly-row{display:flex;gap:8px;margin-bottom:14px}
 .st-modal-readonly{flex:1;min-width:0;padding:9px 11px;border-radius:9px;background:var(--bg);border:1.5px solid var(--border)}
+@media (max-width:480px){
+    .st-modal-readonly-row{flex-direction:column;gap:12px}
+}
 .st-modal-readonly-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
 .st-modal-readonly-value{font-size:13px;font-weight:600;color:var(--text)}
 /* صفحة تفاصيل العميل: خطوط أوضح شوية بين كل سيكشن، عشان كل جزء يبان منفصل عن اللي جنبه */
@@ -723,6 +726,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .iw-form-label{font-size:12.5px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
 .iw-form-hint{font-size:11px;color:var(--text-secondary);margin-top:5px;line-height:1.5}
 .iw-input{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:13.5px;font-family:inherit;background:var(--bg);transition:border-color .15s}
+input[type="date"].iw-input,input[type="time"].iw-input{min-width:0;max-width:100%;box-sizing:border-box}
 .iw-input:focus{outline:none;border-color:var(--primary);background:var(--surface)}
 .iw-input.readonly{background:var(--bg);color:var(--text-secondary);cursor:default}
 .iw-verify-row{display:flex;gap:10px;align-items:center}
