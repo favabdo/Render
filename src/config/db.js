@@ -332,9 +332,11 @@ async function ensureContactsTableExists() {
   `);
 }
 
-// كارت "عميل صيانة" (Add Customer، أدمن بس): مكان العميل، تاريخ التعاقد، وتاريخ
-// انتهاء عقد الصيانة. الأعمدة دي بتفضل NULL لأي كونتاكت عادي جاي من واتساب —
-// بتتملى بس لما الأدمن يضيف الكونتاكت من زرار "Add Contact" في صفحة Contacts
+// كارت "عميل صيانة" (Add Customer، أدمن بس): مكان العميل، تاريخ التعاقد الأصلي
+// (لأول مرة اتعاقدنا مع العميل — بيانات معلوماتية بس ومالهاش أي علاقة بعقود
+// الصيانة نفسها)، ورقم تليفون مدير العميل. الأعمدة دي بتفضل NULL لأي كونتاكت
+// عادي جاي من واتساب — بتتملى بس لما الأدمن يضيف/يعدّل بيانات الكونتاكت من
+// زرار "Add Contact" أو "تعديل" في صفحة Contacts
 async function ensureContactsHaveCustomerCardColumns() {
   const pool = await getPool();
   await pool.request().query(`
@@ -345,21 +347,48 @@ async function ensureContactsHaveCustomerCardColumns() {
     BEGIN
       ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD location NVARCHAR(300) NULL;
     END
+  `);
 
+  // العمودين القدام دول كانوا بيتخزن فيهم تاريخ بدء/انتهاء عقد الصيانة قبل ما
+  // يبقى ليه جدول منفصل بالكامل (NileChat_MaintenanceContracts_byA) — بقوا
+  // مكررين ومش مستخدمين في أي كويري حاليًا، فبنمسحهم عشان مايفضلش لبس، وبنحط
+  // مكانهم تاريخ التعاقد (بمعنى جديد تمامًا، مستقل عن الصيانة) ورقم المدير
+  await pool.request().query(`
+    IF EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'contract_date'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] DROP COLUMN contract_date;
+    END
+
+    IF EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'maintenance_end_date'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] DROP COLUMN maintenance_end_date;
+    END
+  `);
+
+  await pool.request().query(`
     IF NOT EXISTS (
       SELECT * FROM sys.columns
       WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'contract_date'
     )
     BEGIN
+      -- تاريخ التعاقد: معلومة مستقلة بتوضح امتى اتعاقدنا مع العميل ده لأول مرة،
+      -- مالهاش أي ربط ببرمجة/حساب عقود الصيانة (دي في جدول منفصل تمامًا)
       ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD contract_date DATE NULL;
     END
 
     IF NOT EXISTS (
       SELECT * FROM sys.columns
-      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'maintenance_end_date'
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'manager_phone'
     )
     BEGIN
-      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD maintenance_end_date DATE NULL;
+      -- رقم تليفون مدير العميل (شخص مختلف عن رقم العميل نفسه المسجل في ContactPhones)
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD manager_phone NVARCHAR(30) NULL;
     END
   `);
 }

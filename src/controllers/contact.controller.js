@@ -107,7 +107,7 @@ async function linkConversationContact(req, res) {
 // تليفونه، وممكن اختياريًا تاريخ بدء/انتهاء أول عقد صيانة ليه (لو مش عايز يحددها
 // دلوقتي، يقدر يضيفها بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل)
 async function createCustomerCard(req, res) {
-  const { name, location, phone, contractDate, maintenanceEndDate } = req.body || {};
+  const { name, location, phone, contractDate, maintenanceEndDate, signedContractDate, managerPhone } = req.body || {};
 
   const trimmedName = (name || '').trim();
   const trimmedPhone = (phone || '').trim();
@@ -129,6 +129,8 @@ async function createCustomerCard(req, res) {
     name: trimmedName,
     phoneNumber: trimmedPhone,
     location: (location || '').trim() || null,
+    signedContractDate: signedContractDate || null,
+    managerPhone: (managerPhone || '').trim() || null,
     contractDate: contractDate || null,
     maintenanceEndDate: maintenanceEndDate || null,
     createdBy: req.user.userId,
@@ -151,7 +153,7 @@ async function createCustomerCard(req, res) {
 // الاسم والمكان بس؛ عقود الصيانة بقت بتتضاف من سجل الصيانة نفسه (شوف
 // maintenanceContract.controller.js)
 async function updateCustomerCard(req, res) {
-  const { name, location } = req.body || {};
+  const { name, location, signedContractDate, managerPhone } = req.body || {};
 
   const trimmedName = (name || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
@@ -159,6 +161,8 @@ async function updateCustomerCard(req, res) {
   const contact = await contactRepo.updateCustomerDetails(req.params.id, {
     name: trimmedName,
     location: (location || '').trim() || null,
+    signedContractDate: signedContractDate || null,
+    managerPhone: (managerPhone || '').trim() || null,
   });
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 

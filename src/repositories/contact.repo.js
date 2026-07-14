@@ -65,24 +65,19 @@ async function getContactById(id) {
   return result.recordset[0] || null;
 }
 
-// زي getContactById بالظبط، لكن contract_date/maintenance_end_date بييجوا لايف من
-// "العقد الحالي" في سجل عقود الصيانة (الساري لو موجود، وإلا آخر عقد انتهى) — مش من
-// عمودين ثابتين على الكونتاكت زي الطريقة القديمة.
-// ملحوظة مهمة: بنكتب أعمدة الكونتاكت بالاسم بدل c.* عشان الكونتاكت نفسه لسه فيه
-// عمودين قدام بنفس الاسم (contract_date/maintenance_end_date، الأعمدة اللي كانت
-// بتتخزن عليها التواريخ زمان). لو استخدمنا c.* هيبقى فيه اسمين متكررين في نتيجة
-// الكويري (واحد من c.* وواحد من mc)، وده بيخلي مكتبة mssql تدمج القيمتين في
-// array بدل ما تستبدل القديمة بالجديدة — فيبقى contract_date مثلاً [oldValue,
-// newValue] بدل تاريخ لوحده، وده اللي كان بيكسر new Date() في الفرونت إند
-// ويطلع "NaN يوم" في الوقت المتبقي و"-" في مدة التعاقد حتى لو التاريخين ظاهرين
+// زي getContactById بالظبط، لكن maintenance_start_date/maintenance_end_date بييجوا
+// لايف من "العقد الحالي" في سجل عقود الصيانة (الساري لو موجود، وإلا آخر عقد
+// انتهى) — مش من عمودين ثابتين على الكونتاكت. أما contract_date (تاريخ التعاقد
+// الأصلي) و manager_phone (رقم المدير) فدول معلومات مستقلة تمامًا محفوظة على
+// الكونتاكت نفسه، ومالهاش أي علاقة بجدول عقود الصيانة أو بحساباته
 async function getContactByIdWithCurrentContract(id) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
     .query(`
-      SELECT c.id, c.name, c.location, c.created_at,
-             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
+      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone,
+             mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
@@ -131,15 +126,17 @@ async function getContactByIdWithPhones(id) {
 }
 
 // كل الكونتاكتس (تُستخدم في صفحة Contacts وفي قايمة اختيار "اربط بكونتاكت موجود")
-// contract_date/maintenance_end_date هنا بييجوا من "العقد الحالي" (آخر عقد اتضاف)
-// بتاع كل عميل — نفس منطق getContactByIdWithCurrentContract
+// maintenance_start_date/maintenance_end_date هنا بييجوا من "العقد الحالي" (آخر
+// عقد اتضاف) بتاع كل عميل — نفس منطق getContactByIdWithCurrentContract. أما
+// contract_date (تاريخ التعاقد) و manager_phone (رقم المدير) فمعلومات مستقلة
+// محفوظة على الكونتاكت نفسه
 async function listContacts() {
   const pool = await getPool();
   const contactsResult = await pool
     .request()
     .query(`
-      SELECT c.id, c.name, c.location, c.created_at,
-             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
+      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone,
+             mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
@@ -177,8 +174,8 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     .input('offset', sql.Int, offset)
     .input('pageSize', sql.Int, safePageSize)
     .query(`
-      SELECT c.id, c.name, c.location, c.created_at,
-             mc.start_date AS contract_date, mc.end_date AS maintenance_end_date,
+      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone,
+             mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at,
              COUNT(*) OVER() AS total_count
       FROM [dbo].[NileChat_Contacts_byA] c
@@ -310,20 +307,33 @@ async function unlinkPhoneToNewContact(contactId, phoneNumber, newName) {
 
 // بينشئ "كارت عميل صيانة" (Add Contact بتاع الأدمن): كونتاكت جديد بمكانه، بالإضافة
 // لرقم تليفونه العادي زي أي كونتاكت تاني. القيمة دي (location) هي اللي بتفرّق الكارت
-// ده عن كارت الكونتاكت العادي الجاي أوتوماتيك من واتساب. لو الأدمن بعت تاريخ بدء/انتهاء
-// عقد وهو بيضيف العميل، بننشئ أول عقد صيانة ليه فورًا في سجل العقود (بدل ما كان
-// بيتخزن كعمودين ثابتين على الكونتاكت) — لكن ده اختياري تمامًا، ممكن يتضاف بعدين
-// من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل
-async function createCustomerContact({ name, phoneNumber, location, contractDate, maintenanceEndDate, createdBy, createdByName }) {
+// ده عن كارت الكونتاكت العادي الجاي أوتوماتيك من واتساب. signedContractDate (تاريخ
+// التعاقد) و managerPhone (رقم المدير) معلومات مستقلة بتتخزن على الكونتاكت نفسه
+// ومالهاش أي علاقة بعقد الصيانة. أما contractDate/maintenanceEndDate (لو الأدمن
+// بعتهم) فبينشئوا أول عقد صيانة فورًا في سجل العقود المنفصل — اختياري تمامًا،
+// ممكن يتضاف بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل
+async function createCustomerContact({
+  name,
+  phoneNumber,
+  location,
+  signedContractDate,
+  managerPhone,
+  contractDate,
+  maintenanceEndDate,
+  createdBy,
+  createdByName,
+}) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('name', sql.NVarChar(200), name)
     .input('location', sql.NVarChar(300), location || null)
+    .input('contractDate', sql.Date, signedContractDate || null)
+    .input('managerPhone', sql.NVarChar(30), managerPhone || null)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_phone)
       OUTPUT INSERTED.*
-      VALUES (@name, @location)
+      VALUES (@name, @location, @contractDate, @managerPhone)
     `);
   const contact = result.recordset[0];
 
@@ -349,20 +359,22 @@ async function createCustomerContact({ name, phoneNumber, location, contractDate
   return getContactByIdWithPhones(contact.id);
 }
 
-// تعديل بيانات كارت عميل الصيانة (أدمن بس) — الاسم والمكان بس. تواريخ عقد الصيانة
-// بقت بتتضاف/تتجدد من زرار "إضافة عقد صيانة" في سجل الصيانة بتاع العميل (سجل
-// كامل بعقود متعددة)، مش من هنا، عشان لو عقد قديم اتعدّل هنا كان بيمسح تاريخ
-// العقد اللي فات بدل ما يحتفظ بيه كسجل منفصل
-async function updateCustomerDetails(id, { name, location }) {
+// تعديل بيانات كارت عميل الصيانة (أدمن بس) — الاسم، المكان، تاريخ التعاقد، ورقم
+// المدير. تواريخ عقد الصيانة بقت بتتضاف/تتجدد من زرار "إضافة عقد صيانة" في سجل
+// الصيانة بتاع العميل (سجل كامل بعقود متعددة)، مش من هنا، عشان لو عقد قديم
+// اتعدّل هنا كان بيمسح تاريخ العقد اللي فات بدل ما يحتفظ بيه كسجل منفصل
+async function updateCustomerDetails(id, { name, location, signedContractDate, managerPhone }) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
     .input('name', sql.NVarChar(200), name)
     .input('location', sql.NVarChar(300), location || null)
+    .input('contractDate', sql.Date, signedContractDate || null)
+    .input('managerPhone', sql.NVarChar(30), managerPhone || null)
     .query(`
       UPDATE [dbo].[NileChat_Contacts_byA]
-      SET name = @name, location = @location
+      SET name = @name, location = @location, contract_date = @contractDate, manager_phone = @managerPhone
       OUTPUT INSERTED.*
       WHERE id = @id
     `);

@@ -1709,6 +1709,16 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">تاريخ التعاقد</div>
+                <div class="st-modal-readonly-value" id="customer-details-signed-contract-date">-</div>
+            </div>
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">رقم المدير</div>
+                <div class="st-modal-readonly-value" id="customer-details-manager-phone">-</div>
+            </div>
+        </div>
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly">
+                <div class="st-modal-readonly-label">بداية عقد الصيانة الحالي</div>
                 <div class="st-modal-readonly-value" id="customer-details-contract-date">-</div>
             </div>
             <div class="st-modal-readonly">
@@ -6238,6 +6248,8 @@ function openAddCustomerModal() {
     document.getElementById('customer-card-location').value = '';
     document.getElementById('customer-card-phone').value = '';
     document.getElementById('customer-card-phone').disabled = false;
+    document.getElementById('customer-card-signed-contract-date').value = '';
+    document.getElementById('customer-card-manager-phone').value = '';
     document.getElementById('customer-card-contract-start').value = '';
     document.getElementById('customer-card-contract-end').value = '';
     document.getElementById('customer-card-contract-row').style.display = '';
@@ -6267,6 +6279,9 @@ async function submitCustomerCard() {
         return (errorEl.textContent = 'مثال: 201035292196');
     }
 
+    const signedContractDate = document.getElementById('customer-card-signed-contract-date').value;
+    const managerPhone = document.getElementById('customer-card-manager-phone').value.trim();
+
     const contractStart = customerCardMode === 'add' ? document.getElementById('customer-card-contract-start').value : '';
     const contractEnd = customerCardMode === 'add' ? document.getElementById('customer-card-contract-end').value : '';
     if (customerCardMode === 'add' && (contractStart || contractEnd) && !(contractStart && contractEnd)) {
@@ -6284,8 +6299,8 @@ async function submitCustomerCard() {
             : `/api/contacts/${customerCardEditingId}/customer-card`;
         const method = customerCardMode === 'add' ? 'POST' : 'PATCH';
         const body = customerCardMode === 'add'
-            ? { name, location, phone, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined }
-            : { name, location };
+            ? { name, location, phone, signedContractDate: signedContractDate || undefined, managerPhone: managerPhone || undefined, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined }
+            : { name, location, signedContractDate: signedContractDate || undefined, managerPhone: managerPhone || undefined };
 
         const res = await apiFetch(url, { method, body: JSON.stringify(body) });
         const data = await res.json();
@@ -6354,11 +6369,14 @@ async function openCustomerDetails(contactId) {
    بنفصلها في دالة لوحدها عشان نقدر نحدّثها بعد إضافة عقد جديد من غير ما نعيد
    تحميل الصفحة كلها أو نرجّع التاب المختار لـ "الزيارات"*/
 function renderCustomerDetailsStats(c) {
-    document.getElementById('customer-details-contract-date').textContent = formatSchedDate(c.contract_date);
+    document.getElementById('customer-details-signed-contract-date').textContent = formatSchedDate(c.contract_date);
+    document.getElementById('customer-details-manager-phone').textContent = c.manager_phone || '-';
+
+    document.getElementById('customer-details-contract-date').textContent = formatSchedDate(c.maintenance_start_date);
     document.getElementById('customer-details-maintenance-date').textContent = formatSchedDate(c.maintenance_end_date);
 
-    if (c.contract_date && c.maintenance_end_date) {
-        document.getElementById('customer-details-duration').textContent = formatDurationDays(c.contract_date, c.maintenance_end_date);
+    if (c.maintenance_start_date && c.maintenance_end_date) {
+        document.getElementById('customer-details-duration').textContent = formatDurationDays(c.maintenance_start_date, c.maintenance_end_date);
     } else {
         document.getElementById('customer-details-duration').textContent = '-';
     }
@@ -6527,6 +6545,8 @@ function editCurrentCustomerCard() {
     document.getElementById('customer-card-phone').value = (c.phones || []).map(p => p.phone_number).join(', ');
     document.getElementById('customer-card-phone').disabled = true; // الرقم مش بيتعدل من هنا
     document.getElementById('customer-card-phone-hint').style.color = '';
+    document.getElementById('customer-card-signed-contract-date').value = c.contract_date ? c.contract_date.substring(0, 10) : '';
+    document.getElementById('customer-card-manager-phone').value = c.manager_phone || '';
     document.getElementById('customer-card-contract-row').style.display = 'none'; // عقد الصيانة بيتضاف/يتجدد من صفحة التفاصيل مش من هنا
     document.getElementById('customer-card-contract-hint').style.display = 'none';
     document.getElementById('customer-card-error').textContent = '';
@@ -8011,6 +8031,18 @@ async function iwDeleteInbox(id) {
         <div class="resolve-cats-label">رقم التليفون</div>
         <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 201001234567" maxlength="12" oninput="validateCustomerCardPhone()">
         <div class="iw-form-hint" id="customer-card-phone-hint" style="margin-bottom:12px">مثال: <b dir="ltr">201001234567</b></div>
+
+        <div class="st-modal-readonly-row">
+            <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
+                <div class="resolve-cats-label">تاريخ التعاقد</div>
+                <input type="date" class="iw-input" id="customer-card-signed-contract-date">
+            </div>
+            <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
+                <div class="resolve-cats-label">رقم المدير</div>
+                <input type="text" class="iw-input" id="customer-card-manager-phone" placeholder="رقم تليفون المدير">
+            </div>
+        </div>
+        <div class="iw-form-hint" style="margin-top:-8px;margin-bottom:12px">معلومات مستقلة بس عشان نعرف امتى اتعاقدنا مع العميل ده لأول مرة — مالهاش أي علاقة بعقد الصيانة</div>
 
         <div class="st-modal-readonly-row" id="customer-card-contract-row">
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
