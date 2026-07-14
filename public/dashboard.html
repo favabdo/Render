@@ -451,8 +451,11 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .label-color-swatch.selected{border-color:var(--text)}
 .sched-subhead{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px;display:flex;align-items:center;gap:6px;cursor:default}
 .sched-subhead .sched-subhead-count{color:var(--text-secondary);font-weight:600;text-transform:none;letter-spacing:0}
-.sched-task-card{padding:11px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:8px;min-width:0;box-sizing:border-box}
+.sched-task-card{padding:11px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);margin-bottom:8px;min-width:0;box-sizing:border-box;transition:box-shadow .3s,border-color .3s}
 .sched-task-card.ended{opacity:.65}
+.sched-task-card.sched-task-highlight{border-color:var(--primary);box-shadow:0 0 0 3px rgba(108,92,231,0.18)}
+.cd-sched-task-badge{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:9px;background:rgba(108,92,231,0.1);color:var(--primary);font-size:12.5px;font-weight:600;cursor:pointer;border:1.5px dashed var(--primary)}
+.cd-sched-task-badge:hover{background:rgba(108,92,231,0.18)}
 .sched-task-customer{font-size:15px;font-weight:800;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .sched-task-customer svg{color:var(--primary);flex-shrink:0}
 .sched-task-subrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--text-secondary);font-weight:600;padding-bottom:9px;margin-bottom:10px;border-bottom:1px dashed var(--border)}
@@ -1076,8 +1079,14 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
             <!-- Tab: Info -->
             <div class="cp-tab-content" id="cptab-info">
-                <div class="cp-section">
-                    <div class="cp-section-title">Phone Numbers</div>
+                <div class="cp-section" id="cp-section-phones">
+                    <div class="cp-section-header" onclick="toggleCpSection('cp-section-phones')">
+                        <div class="cp-section-title">Phone Numbers</div>
+                        <div class="cp-section-header-right">
+                            <i data-lucide="chevron-down" class="cp-collapse-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="cp-section-body">
                     <div class="info-list" id="phone-list"></div>
                     <button class="add-btn" onclick="showAddPhone()" id="add-phone-btn" style="margin-top:8px">
                         <i data-lucide="plus" style="width:16px;height:16px"></i> Add Phone Number
@@ -1100,9 +1109,16 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                             <button class="add-cancel" onclick="hideMergeContact()">Cancel</button>
                         </div>
                     </div>
+                    </div>
                 </div>
-                <div class="cp-section">
-                    <div class="cp-section-title">Devices</div>
+                <div class="cp-section" id="cp-section-devices">
+                    <div class="cp-section-header" onclick="toggleCpSection('cp-section-devices')">
+                        <div class="cp-section-title">Devices</div>
+                        <div class="cp-section-header-right">
+                            <i data-lucide="chevron-down" class="cp-collapse-chevron"></i>
+                        </div>
+                    </div>
+                    <div class="cp-section-body">
                     <div id="device-list"></div>
                     <button class="add-btn" onclick="showAddDevice()" id="add-device-btn" style="margin-top:8px">
                         <i data-lucide="plus" style="width:16px;height:16px"></i> Add Device
@@ -1115,6 +1131,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                             <button class="add-confirm" onclick="addDevice()">Add</button>
                             <button class="add-cancel" onclick="hideAddDevice()">Cancel</button>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -1730,6 +1747,12 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="iw-form-hint" id="customer-details-new-phone-hint">لازم يبدأ بكود مصر 20 وبدون + وبدون مسافات (مثال: 201001234567)</div>
             </div>
         </div>
+
+        <div class="st-modal-readonly" id="customer-details-sched-section" style="margin-top:12px;display:none">
+            <div class="st-modal-readonly-label">Scheduled Task</div>
+            <div id="customer-details-sched-content"></div>
+        </div>
+
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">تاريخ التعاقد</div>
@@ -3661,6 +3684,7 @@ let scheduledTasks = [];
 let schedActiveTab = 'open';
 let schedFilterAgent = '';
 let schedFilterCustomer = '';
+let pendingSchedTaskHighlight = null; // {contactId, taskId} — بيتحط قبل ما ننتقل لصفحة Scheduled Tasks من كارت العميل بره، عشان نلقط التاسك ده ونهايلايته لما الصفحة تخلص تحميل
 
 /* ===== التنقل ===== */
 function navigateTo(page) {
@@ -6009,6 +6033,13 @@ async function loadScheduledTasksPage() {
     }
 }
 
+/* بتنقل من كارت العميل (جوه المحادثة أو بره في تفاصيل العميل) لصفحة Scheduled Tasks
+   وبتفلتر على اسم العميل ده وتعمل هايلايت للتاسك المطلوب نفسه عشان الإيجنت يشوف تفاصيله فورًا */
+function viewScheduledTaskDetails(contactId, taskId, customerName) {
+    pendingSchedTaskHighlight = { contactId: String(contactId), taskId: String(taskId), customerName: customerName || '' };
+    navigateTo('scheduled-tasks');
+}
+
 function goToTaskConversation(contactId) {
     const match = conversations.find(x => String(x.contactId) === String(contactId));
     if (!match) return showToast('محادثة العميل ده مش ظاهرة في القايمة دلوقتي', 'info');
@@ -6028,7 +6059,7 @@ function scheduledTaskCardHtml(t, ended) {
         : '<span class="sched-ended-tag"><i data-lucide="check-circle" style="width:12px;height:12px"></i>Ended</span>';
 
     return `
-        <div class="sched-task-card${ended ? ' ended' : ''}">
+        <div class="sched-task-card${ended ? ' ended' : ''}" data-task-id="${t.id}">
             <div class="sched-task-customer">
                 <i data-lucide="user-round-search" style="width:16px;height:16px"></i>
                 <span onclick="goToTaskConversation(${t.contact_id})" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted">${escapeHtml(t.customer_name || 'Unknown customer')}</span>
@@ -6128,6 +6159,38 @@ function drawScheduledTasksPage(refreshFilters = true) {
     document.getElementById('sched-page-ended-list').style.display = schedActiveTab === 'ended' ? '' : 'none';
 
     lucide.createIcons();
+    applyPendingSchedTaskHighlight();
+}
+
+/* بتتنفذ بعد ما صفحة Scheduled Tasks تترسم — لو فيه تاسك متطلوب هايلايت له (جاي من كارت
+   العميل)، بنفلتر على اسم العميل ده، نفتح التاب الصح (مفتوح/منتهي)، ونعمل سكرول+هايلايت للكارت بتاعه */
+function applyPendingSchedTaskHighlight() {
+    if (!pendingSchedTaskHighlight) return;
+    const { contactId, taskId, customerName } = pendingSchedTaskHighlight;
+    pendingSchedTaskHighlight = null;
+
+    const task = scheduledTasks.find(t => String(t.id) === taskId) ||
+        scheduledTasks.find(t => String(t.contact_id) === contactId);
+    if (!task) return;
+
+    const filterInput = document.getElementById('sched-filter-customer');
+    if (filterInput && customerName) {
+        filterInput.value = customerName;
+        schedFilterCustomer = customerName;
+    }
+    const agentFilterInput = document.getElementById('sched-filter-agent');
+    if (agentFilterInput) agentFilterInput.value = '';
+    schedFilterAgent = '';
+    switchSchedTab(task.status === 'ended' ? 'ended' : 'open');
+    drawScheduledTasksPage(false);
+
+    setTimeout(() => {
+        const card = document.querySelector(`.sched-task-card[data-task-id="${task.id}"]`);
+        if (!card) return;
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('sched-task-highlight');
+        setTimeout(() => card.classList.remove('sched-task-highlight'), 2500);
+    }, 60);
 }
 
 async function endScheduledTask(taskId, contactId) {
@@ -6287,7 +6350,9 @@ let customerCardEditingId = null;
 
 // نفس صيغة رقم تليفون العميل بتاعة كارت الصيانة: كود الدولة 20 وبعده رقم
 // الموبايل المصري من غير الصفر اللي في الأول (يعني 12 رقم بالظبط، بيبدأ بـ 2010/2011/2012/2015)
-const CUSTOMER_PHONE_REGEX = /^201[0125]\d{8}$/;
+// وبرضه بيقبل نفس الصيغة للأرقام السعودية: كود الدولة 966 وبعده رقم الموبايل
+// السعودي من غير الصفر اللي في الأول (12 رقم بالظبط، بيبدأ بـ 9665)
+const CUSTOMER_PHONE_REGEX = /^(201[0125]\d{8}|9665\d{8})$/;
 
 function validateCustomerCardPhone() {
     const input = document.getElementById('customer-card-phone');
@@ -6447,6 +6512,37 @@ function formatDurationDays(fromDate, toDate) {
 
 let customerDetailsCache = null;
 
+/* بتجيب تاسكات العميل ده وتعرض إشارة "Scheduled Task" فوق كارت تفاصيل العميل (بره
+   المحادثة) لو عنده تاسك مفتوح — دوس عليها يوديك على صفحة Scheduled Tasks تشوف تفاصيله */
+async function loadCustomerDetailsScheduledTask(contactId) {
+    const section = document.getElementById('customer-details-sched-section');
+    const content = document.getElementById('customer-details-sched-content');
+    if (!section || !content) return;
+    section.style.display = 'none';
+    try {
+        const res = await apiFetch(`/api/contacts/${contactId}/scheduled-tasks`);
+        if (!res.ok) return;
+        const tasks = await res.json();
+        const openTask = tasks.find(t => t.status === 'open');
+        if (!openTask) return; // مفيش تاسك مفتوح دلوقتي — القسم يفضل مخفي
+
+        content.innerHTML = `
+            <button type="button" class="cd-sched-task-badge" onclick="viewCurrentCustomerScheduledTask(${openTask.id})" title="دوس عشان تشوف تفاصيل التاسك">
+                <i data-lucide="calendar-clock" style="width:14px;height:14px"></i>
+                العميل ده ليه تاسك مجدول — دوس تشوف التفاصيل
+            </button>`;
+        section.style.display = '';
+        lucide.createIcons();
+    } catch (err) {
+        console.error('[API] loadCustomerDetailsScheduledTask error:', err);
+    }
+}
+
+function viewCurrentCustomerScheduledTask(taskId) {
+    if (!customerDetailsCache) return;
+    viewScheduledTaskDetails(customerDetailsCache.id, taskId, customerDetailsCache.name || '');
+}
+
 async function openCustomerDetails(contactId) {
     try {
         const res = await apiFetch(`/api/contacts/${contactId}`);
@@ -6458,6 +6554,7 @@ async function openCustomerDetails(contactId) {
         document.getElementById('customer-details-location').textContent = c.location || '-';
         renderCustomerDetailsPhones(c);
         renderCustomerDetailsStats(c);
+        loadCustomerDetailsScheduledTask(c.id);
 
         // زرار التعديل وزرار إضافة عقد صيانة وزرار حذف العميل بيظهروا للأدمن/الأونر بس
         document.getElementById('customer-details-edit-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
