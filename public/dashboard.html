@@ -1154,7 +1154,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             </button>
             <button class="contacts-tab" data-tab="unregistered" onclick="switchContactsTab('unregistered')">
                 <i data-lucide="message-circle" style="width:14px;height:14px"></i>
-                ارقام غير مسجلة
+                بعتوا واتساب ولسه متسجلوش
                 <span class="contacts-tab-count" id="contacts-tab-count-unregistered">0</span>
             </button>
         </div>
@@ -6589,6 +6589,11 @@ function renderCustomerDetailsPhones(c) {
     wrap.innerHTML = phones.map(p => `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <div class="st-modal-readonly-value">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>
+            ${isOwnerOrAdmin() ? `
+                <button class="resolve-cancel-btn" style="padding:4px 9px;font-size:11.5px" onclick="editCustomerDetailsPhoneLabel('${escapeHtml(p.phone_number)}')" title="حط/عدّل اسم ثانوي للرقم">
+                    <i data-lucide="tag" style="width:12px;height:12px"></i> ليبل
+                </button>
+            ` : ''}
             ${canUnlink ? `
                 <button class="resolve-cancel-btn" style="padding:4px 9px;font-size:11.5px" onclick="openUnlinkPhoneModal('${escapeHtml(p.phone_number)}')">
                     <i data-lucide="unlink" style="width:12px;height:12px"></i> فصل
@@ -6597,6 +6602,40 @@ function renderCustomerDetailsPhones(c) {
         </div>
     `).join('');
     lucide.createIcons();
+}
+
+/* بيفتح prompt عشان يحط/يعدّل ليبل (اسم ثانوي) لرقم معين من صفحة تفاصيل العميل —
+   نفس بالظبط لوجيك editPhoneLabel بتاعة الكارت اللي في المحادثة، بس هنا بيشتغل
+   على customerDetailsCache بدل ما يبقى محتاج محادثة مفتوحة أصلًا */
+async function editCustomerDetailsPhoneLabel(phoneNumber) {
+    if (!customerDetailsCache) return;
+    const p = (customerDetailsCache.phones || []).find(ph => ph.phone_number === phoneNumber);
+    const newLabel = window.prompt('اكتب ليبل للرقم ده (مثلاً: الشغل، الرقم الشخصي) — سيبه فاضي عشان تمسح الليبل', (p && p.label) || '');
+    if (newLabel === null) return; // المستخدم عمل Cancel
+
+    try {
+        const res = await apiFetch(`/api/contacts/${customerDetailsCache.id}/phones`, {
+            method: 'PATCH',
+            body: JSON.stringify({ phone: phoneNumber, label: newLabel.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ الليبل');
+
+        customerDetailsCache = data.contact;
+        renderCustomerDetailsPhones(data.contact);
+
+        // لو نفس العميل ده مفتوح كمان جوه محادثة شغالة حاليًا، حدّث الليبل هناك كمان
+        const c = conversations.find(x => x.contactId === customerDetailsCache.id);
+        if (c) {
+            c.phones = data.contact.phones.map(ph => ({ number: ph.phone_number, label: ph.label || null }));
+            if (selectedChatId === c.id) renderPhones(c);
+        }
+
+        showToast('تم حفظ الليبل بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] editCustomerDetailsPhoneLabel error:', err);
+        showToast(err.message || 'فشل حفظ الليبل', 'error');
+    }
 }
 
 /* ===== فصل رقم تليفون من عميل عنده أكتر من رقم =====
