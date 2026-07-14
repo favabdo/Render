@@ -292,9 +292,17 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     .input('q', sql.NVarChar(200), q ? `%${q}%` : null)
     .query(`
       SELECT
-        SUM(CASE WHEN ${REGISTERED_CONDITION} THEN 1 ELSE 0 END) AS registered_count,
-        SUM(CASE WHEN NOT ${REGISTERED_CONDITION} THEN 1 ELSE 0 END) AS unregistered_count
+        SUM(reg.is_registered) AS registered_count,
+        SUM(1 - reg.is_registered) AS unregistered_count
       FROM [dbo].[NileChat_Contacts_byA] c
+      CROSS APPLY (
+        -- بننقل شرط EXISTS برّه الـ SUM هنا (مش جواه مباشرة) لأن SQL Server مش بيسمح
+        -- بـ subquery جوه argument بتاع aggregate function زي SUM (بيدي Error 130:
+        -- "Cannot perform an aggregate function on an expression containing an
+        -- aggregate or a subquery"). هنا بقى reg.is_registered عمود عادي بقيمة 0/1
+        -- جاهزة، والـ SUM بيجمعها عادي من غير أي subquery جواه
+        SELECT CASE WHEN ${REGISTERED_CONDITION} THEN 1 ELSE 0 END AS is_registered
+      ) reg
       WHERE (
          @q IS NULL
          OR c.name LIKE @q
