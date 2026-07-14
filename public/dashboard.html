@@ -1154,7 +1154,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
             </button>
             <button class="contacts-tab" data-tab="unregistered" onclick="switchContactsTab('unregistered')">
                 <i data-lucide="message-circle" style="width:14px;height:14px"></i>
-                بعتوا واتساب ولسه متسجلوش
+                ارقام غير مسجله
                 <span class="contacts-tab-count" id="contacts-tab-count-unregistered">0</span>
             </button>
         </div>
@@ -5422,7 +5422,7 @@ function renderPhones(c) {
                 <span>${escapeHtml(p.number)}</span>
                 ${p.label ? `<span class="label-chip" style="background:rgba(108,92,231,0.1);color:var(--primary);padding:2px 9px;font-size:11px">${escapeHtml(p.label)}</span>` : ''}
             </div>
-            ${isOwnerOrAdmin() ? `<button class="info-item-del" onclick="editPhoneLabel(${i})" title="حط/عدّل ليبل"><i data-lucide="tag" style="width:14px;height:14px"></i></button>` : ''}
+            ${isOwnerOrAdmin() ? `<button class="info-item-del" onclick="editPhoneLabel(${i})" title="حط/عدّل اسم ثانوي"><i data-lucide="tag" style="width:14px;height:14px"></i></button>` : ''}
         </div>
     `).join('');
     lucide.createIcons();
@@ -5435,7 +5435,7 @@ async function editPhoneLabel(idx) {
     const p = c.phones[idx];
     if (!p) return;
 
-    const newLabel = window.prompt('اكتب ليبل للرقم ده (مثلاً: الشغل، الرقم الشخصي) — سيبه فاضي عشان تمسح الليبل', p.label || '');
+    const newLabel = window.prompt('اكتب اسم ثانوي للرقم ده (مثلاً: الشغل، الرقم الشخصي) — سيبه فاضي عشان تمسح الاسم الثانوي', p.label || '');
     if (newLabel === null) return; // المستخدم عمل Cancel
 
     try {
@@ -5444,14 +5444,14 @@ async function editPhoneLabel(idx) {
             body: JSON.stringify({ phone: p.number, label: newLabel.trim() })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ الليبل');
+        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ الاسم الثانوي');
 
         c.phones = data.contact.phones.map(ph => ({ number: ph.phone_number, label: ph.label || null }));
         renderPhones(c);
-        showToast('تم حفظ الليبل بنجاح', 'success');
+        showToast('تم حفظ الاسم الثانوي بنجاح', 'success');
     } catch (err) {
         console.error('[API] editPhoneLabel error:', err);
-        showToast(err.message || 'فشل حفظ الليبل', 'error');
+        showToast(err.message || 'فشل حفظ الاسم الثانوي', 'error');
     }
 }
 
@@ -6218,7 +6218,7 @@ function renderContacts() {
     if (contactsData.length === 0) {
         const emptyMsg = contactsSearchQuery
             ? 'لا توجد نتائج مطابقة'
-            : (contactsActiveTab === 'registered' ? 'لا يوجد عملاء مسجلين لعرضهم' : 'لا يوجد عملاء بعتوا واتساب ولسه متسجلوش');
+            : (contactsActiveTab === 'registered' ? 'لا يوجد عملاء مسجلين لعرضهم' : 'لا يوجد ارقام غير مسجله لعرضها');
         grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${emptyMsg}</div>`;
         return;
     }
@@ -6591,7 +6591,7 @@ function renderCustomerDetailsPhones(c) {
             <div class="st-modal-readonly-value">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>
             ${isOwnerOrAdmin() ? `
                 <button class="resolve-cancel-btn" style="padding:4px 9px;font-size:11.5px" onclick="editCustomerDetailsPhoneLabel('${escapeHtml(p.phone_number)}')" title="حط/عدّل اسم ثانوي للرقم">
-                    <i data-lucide="tag" style="width:12px;height:12px"></i> ليبل
+                    <i data-lucide="tag" style="width:12px;height:12px"></i> اسم ثانوي
                 </button>
             ` : ''}
             ${canUnlink ? `
@@ -6610,7 +6610,7 @@ function renderCustomerDetailsPhones(c) {
 async function editCustomerDetailsPhoneLabel(phoneNumber) {
     if (!customerDetailsCache) return;
     const p = (customerDetailsCache.phones || []).find(ph => ph.phone_number === phoneNumber);
-    const newLabel = window.prompt('اكتب ليبل للرقم ده (مثلاً: الشغل، الرقم الشخصي) — سيبه فاضي عشان تمسح الليبل', (p && p.label) || '');
+    const newLabel = window.prompt('اكتب اسم ثانوي للرقم ده (مثلاً: الشغل، الرقم الشخصي) — سيبه فاضي عشان تمسح الاسم الثانوي', (p && p.label) || '');
     if (newLabel === null) return; // المستخدم عمل Cancel
 
     try {
@@ -6619,22 +6619,22 @@ async function editCustomerDetailsPhoneLabel(phoneNumber) {
             body: JSON.stringify({ phone: phoneNumber, label: newLabel.trim() }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ الليبل');
+        if (!res.ok) throw new Error((data && data.error) || 'فشل حفظ الاسم الثانوي');
 
         customerDetailsCache = data.contact;
         renderCustomerDetailsPhones(data.contact);
 
-        // لو نفس العميل ده مفتوح كمان جوه محادثة شغالة حاليًا، حدّث الليبل هناك كمان
+        // لو نفس العميل ده مفتوح كمان جوه محادثة شغالة حاليًا، حدّث الاسم الثانوي هناك كمان
         const c = conversations.find(x => x.contactId === customerDetailsCache.id);
         if (c) {
             c.phones = data.contact.phones.map(ph => ({ number: ph.phone_number, label: ph.label || null }));
             if (selectedChatId === c.id) renderPhones(c);
         }
 
-        showToast('تم حفظ الليبل بنجاح', 'success');
+        showToast('تم حفظ الاسم الثانوي بنجاح', 'success');
     } catch (err) {
         console.error('[API] editCustomerDetailsPhoneLabel error:', err);
-        showToast(err.message || 'فشل حفظ الليبل', 'error');
+        showToast(err.message || 'فشل حفظ الاسم الثانوي', 'error');
     }
 }
 

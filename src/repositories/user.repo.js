@@ -69,10 +69,10 @@ function resolveDisplayName(user) {
 
 // القيم الافتراضية لتفضيلات الإشعارات — لو اليوزر لسه معملش أي تعديل عليها
 const DEFAULT_NOTIFICATION_PREFS = {
-  conversation_created: { email: true, push: true },
-  conversation_assigned: { email: true, push: true },
-  conversation_mention: { email: true, push: true },
-  assigned_conversation_message: { email: true, push: true },
+  conversation_created: { email: false, push: true },
+  conversation_assigned: { email: false, push: true },
+  conversation_mention: { email: false, push: true },
+  assigned_conversation_message: { email: false, push: true },
   participating_conversation_message: { email: false, push: true },
 };
 
