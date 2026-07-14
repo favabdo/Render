@@ -299,6 +299,23 @@ async function ensureMessagesHaveSenderColumns() {
   }
 }
 
+// بنعلّم رسايل أتمتة "ما بعد الحل" (CSAT + فلو التقييم بكل مراحله + ردود العميل
+// عليها) بعمود منفصل عشان نقدر نفلترها بره شاشة الإيجنت (آخر حاجة يشوفها
+// الإيجنت هي رسالة "Conversation was marked resolved" نفسها بس — أي حاجة بعدها
+// من أتمتة التقييم مخصوصة للـ admin/owner بس، شوف conversation.controller.js)
+async function ensureMessagesHavePostResolveColumn() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.${TABLE_NAME}') AND name = 'is_post_resolve'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[${TABLE_NAME}] ADD is_post_resolve BIT NOT NULL DEFAULT 0;
+    END
+  `);
+}
+
 // بنسجل نوع الملف (MIME) واسمه الأصلي مع أي رسالة وسائط (صورة/فيديو/صوت/مستند)
 // عشان الواجهة تعرف تعرض العنصر الصح (img/video/audio/رابط تحميل) وتفضل عارفة
 // اسم الملف الأصلي حتى لو الرابط المخزن اسمه عشوائي على السيرفر
@@ -1107,6 +1124,7 @@ async function ensureSchema() {
   await ensureMessagesHaveConversationColumn();
   await ensureMessagesHaveSenderColumns();
   await ensureMessagesHaveMediaColumns();
+  await ensureMessagesHavePostResolveColumn();
   await ensureInboxesTableExists();
   await ensureInboxesHaveExtraColumns();
   await ensureInboxAgentsTableExists();
@@ -1151,6 +1169,7 @@ module.exports = {
   ensureMessagesHaveConversationColumn,
   ensureMessagesHaveSenderColumns,
   ensureMessagesHaveMediaColumns,
+  ensureMessagesHavePostResolveColumn,
   ensureInboxesTableExists,
   ensureInboxesHaveExtraColumns,
   ensureInboxAgentsTableExists,

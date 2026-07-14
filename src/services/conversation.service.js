@@ -12,6 +12,7 @@ const whatsappService = require('./whatsapp.service');
 const notificationService = require('./notification.service');
 const ratingRepo = require('../repositories/rating.repo');
 const ratingFlowService = require('./ratingFlow.service');
+const socketService = require('../socket/socket');
 const logger = require('../utils/logger');
 const { isWithinBusinessHours } = require('../utils/welcomeSchedule');
 
@@ -213,9 +214,10 @@ async function processIncomingMessages(value, io, wabaId = null) {
           messageType,
           messageText,
           rawPayload: JSON.stringify(msg),
+          isPostResolve: true,
         });
         if (io) {
-          io.emit('new_message', { conversationId: pendingRating.conversation_id, message: saved });
+          socketService.emitToPrivilegedRoom(io, 'new_message', { conversationId: pendingRating.conversation_id, message: saved });
         }
         try {
           if (messageType === 'interactive' && msg.interactive?.type === 'nfm_reply') {

@@ -57,7 +57,7 @@ async function resolveCredentials(inboxId) {
  * وترجعها فورًا عشان تتبعت على الـ socket فورًا (التيك بيبقى "بيحمّل" لحد ما
  * مرحلة 2 تخلص فعليًا، مش لحد ما الرسالة توصل للعميل).
  */
-async function createOutgoingMessage(toNumber, text, conversationId, inboxId, sender) {
+async function createOutgoingMessage(toNumber, text, conversationId, inboxId, sender, isPostResolve = false) {
   const { phoneNumberId } = await resolveCredentials(inboxId);
   return conversationRepo.saveMessage({
     waMessageId: null,
@@ -70,6 +70,7 @@ async function createOutgoingMessage(toNumber, text, conversationId, inboxId, se
     status: 'sending',
     sentByUserId: sender?.id || null,
     sentByName: sender?.name || null,
+    isPostResolve,
   });
 }
 
@@ -119,8 +120,8 @@ async function deliverOutgoingMessage(savedMessage, { toNumber, text, inboxId },
 
 // النسخة القديمة (متزامنة بالكامل، بتستنى ميتا قبل ما ترجع) — لسه موجودة لأي كود
 // تاني ممكن يعتمد عليها، بس reply() في الكنترولر بقى بيستخدم النسختين الجداد فوق
-async function sendTextMessage(toNumber, text, conversationId = null, inboxId = null, sender = null) {
-  const saved = await createOutgoingMessage(toNumber, text, conversationId, inboxId, sender);
+async function sendTextMessage(toNumber, text, conversationId = null, inboxId = null, sender = null, isPostResolve = false) {
+  const saved = await createOutgoingMessage(toNumber, text, conversationId, inboxId, sender, isPostResolve);
   return deliverOutgoingMessage(saved, { toNumber, text, inboxId });
 }
 
@@ -206,8 +207,8 @@ function buildSkippableTextInteractive(bodyText, skipLabel = 'تخطي') {
   };
 }
 
-async function sendStarRatingMessage(toNumber, bodyText, conversationId = null, inboxId = null, sender = null) {
-  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender);
+async function sendStarRatingMessage(toNumber, bodyText, conversationId = null, inboxId = null, sender = null, isPostResolve = false) {
+  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender, isPostResolve);
   return deliverOutgoingInteractiveMessage(saved, {
     toNumber,
     interactive: buildStarRatingListInteractive(bodyText),
@@ -215,8 +216,8 @@ async function sendStarRatingMessage(toNumber, bodyText, conversationId = null, 
   });
 }
 
-async function sendSkippableTextMessage(toNumber, bodyText, conversationId = null, inboxId = null, sender = null, skipLabel = 'تخطي') {
-  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender);
+async function sendSkippableTextMessage(toNumber, bodyText, conversationId = null, inboxId = null, sender = null, skipLabel = 'تخطي', isPostResolve = false) {
+  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender, isPostResolve);
   return deliverOutgoingInteractiveMessage(saved, {
     toNumber,
     interactive: buildSkippableTextInteractive(bodyText, skipLabel),
@@ -412,8 +413,8 @@ function buildRatingFlowInteractive({ flowId, flowToken, bodyText }) {
 // بتبعت رسالة الـ Flow الموحّدة (تقييمين + تعليق + إرسال في فقاعة واحدة).
 // flowToken هو id صف التقييم (NileChat_ConversationRatings_byA) كنص، عشان لما
 // الرد يرجع من واتساب نعرف نربطه بالطلب الصح
-async function sendRatingFlowMessage(toNumber, { flowId, flowToken, bodyText }, conversationId = null, inboxId = null, sender = null) {
-  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender);
+async function sendRatingFlowMessage(toNumber, { flowId, flowToken, bodyText }, conversationId = null, inboxId = null, sender = null, isPostResolve = false) {
+  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender, isPostResolve);
   return deliverOutgoingInteractiveMessage(saved, {
     toNumber,
     interactive: buildRatingFlowInteractive({ flowId, flowToken, bodyText }),

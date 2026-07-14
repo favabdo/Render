@@ -17,6 +17,7 @@ const ratingRepo = require('../repositories/rating.repo');
 const conversationRepo = require('../repositories/conversation.repo');
 const companyRepo = require('../repositories/company.repo');
 const whatsappService = require('../services/whatsapp.service');
+const { emitToPrivilegedRoom } = require('../socket/socket');
 const logger = require('../utils/logger');
 
 const DEFAULT_CSAT_MESSAGE = 'شكرًا لتواصلك معانا، تم حل مشكلتك 🙏 لو محتاج أي حاجة تانية إحنا موجودين.';
@@ -59,11 +60,12 @@ async function sendPlainFlowMessage(pending, text, io) {
     text,
     pending.conversation_id,
     pending.inbox_id,
-    { id: null, name: 'Automation' }
+    { id: null, name: 'Automation' },
+    true
   );
   await conversationRepo.touchConversation(pending.conversation_id);
   if (io && message) {
-    io.emit('new_message', { conversationId: pending.conversation_id, message });
+    emitToPrivilegedRoom(io, 'new_message', { conversationId: pending.conversation_id, message });
   }
   return message;
 }
@@ -75,11 +77,12 @@ async function sendStarRatingFlowMessage(pending, text, io) {
     text,
     pending.conversation_id,
     pending.inbox_id,
-    { id: null, name: 'Automation' }
+    { id: null, name: 'Automation' },
+    true
   );
   await conversationRepo.touchConversation(pending.conversation_id);
   if (io && message) {
-    io.emit('new_message', { conversationId: pending.conversation_id, message });
+    emitToPrivilegedRoom(io, 'new_message', { conversationId: pending.conversation_id, message });
   }
   return message;
 }
@@ -93,11 +96,12 @@ async function sendSkippableFlowMessage(pending, text, io) {
     pending.conversation_id,
     pending.inbox_id,
     { id: null, name: 'Automation' },
-    'تخطي'
+    'تخطي',
+    true
   );
   await conversationRepo.touchConversation(pending.conversation_id);
   if (io && message) {
-    io.emit('new_message', { conversationId: pending.conversation_id, message });
+    emitToPrivilegedRoom(io, 'new_message', { conversationId: pending.conversation_id, message });
   }
   return message;
 }
@@ -115,11 +119,12 @@ async function sendCsatMessage(conversation, io) {
     text,
     conversation.id,
     conversation.inbox_id,
-    { id: null, name: 'Automation' }
+    { id: null, name: 'Automation' },
+    true
   );
   await conversationRepo.touchConversation(conversation.id);
   if (io && message) {
-    io.emit('new_message', { conversationId: conversation.id, message });
+    emitToPrivilegedRoom(io, 'new_message', { conversationId: conversation.id, message });
   }
   return message;
 }
@@ -155,11 +160,12 @@ async function startRatingFlow(conversation, io) {
       { flowId, flowToken: String(pending.id), bodyText: introText },
       pending.conversation_id,
       pending.inbox_id,
-      { id: null, name: 'Automation' }
+      { id: null, name: 'Automation' },
+      true
     );
     await conversationRepo.touchConversation(pending.conversation_id);
     if (io && message) {
-      io.emit('new_message', { conversationId: pending.conversation_id, message });
+      emitToPrivilegedRoom(io, 'new_message', { conversationId: pending.conversation_id, message });
     }
   } catch (err) {
     logger.error(

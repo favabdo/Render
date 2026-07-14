@@ -91,8 +91,12 @@ async function touchConversation(conversationId) {
     .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET last_message_at = SYSUTCDATETIME() WHERE id = @id`);
 }
 
-async function listConversations() {
+async function listConversations(hideRatingMessages = false) {
   const pool = await getPool();
+  // الإيجنت (role > 1) مش المفروض يشوف رسايل أتمتة "ما بعد الحل" (CSAT/تقييم)
+  // حتى في معاينة آخر رسالة في قايمة المحادثات — فبنستثنيها من الـ subqueries
+  // دي لو hideRatingMessages=true (شوف conversation.controller.js)
+  const postResolveFilter = hideRatingMessages ? 'AND m.is_post_resolve = 0' : '';
   const result = await pool.request().query(`
     SELECT c.*,
       COALESCE(u.display_name, u.email) AS assigned_agent_name,
@@ -106,7 +110,7 @@ async function listConversations() {
       (
         SELECT TOP 1 m.message_text
         FROM [dbo].[${TABLE_NAME}] m
-        WHERE m.conversation_id = c.id AND m.direction != 'note'
+        WHERE m.conversation_id = c.id AND m.direction != 'note' ${postResolveFilter}
         ORDER BY m.created_at DESC
       ) AS last_message_text,
       (
@@ -114,7 +118,7 @@ async function listConversations() {
         -- من غير كابشن، الفرونت إند يعرض "📷 Photo" بدل معاينة فاضية
         SELECT TOP 1 m.message_type
         FROM [dbo].[${TABLE_NAME}] m
-        WHERE m.conversation_id = c.id AND m.direction != 'note'
+        WHERE m.conversation_id = c.id AND m.direction != 'note' ${postResolveFilter}
         ORDER BY m.created_at DESC
       ) AS last_message_type,
       (
@@ -122,7 +126,7 @@ async function listConversations() {
         -- رسالة جديدة جاية من العميل (لازم تتحسب unread) ورد بعته الإيجنت نفسه
         SELECT TOP 1 m.direction
         FROM [dbo].[${TABLE_NAME}] m
-        WHERE m.conversation_id = c.id AND m.direction != 'note'
+        WHERE m.conversation_id = c.id AND m.direction != 'note' ${postResolveFilter}
         ORDER BY m.created_at DESC
       ) AS last_message_direction,
       (
@@ -361,6 +365,9 @@ async function saveMessage({
   rawPayload = null,
   sentByUserId = null,
   sentByName = null,
+  // true لأي رسالة جزء من أتمتة "ما بعد الحل" (CSAT + فلو التقييم + ردود العميل
+  // عليها) — بتتفلتر بره اللي بيرجع للإيجنت (admin/owner بس اللي يشوفوها)
+  isPostResolve = false,
 }) {
   const pool = await getPool();
   const result = await pool
@@ -380,16 +387,17 @@ async function saveMessage({
     .input('rawPayload', sql.NVarChar(sql.MAX), rawPayload)
     .input('sentByUserId', sql.BigInt, sentByUserId)
     .input('sentByName', sql.NVarChar(200), sentByName)
+    .input('isPostResolve', sql.Bit, Boolean(isPostResolve))
     .query(`
       INSERT INTO [dbo].[${TABLE_NAME}]
         (wa_message_id, conversation_id, direction, from_number, to_number, contact_name,
          message_type, message_text, media_url, media_mime, media_filename, status, raw_payload,
-         sent_by_user_id, sent_by_name)
+         sent_by_user_id, sent_by_name, is_post_resolve)
       OUTPUT INSERTED.*
       VALUES
         (@waMessageId, @conversationId, @direction, @fromNumber, @toNumber, @contactName,
          @messageType, @messageText, @mediaUrl, @mediaMime, @mediaFileName, @status, @rawPayload,
-         @sentByUserId, @sentByName)
+         @sentByUserId, @sentByName, @isPostResolve)
     `);
   return result.recordset[0];
 }
