@@ -4,6 +4,7 @@ const env = require('./config/env');
 const logger = require('./utils/logger');
 const { initSocket } = require('./socket/socket');
 const { startAutoResolveScheduler } = require('./services/autoResolve.service');
+const { startContractExpiryScheduler } = require('./services/contractExpiry.service');
 const notificationService = require('./services/notification.service');
 
 const server = http.createServer(app);
@@ -19,3 +20,7 @@ server.listen(env.PORT, () => {
 // فحص دوري (Auto Resolve After Inactivity) — بيقفل المحادثات الخاملة أوتوماتيك
 // حسب عدد الأيام المحدد في إعدادات الحساب (Settings -> Account Settings)
 startAutoResolveScheduler(() => app.get('io'));
+
+// فحص دوري (عقد الصيانة منتهي) — بيبعت رسالة الأتمتة لأي عميل عقده عدّى تاريخ
+// نهايته من غير ما يتجدد (مرة واحدة بس لكل عقد)
+startContractExpiryScheduler(() => app.get('io'));

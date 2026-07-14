@@ -145,6 +145,13 @@ async function updateAutomationSettings(req, res) {
     csat_message,
     keyword_routing_enabled,
     keyword_routing_rules,
+    contract_expired_enabled,
+    contract_expired_message,
+    rating_enabled,
+    rating_issue_message,
+    rating_agent_message,
+    rating_feedback_message,
+    rating_thanks_message,
   } = req.body || {};
 
   const user = await userRepo.findUserById(req.user.userId);
@@ -246,6 +253,33 @@ async function updateAutomationSettings(req, res) {
     }
     fields.keywordRoutingRules = cleanedRules;
   }
+  if (contract_expired_enabled !== undefined) {
+    fields.contractExpiredEnabled = Boolean(contract_expired_enabled);
+  }
+  if (contract_expired_message !== undefined) {
+    const trimmed = String(contract_expired_message || '').trim();
+    if (trimmed.length > 4000) {
+      return res.status(400).json({ error: 'رسالة انتهاء العقد طويلة أوي' });
+    }
+    fields.contractExpiredMessage = trimmed;
+  }
+  if (rating_enabled !== undefined) {
+    fields.ratingEnabled = Boolean(rating_enabled);
+  }
+  for (const [bodyKey, fieldKey, label] of [
+    [rating_issue_message, 'ratingIssueMessage', 'رسالة تقييم حل المشكلة'],
+    [rating_agent_message, 'ratingAgentMessage', 'رسالة تقييم ممثل خدمة العملاء'],
+    [rating_feedback_message, 'ratingFeedbackMessage', 'رسالة طلب التعليق النصي'],
+    [rating_thanks_message, 'ratingThanksMessage', 'رسالة الشكر بعد التقييم'],
+  ]) {
+    if (bodyKey !== undefined) {
+      const trimmed = String(bodyKey || '').trim();
+      if (trimmed.length > 4000) {
+        return res.status(400).json({ error: `${label} طويلة أوي` });
+      }
+      fields[fieldKey] = trimmed;
+    }
+  }
 
   // لو حد فعّل قاعدة الـ Auto-assign لازم يكون في إيجنت مختار (سواء دلوقتي أو
   // متحدد من قبل كده وموجود في الداتابيز بالفعل)
@@ -281,6 +315,17 @@ async function updateAutomationSettings(req, res) {
     const finalRules = fields.keywordRoutingRules !== undefined ? fields.keywordRoutingRules : existing.keyword_routing_rules;
     if (!finalRules || !finalRules.length) {
       return res.status(400).json({ error: 'لازم تضيف قاعدة واحدة على الأقل (تيم + كلمة مفتاحية) قبل التفعيل' });
+    }
+  }
+
+  // لو حد فعّل قاعدة "عقد الصيانة منتهي" لازم يكون في نص رسالة متسجل (سواء
+  // دلوقتي أو محفوظ من قبل كده)
+  const willContractExpiredBeEnabled = fields.contractExpiredEnabled !== undefined ? fields.contractExpiredEnabled : undefined;
+  if (willContractExpiredBeEnabled) {
+    const existing = await companyRepo.getAutomationSettings(company.id);
+    const finalMessage = fields.contractExpiredMessage !== undefined ? fields.contractExpiredMessage : existing.contract_expired_message;
+    if (!finalMessage) {
+      return res.status(400).json({ error: 'لازم تكتب رسالة "عقد الصيانة منتهي" الأول قبل التفعيل' });
     }
   }
 

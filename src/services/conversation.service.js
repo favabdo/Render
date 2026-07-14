@@ -10,6 +10,8 @@ const webhookDispatchService = require('./webhookDispatch.service');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
 const notificationService = require('./notification.service');
+const ratingRepo = require('../repositories/rating.repo');
+const ratingFlowService = require('./ratingFlow.service');
 const logger = require('../utils/logger');
 const { isWithinBusinessHours } = require('../utils/welcomeSchedule');
 
@@ -152,6 +154,36 @@ async function processIncomingMessages(value, io) {
     }
 
     const contactName = contact?.profile?.name || null;
+
+    // لو الرقم ده عنده طلب تقييم "ما بعد الحل" لسه مفتوح، بنعامل الرسالة دي كرد
+    // على فلو التقييم (رقم نجوم أو تعليق نصي) مش كرسالة عادية — بنسجلها جوه نفس
+    // المحادثة المقفولة اللي فتح التقييم عليها، من غير ما نفتح تذكرة جديدة أو
+    // نبعت أي إشعارات للإيجنتس أو نطبّق قواعد أتمتة/توجيه عليها
+    if (['text', 'button', 'interactive'].includes(messageType) && messageText) {
+      const pendingRating = await ratingRepo.getPendingRatingByContactNumber(msg.from);
+      if (pendingRating) {
+        const saved = await conversationRepo.saveMessage({
+          waMessageId: msg.id,
+          conversationId: pendingRating.conversation_id,
+          direction: 'in',
+          fromNumber: msg.from,
+          toNumber: value.metadata?.display_phone_number || null,
+          contactName,
+          messageType,
+          messageText,
+          rawPayload: JSON.stringify(msg),
+        });
+        if (io) {
+          io.emit('new_message', { conversationId: pendingRating.conversation_id, message: saved });
+        }
+        try {
+          await ratingFlowService.handleIncomingRatingReply(pendingRating, messageText, io);
+        } catch (err) {
+          logger.error('❌ فشل تنفيذ رد فلو تقييم ما بعد الحل:', err.message);
+        }
+        continue;
+      }
+    }
 
     // أول ما رقم يبعت رسالة: لو عندنا كونتاكت مسجل بالرقم ده نستخدمه، ولو لأ ننشئ كونتاكت جديد تلقائيًا
     const matchedContact = await contactService.findOrCreateContactForIncoming(msg.from, contactName);

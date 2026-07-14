@@ -556,6 +556,14 @@ async function ensureMaintenanceContractsTableExists() {
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_MaintenanceContracts_byA') AND name = 'stopped_by_name')
       ALTER TABLE [dbo].[NileChat_MaintenanceContracts_byA] ADD stopped_by_name NVARCHAR(200) NULL;
   `);
+
+  // عمود "تم إرسال إشعار انتهاء العقد" — بيتسجل بمجرد ما رسالة أتمتة "العقد
+  // منتهي" تتبعت للعميل ده، عشان قاعدة الأتمتة متبعتش نفس الرسالة أكتر من مرة
+  // لنفس العقد (بتتفحص دوريًا من contractExpiry.service.js)
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_MaintenanceContracts_byA') AND name = 'expiry_notice_sent_at')
+      ALTER TABLE [dbo].[NileChat_MaintenanceContracts_byA] ADD expiry_notice_sent_at DATETIME2 NULL;
+  `);
   logger.info('✅ جدول Maintenance Contracts جاهز.');
 }
 
@@ -864,6 +872,20 @@ async function ensureCompaniesHaveAutomationColumns() {
     // كل قاعدة = { team_id, keywords: [...] } — بيتخزنوا كـ JSON array واحد،
     // عشان تقدر تعمل أكتر من قاعدة: كل مجموعة كلمات بتوجه لتيم مختلف
     { name: 'automation_keyword_routing_rules', def: 'NVARCHAR(MAX) NULL' },
+    // "عقد الصيانة منتهي": رسالة تتبعت أوتوماتيك (مرة واحدة بس لكل عقد) لأي
+    // عميل عقده عدّى تاريخ نهايته من غير ما يتجدد — النص قابل للتعديل من صفحة
+    // الإعدادات (contractExpiry.service.js هو اللي بيفحص وبيبعت)
+    { name: 'automation_contract_expired_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_contract_expired_message', def: 'NVARCHAR(MAX) NULL' },
+    // "تقييم بعد الحل" (Post-Resolve Rating): بمجرد ما محادثة تتقفل (Resolve)،
+    // بيتبعت للعميل بالترتيب: تقييم نجوم (1-5) لحل المشكلة، تقييم نجوم (1-5)
+    // لممثل خدمة العملاء، وبعدين تقييم نصي اختياري — كل رسالة من التلاتة ليها
+    // نص افتراضي لو الحقل فاضي (شايفينه في ratingFlow.service.js)
+    { name: 'automation_rating_enabled', def: 'BIT NOT NULL DEFAULT 0' },
+    { name: 'automation_rating_issue_message', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'automation_rating_agent_message', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'automation_rating_feedback_message', def: 'NVARCHAR(MAX) NULL' },
+    { name: 'automation_rating_thanks_message', def: 'NVARCHAR(MAX) NULL' },
   ];
   for (const col of columns) {
     await pool.request().query(`
@@ -877,6 +899,40 @@ async function ensureCompaniesHaveAutomationColumns() {
     `);
   }
   logger.info('✅ أعمدة إعدادات الأتمتة (Automation) جاهزة على جدول Companies.');
+}
+
+// جدول تقييمات ما بعد الحل (Post-Resolve Ratings): صف واحد بيتفتح لكل محادثة
+// اتقفلت وقاعدة "تقييم بعد الحل" مفعّلة، وبيتحدّث خطوة بخطوة (stage) لحد ما
+// العميل يخلص التلات خطوات (تقييم الحل -> تقييم الإيجنت -> تعليق نصي اختياري)
+// أو يسيب الفلو من غير ما يكمل (بيفضل الصف بحالته الأخيرة، مش بيتمسح)
+async function ensureConversationRatingsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_ConversationRatings_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_ConversationRatings_byA] (
+        id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+        conversation_id BIGINT NOT NULL,
+        contact_id      BIGINT NULL,
+        contact_number  NVARCHAR(30) NOT NULL,
+        inbox_id        BIGINT NULL,
+        agent_id        BIGINT NULL,
+        agent_name      NVARCHAR(200) NULL,
+        stage           NVARCHAR(30) NOT NULL DEFAULT 'awaiting_issue_rating',
+        issue_rating    INT NULL,
+        agent_rating    INT NULL,
+        feedback_text   NVARCHAR(MAX) NULL,
+        created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        updated_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        completed_at    DATETIME2 NULL
+      );
+      CREATE INDEX IX_NileChat_ConversationRatings_byA_contact_number
+        ON [dbo].[NileChat_ConversationRatings_byA](contact_number, stage);
+      CREATE INDEX IX_NileChat_ConversationRatings_byA_conversation_id
+        ON [dbo].[NileChat_ConversationRatings_byA](conversation_id);
+    END
+  `);
+  logger.info('✅ جدول Conversation Ratings (تقييم بعد الحل) جاهز.');
 }
 
 // جدول الـ Webhooks الصادرة (Outbound): اليوزر بيسجّل URL بتاعه، واحنا بنبعتله
@@ -967,6 +1023,7 @@ async function ensureSchema() {
   await ensureUsersHaveCompanyAssigned();
   await ensureUsersHaveProfileColumns();
   await ensureCompaniesHaveAutomationColumns();
+  await ensureConversationRatingsTableExists();
   await ensureTeamsTableExists();
   await ensureTeamMembersTableExists();
   await ensureConversationTeamsTableExists();
@@ -1007,6 +1064,7 @@ module.exports = {
   ensureUsersHaveCompanyAssigned,
   ensureUsersHaveProfileColumns,
   ensureCompaniesHaveAutomationColumns,
+  ensureConversationRatingsTableExists,
   generateCompanyCode,
   ensureTeamsTableExists,
   ensureTeamMembersTableExists,

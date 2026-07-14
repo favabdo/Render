@@ -3,12 +3,12 @@
 
 const conversationRepo = require('../repositories/conversation.repo');
 const userRepo = require('../repositories/user.repo');
-const companyRepo = require('../repositories/company.repo');
 const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
 const groqAiService = require('../services/groqAi.service');
 const notificationService = require('../services/notification.service');
+const ratingFlowService = require('../services/ratingFlow.service');
 const mediaStorage = require('../utils/mediaStorage');
 const env = require('../config/env');
 const logger = require('../utils/logger');
@@ -162,33 +162,14 @@ async function resolve(req, res) {
     notes: notes || null,
   }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
 
-  // قاعدة أتمتة "Send CSAT after resolution" — لو مفعّلة، بتبعت رسالة تقييم
-  // رضا العميل جاهزة (قابلة للتعديل من صفحة الإعدادات) فور ما المحادثة تتقفل.
-  // بتتنفذ بعد ما رجعنا الرد للإيجنت عشان مبتأخرش قفل المحادثة في الواجهة
-  applySendCsatIfEnabled(updated, io).catch((err) => {
-    logger.error('❌ فشل إرسال رسالة الـ CSAT التلقائية:', err.message);
+  // قاعدة أتمتة "تقييم بعد الحل" (Post-Resolve Rating) — لو مفعّلة، بتبدأ فلو
+  // التقييم (نجوم لحل المشكلة -> نجوم لممثل خدمة العملاء -> تعليق نصي اختياري)
+  // فور ما المحادثة تتقفل. بتتنفذ بعد ما رجعنا الرد للإيجنت عشان مبتأخرش قفل
+  // المحادثة في الواجهة
+  ratingFlowService.startRatingFlow(updated, io).catch((err) => {
+    logger.error('❌ فشل بدء فلو تقييم ما بعد الحل:', err.message);
   });
 }
-
-// بتبعت رسالة الـ CSAT المحفوظة في إعدادات الأتمتة للعميل بمجرد ما المحادثة تتقفل،
-// لو القاعدة مفعّلة وفيه نص متسجل فعلاً
-async function applySendCsatIfEnabled(conversation, io) {
-  const settings = await companyRepo.getAutomationSettings();
-  if (!settings || !settings.csat_enabled || !settings.csat_message) return;
-
-  const message = await whatsappService.sendTextMessage(
-    conversation.contact_number,
-    settings.csat_message,
-    conversation.id,
-    conversation.inbox_id,
-    { id: null, name: 'Automation' }
-  );
-  await conversationRepo.touchConversation(conversation.id);
-  if (io && message) {
-    io.emit('new_message', { conversationId: conversation.id, message });
-  }
-}
-
 
 // لو حبيت ترجّع محادثة اتقفلت تفتح تاني (مثلاً العميل رجع يكلم)
 async function reopen(req, res) {

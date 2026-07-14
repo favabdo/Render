@@ -131,6 +131,53 @@ async function getCurrentContractForContact(contactId) {
   return result.recordset[0] || null;
 }
 
+// عقود الصيانة اللي "منتهية فعليًا ولسه محدش بعتلها إشعار": تاريخ نهايتها فات
+// (وهي لسه آخر عقد اتضاف للعميل ده — مش عقد قديم اتغطى بعقد أحدث)، ومحدش
+// أوقفها يدويًا (لو الأدمن أوقفها بنفسه فده مش "انتهاء طبيعي")، ولسه
+// expiry_notice_sent_at فاضي. بترجع رقم تليفون العميل الأساسي (أول رقم متسجل
+// له) عشان contractExpiry.service.js يقدر يبعت عليه مباشرة
+async function findExpiredContractsPendingNotice() {
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT m.id AS contract_id, m.contact_id, m.end_date,
+           c.name AS contact_name,
+           p.phone_number AS contact_phone
+    FROM [dbo].[NileChat_MaintenanceContracts_byA] m
+    INNER JOIN [dbo].[NileChat_Contacts_byA] c ON c.id = m.contact_id
+    OUTER APPLY (
+      SELECT TOP 1 phone_number
+      FROM [dbo].[NileChat_ContactPhones_byA] ph
+      WHERE ph.contact_id = c.id
+      ORDER BY ph.created_at ASC
+    ) p
+    WHERE m.stopped_at IS NULL
+      AND m.expiry_notice_sent_at IS NULL
+      AND m.end_date < CAST(SYSUTCDATETIME() AS DATE)
+      -- لازم يكون ده آخر عقد اتضاف للعميل ده (مش عقد قديم اتغطى بعقد جديد)
+      AND m.id = (
+        SELECT TOP 1 m2.id
+        FROM [dbo].[NileChat_MaintenanceContracts_byA] m2
+        WHERE m2.contact_id = m.contact_id
+        ORDER BY m2.created_at DESC, m2.id DESC
+      )
+      AND p.phone_number IS NOT NULL
+  `);
+  return result.recordset;
+}
+
+// بيسجل إن إشعار انتهاء العقد ده اتبعت، عشان القاعدة متبعتوش تاني لنفس العقد
+async function markExpiryNoticeSent(contractId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, contractId)
+    .query(`
+      UPDATE [dbo].[NileChat_MaintenanceContracts_byA]
+      SET expiry_notice_sent_at = SYSUTCDATETIME()
+      WHERE id = @id AND expiry_notice_sent_at IS NULL
+    `);
+}
+
 module.exports = {
   listContractsForContact,
   getContractById,
@@ -139,4 +186,6 @@ module.exports = {
   addContract,
   stopContract,
   deleteContract,
+  findExpiredContractsPendingNotice,
+  markExpiryNoticeSent,
 };

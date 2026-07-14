@@ -117,6 +117,13 @@ function mapAutomationSettings(company) {
     csat_message: company.automation_csat_message || '',
     keyword_routing_enabled: Boolean(company.automation_keyword_routing_enabled),
     keyword_routing_rules: parseKeywordRoutingRules(company.automation_keyword_routing_rules),
+    contract_expired_enabled: Boolean(company.automation_contract_expired_enabled),
+    contract_expired_message: company.automation_contract_expired_message || '',
+    rating_enabled: Boolean(company.automation_rating_enabled),
+    rating_issue_message: company.automation_rating_issue_message || '',
+    rating_agent_message: company.automation_rating_agent_message || '',
+    rating_feedback_message: company.automation_rating_feedback_message || '',
+    rating_thanks_message: company.automation_rating_thanks_message || '',
   };
 }
 
@@ -173,6 +180,34 @@ async function updateAutomationSettings(companyId, fields = {}) {
   if (fields.keywordRoutingRules !== undefined) {
     req.input('keywordRoutingRules', sql.NVarChar(sql.MAX), JSON.stringify(fields.keywordRoutingRules));
     sets.push('automation_keyword_routing_rules = @keywordRoutingRules');
+  }
+  if (fields.contractExpiredEnabled !== undefined) {
+    req.input('contractExpiredEnabled', sql.Bit, fields.contractExpiredEnabled ? 1 : 0);
+    sets.push('automation_contract_expired_enabled = @contractExpiredEnabled');
+  }
+  if (fields.contractExpiredMessage !== undefined) {
+    req.input('contractExpiredMessage', sql.NVarChar(sql.MAX), fields.contractExpiredMessage);
+    sets.push('automation_contract_expired_message = @contractExpiredMessage');
+  }
+  if (fields.ratingEnabled !== undefined) {
+    req.input('ratingEnabled', sql.Bit, fields.ratingEnabled ? 1 : 0);
+    sets.push('automation_rating_enabled = @ratingEnabled');
+  }
+  if (fields.ratingIssueMessage !== undefined) {
+    req.input('ratingIssueMessage', sql.NVarChar(sql.MAX), fields.ratingIssueMessage);
+    sets.push('automation_rating_issue_message = @ratingIssueMessage');
+  }
+  if (fields.ratingAgentMessage !== undefined) {
+    req.input('ratingAgentMessage', sql.NVarChar(sql.MAX), fields.ratingAgentMessage);
+    sets.push('automation_rating_agent_message = @ratingAgentMessage');
+  }
+  if (fields.ratingFeedbackMessage !== undefined) {
+    req.input('ratingFeedbackMessage', sql.NVarChar(sql.MAX), fields.ratingFeedbackMessage);
+    sets.push('automation_rating_feedback_message = @ratingFeedbackMessage');
+  }
+  if (fields.ratingThanksMessage !== undefined) {
+    req.input('ratingThanksMessage', sql.NVarChar(sql.MAX), fields.ratingThanksMessage);
+    sets.push('automation_rating_thanks_message = @ratingThanksMessage');
   }
 
   if (sets.length === 0) return getAutomationSettings(companyId);
