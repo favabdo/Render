@@ -1,5 +1,6 @@
 const { getPool, sql, TABLE_NAME } = require('../config/db');
 const maintenanceContractRepo = require('./maintenanceContract.repo');
+const { PREDEFINED_CONTACT_MODULES } = require('../utils/contactModules');
 
 // نفس منطق "العقد الحالي" الموجود في maintenanceContract.repo.getCurrentContractForContact
 // لكن كـ OUTER APPLY جوه استعلام واحد، عشان نجيب العقد الحالي لكل الكونتاكتس دفعة
@@ -76,7 +77,7 @@ async function getContactByIdWithCurrentContract(id) {
     .request()
     .input('id', sql.BigInt, id)
     .query(`
-      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone,
+      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
@@ -118,11 +119,63 @@ async function updatePhoneLabel(contactId, phoneNumber, label) {
   return result.recordset[0] || null;
 }
 
+// بيرجع كل الموديولات اللي العميل ده مشترك فيها (سواء من القايمة الجاهزة أو
+// اللي الأدمن كتبها بايده) — بتتعرض في صفحة تفاصيل العميل أول ما تتفتح
+async function getModulesForContact(contactId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .query(`
+      SELECT module_name, is_custom FROM [dbo].[NileChat_ContactModules_byA]
+      WHERE contact_id = @contactId
+      ORDER BY is_custom ASC, created_at ASC
+    `);
+  return result.recordset.map((r) => ({ name: r.module_name, isCustom: !!r.is_custom }));
+}
+
+// بيستبدل كل موديولات العميل بقايمة جديدة (مسح كل القديم وإضافة الجديد) — أسهل
+// وأأمن من مقارنة الفروقات، وعدد الموديولات لكل عميل صغير أصلًا فمفيش مشكلة
+// أداء. أي موديول مش موجود حرفيًا في القايمة الجاهزة (PREDEFINED_CONTACT_MODULES)
+// بيتسجل كـ is_custom=1 (الأدمن كاتبه بنفسه في التيكست بوكس)
+async function setContactModules(contactId, modules) {
+  const pool = await getPool();
+  const cleanModules = [...new Set((modules || []).map((m) => (m || '').trim()).filter(Boolean))];
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_ContactModules_byA] WHERE contact_id = @contactId`);
+
+    for (const moduleName of cleanModules) {
+      const isCustom = !PREDEFINED_CONTACT_MODULES.includes(moduleName);
+      await new sql.Request(transaction)
+        .input('contactId', sql.BigInt, contactId)
+        .input('moduleName', sql.NVarChar(300), moduleName)
+        .input('isCustom', sql.Bit, isCustom)
+        .query(`
+          INSERT INTO [dbo].[NileChat_ContactModules_byA] (contact_id, module_name, is_custom)
+          VALUES (@contactId, @moduleName, @isCustom)
+        `);
+    }
+
+    await transaction.commit();
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+
+  return getModulesForContact(contactId);
+}
+
 async function getContactByIdWithPhones(id) {
   const contact = await getContactByIdWithCurrentContract(id);
   if (!contact) return null;
   const phones = await getPhonesForContact(id);
-  return { ...contact, phones };
+  const modules = await getModulesForContact(id);
+  return { ...contact, phones, modules };
 }
 
 // كل الكونتاكتس (تُستخدم في صفحة Contacts وفي قايمة اختيار "اربط بكونتاكت موجود")
@@ -135,7 +188,7 @@ async function listContacts() {
   const contactsResult = await pool
     .request()
     .query(`
-      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone,
+      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
@@ -161,12 +214,30 @@ async function listContacts() {
 // عشان لو حد بحث عن حاجة مش في أول صفحة يلاقيها برضو
 const MAX_CONTACTS_PAGE_SIZE = 20;
 
-async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '' } = {}) {
+// عميل بيتحسب "مسجل بالفعل" لو عنده كارت عميل متضاف (location/contract_date/
+// manager_phone من زرار Add Contact) أو عنده عقد صيانة (حالي أو سابق) في سجل
+// العقود. أي كونتاكت تاني (جاي أوتوماتيك من واتساب وملوش أي حاجة من دول) بيبقى
+// "لسه بس بعت واتساب ومتسجلش" — ده هو الفرق بين التابين في صفحة Contacts
+const REGISTERED_CONDITION = `(
+  c.location IS NOT NULL
+  OR c.contract_date IS NOT NULL
+  OR c.manager_phone IS NOT NULL
+  OR EXISTS (
+       SELECT 1 FROM [dbo].[NileChat_MaintenanceContracts_byA] mc2
+       WHERE mc2.contact_id = c.id
+     )
+)`;
+
+async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '', registered = 'all' } = {}) {
   const pool = await getPool();
   const safePage = Math.max(1, parseInt(page, 10) || 1);
   const safePageSize = Math.min(MAX_CONTACTS_PAGE_SIZE, Math.max(1, parseInt(pageSize, 10) || MAX_CONTACTS_PAGE_SIZE));
   const offset = (safePage - 1) * safePageSize;
   const q = (search || '').trim();
+
+  let registeredClause = '';
+  if (registered === 'yes') registeredClause = `AND ${REGISTERED_CONDITION}`;
+  else if (registered === 'no') registeredClause = `AND NOT ${REGISTERED_CONDITION}`;
 
   const contactsResult = await pool
     .request()
@@ -174,18 +245,21 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     .input('offset', sql.Int, offset)
     .input('pageSize', sql.Int, safePageSize)
     .query(`
-      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone,
+      SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at,
              COUNT(*) OVER() AS total_count
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
-      WHERE @q IS NULL
+      WHERE (
+         @q IS NULL
          OR c.name LIKE @q
          OR EXISTS (
               SELECT 1 FROM [dbo].[NileChat_ContactPhones_byA] p
               WHERE p.contact_id = c.id AND p.phone_number LIKE @q
             )
+      )
+      ${registeredClause}
       ORDER BY c.name ASC
       OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
     `);
@@ -211,12 +285,37 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     }
   }
 
+  // عدد التابين (مسجلين / لسه بس واتساب) على نفس شرط البحث @q، عشان الأرقام
+  // فوق التابات تفضل مظبوطة حتى لو المستخدم بيدور بكلمة معينة
+  const countsResult = await pool
+    .request()
+    .input('q', sql.NVarChar(200), q ? `%${q}%` : null)
+    .query(`
+      SELECT
+        SUM(CASE WHEN ${REGISTERED_CONDITION} THEN 1 ELSE 0 END) AS registered_count,
+        SUM(CASE WHEN NOT ${REGISTERED_CONDITION} THEN 1 ELSE 0 END) AS unregistered_count
+      FROM [dbo].[NileChat_Contacts_byA] c
+      WHERE (
+         @q IS NULL
+         OR c.name LIKE @q
+         OR EXISTS (
+              SELECT 1 FROM [dbo].[NileChat_ContactPhones_byA] p
+              WHERE p.contact_id = c.id AND p.phone_number LIKE @q
+            )
+      )
+    `);
+  const countsRow = countsResult.recordset[0] || {};
+
   return {
     contacts: rows.map(({ total_count, ...c }) => ({ ...c, phones: phonesByContact[c.id] || [] })),
     page: safePage,
     pageSize: safePageSize,
     total,
     totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+    counts: {
+      registered: countsRow.registered_count || 0,
+      unregistered: countsRow.unregistered_count || 0,
+    },
   };
 }
 
@@ -317,9 +416,11 @@ async function createCustomerContact({
   phoneNumber,
   location,
   signedContractDate,
+  managerName,
   managerPhone,
   contractDate,
   maintenanceEndDate,
+  modules,
   createdBy,
   createdByName,
 }) {
@@ -329,11 +430,12 @@ async function createCustomerContact({
     .input('name', sql.NVarChar(200), name)
     .input('location', sql.NVarChar(300), location || null)
     .input('contractDate', sql.Date, signedContractDate || null)
+    .input('managerName', sql.NVarChar(200), managerName || null)
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_phone)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone)
       OUTPUT INSERTED.*
-      VALUES (@name, @location, @contractDate, @managerPhone)
+      VALUES (@name, @location, @contractDate, @managerName, @managerPhone)
     `);
   const contact = result.recordset[0];
 
@@ -345,6 +447,10 @@ async function createCustomerContact({
       INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
       VALUES (@contactId, @phone)
     `);
+
+  if (modules && modules.length) {
+    await setContactModules(contact.id, modules);
+  }
 
   if (contractDate && maintenanceEndDate) {
     await maintenanceContractRepo.addContract({
@@ -359,11 +465,12 @@ async function createCustomerContact({
   return getContactByIdWithPhones(contact.id);
 }
 
-// تعديل بيانات كارت عميل الصيانة (أدمن بس) — الاسم، المكان، تاريخ التعاقد، ورقم
-// المدير. تواريخ عقد الصيانة بقت بتتضاف/تتجدد من زرار "إضافة عقد صيانة" في سجل
-// الصيانة بتاع العميل (سجل كامل بعقود متعددة)، مش من هنا، عشان لو عقد قديم
-// اتعدّل هنا كان بيمسح تاريخ العقد اللي فات بدل ما يحتفظ بيه كسجل منفصل
-async function updateCustomerDetails(id, { name, location, signedContractDate, managerPhone }) {
+// تعديل بيانات كارت عميل الصيانة (أدمن بس) — الاسم، المكان، تاريخ التعاقد، رقم
+// المدير، والموديولات اللي مشترك فيها. تواريخ عقد الصيانة بقت بتتضاف/تتجدد من
+// زرار "إضافة عقد صيانة" في سجل الصيانة بتاع العميل (سجل كامل بعقود متعددة)،
+// مش من هنا، عشان لو عقد قديم اتعدّل هنا كان بيمسح تاريخ العقد اللي فات بدل ما
+// يحتفظ بيه كسجل منفصل
+async function updateCustomerDetails(id, { name, location, signedContractDate, managerName, managerPhone, modules }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -371,14 +478,20 @@ async function updateCustomerDetails(id, { name, location, signedContractDate, m
     .input('name', sql.NVarChar(200), name)
     .input('location', sql.NVarChar(300), location || null)
     .input('contractDate', sql.Date, signedContractDate || null)
+    .input('managerName', sql.NVarChar(200), managerName || null)
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
     .query(`
       UPDATE [dbo].[NileChat_Contacts_byA]
-      SET name = @name, location = @location, contract_date = @contractDate, manager_phone = @managerPhone
+      SET name = @name, location = @location, contract_date = @contractDate, manager_name = @managerName, manager_phone = @managerPhone
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
   if (!result.recordset[0]) return null;
+
+  if (modules !== undefined) {
+    await setContactModules(id, modules);
+  }
+
   return getContactByIdWithPhones(id);
 }
 
@@ -432,6 +545,10 @@ async function deleteContactCompletely(contactId) {
       .input('contactId', sql.BigInt, contactId)
       .query(`DELETE FROM [dbo].[NileChat_ContactPhones_byA] WHERE contact_id = @contactId`);
 
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_ContactModules_byA] WHERE contact_id = @contactId`);
+
     const deletedResult = await new sql.Request(transaction)
       .input('contactId', sql.BigInt, contactId)
       .query(`
@@ -465,4 +582,6 @@ module.exports = {
   unlinkPhoneToNewContact,
   deletePhonelessContact,
   deleteContactCompletely,
+  getModulesForContact,
+  setContactModules,
 };

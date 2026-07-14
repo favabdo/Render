@@ -7,6 +7,18 @@ const userRepo = require('../repositories/user.repo');
 const notificationService = require('../services/notification.service');
 const logger = require('../utils/logger');
 
+// بينضف قايمة الموديولات الجاية من الفرونت (كارت العميل): بيشيل الفاضي
+// والمكرر، وبيحد أقصى عدد وطول لكل اسم عشان محدش يبعت حاجة غريبة تعطل الداتابيز
+const MAX_MODULES_PER_CONTACT = 50;
+function sanitizeModulesList(modules) {
+  if (!Array.isArray(modules)) return [];
+  const cleaned = modules
+    .map((m) => (typeof m === 'string' ? m.trim() : ''))
+    .filter(Boolean)
+    .map((m) => m.slice(0, 300));
+  return [...new Set(cleaned)].slice(0, MAX_MODULES_PER_CONTACT);
+}
+
 // كل الكونتاكتس الحقيقيين (لصفحة Contacts، وكمان لاختيار "اربط بكونتاكت موجود")
 async function listContacts(req, res) {
   const contacts = await contactRepo.listContacts();
@@ -20,6 +32,7 @@ async function listContactsPaginated(req, res) {
     page: req.query.page,
     pageSize: req.query.pageSize,
     search: req.query.q,
+    registered: req.query.registered, // 'yes' | 'no' | 'all' (تاب "عملاء مسجلين" / "لسه بس واتساب")
   });
   res.json(result);
 }
@@ -107,7 +120,7 @@ async function linkConversationContact(req, res) {
 // تليفونه، وممكن اختياريًا تاريخ بدء/انتهاء أول عقد صيانة ليه (لو مش عايز يحددها
 // دلوقتي، يقدر يضيفها بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل)
 async function createCustomerCard(req, res) {
-  const { name, location, phone, contractDate, maintenanceEndDate, signedContractDate, managerPhone } = req.body || {};
+  const { name, location, phone, contractDate, maintenanceEndDate, signedContractDate, managerName, managerPhone, modules } = req.body || {};
 
   const trimmedName = (name || '').trim();
   const trimmedPhone = (phone || '').trim();
@@ -130,9 +143,11 @@ async function createCustomerCard(req, res) {
     phoneNumber: trimmedPhone,
     location: (location || '').trim() || null,
     signedContractDate: signedContractDate || null,
+    managerName: (managerName || '').trim() || null,
     managerPhone: (managerPhone || '').trim() || null,
     contractDate: contractDate || null,
     maintenanceEndDate: maintenanceEndDate || null,
+    modules: sanitizeModulesList(modules),
     createdBy: req.user.userId,
     createdByName: agentName,
   });
@@ -153,7 +168,7 @@ async function createCustomerCard(req, res) {
 // الاسم والمكان بس؛ عقود الصيانة بقت بتتضاف من سجل الصيانة نفسه (شوف
 // maintenanceContract.controller.js)
 async function updateCustomerCard(req, res) {
-  const { name, location, signedContractDate, managerPhone } = req.body || {};
+  const { name, location, signedContractDate, managerName, managerPhone, modules } = req.body || {};
 
   const trimmedName = (name || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم العميل' });
@@ -162,7 +177,9 @@ async function updateCustomerCard(req, res) {
     name: trimmedName,
     location: (location || '').trim() || null,
     signedContractDate: signedContractDate || null,
+    managerName: (managerName || '').trim() || null,
     managerPhone: (managerPhone || '').trim() || null,
+    modules: sanitizeModulesList(modules),
   });
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 

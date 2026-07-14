@@ -513,7 +513,19 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .coming-soon-box h3{font-size:18px;font-weight:700;color:var(--text)}
 .coming-soon-box p{font-size:13.5px}
 
+.contacts-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.contacts-tab{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.contacts-tab:hover{border-color:var(--primary-light);color:var(--text)}
+.contacts-tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.contacts-tab-count{background:rgba(0,0,0,0.08);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700}
+.contacts-tab.active .contacts-tab-count{background:rgba(255,255,255,0.25)}
 .contacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.contact-modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 10px;max-height:220px;overflow-y:auto;padding:10px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px}
+.contact-modules-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text);cursor:pointer}
+.contact-modules-item input{accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.contact-modules-badges{display:flex;flex-wrap:wrap;gap:6px}
+.contact-modules-badge{background:rgba(108,92,231,0.12);color:var(--primary);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700}
+.contact-modules-badge.is-custom{background:rgba(16,185,129,0.12);color:var(--success)}
 .contacts-pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:24px;flex-wrap:wrap}
 .contacts-pagination button{min-width:34px;height:34px;padding:0 10px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .contacts-pagination button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
@@ -1134,6 +1146,18 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <button class="page-btn" id="add-customer-btn" style="display:none" onclick="openAddCustomerModal()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Contact</button>
             </div>
         </div>
+        <div class="contacts-tabs" id="contacts-tabs">
+            <button class="contacts-tab active" data-tab="registered" onclick="switchContactsTab('registered')">
+                <i data-lucide="badge-check" style="width:14px;height:14px"></i>
+                عملاء مسجلين
+                <span class="contacts-tab-count" id="contacts-tab-count-registered">0</span>
+            </button>
+            <button class="contacts-tab" data-tab="unregistered" onclick="switchContactsTab('unregistered')">
+                <i data-lucide="message-circle" style="width:14px;height:14px"></i>
+                بعتوا واتساب ولسه متسجلوش
+                <span class="contacts-tab-count" id="contacts-tab-count-unregistered">0</span>
+            </button>
+        </div>
         <div style="max-width:500px;margin-bottom:24px">
             <div class="cl-search-wrap">
                 <i data-lucide="search" style="width:16px;height:16px" class="cl-search-icon"></i>
@@ -1712,9 +1736,14 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="st-modal-readonly-value" id="customer-details-signed-contract-date">-</div>
             </div>
             <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">رقم المدير</div>
+                <div class="st-modal-readonly-label">اسم ورقم المدير</div>
+                <div class="st-modal-readonly-value" id="customer-details-manager-name">-</div>
                 <div class="st-modal-readonly-value" id="customer-details-manager-phone">-</div>
             </div>
+        </div>
+        <div class="st-modal-readonly" style="margin-top:12px">
+            <div class="st-modal-readonly-label">الموديولات المشترك فيها</div>
+            <div class="contact-modules-badges" id="customer-details-modules">-</div>
         </div>
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly">
@@ -6122,6 +6151,10 @@ let contactsCurrentPage = 1;
 let contactsTotalPages = 1;
 let contactsSearchQuery = '';
 let contactsSearchDebounceTimer = null;
+// تاب صفحة الـ Contacts: 'registered' = عملاء عندهم كارت عميل أو عقد صيانة،
+// 'unregistered' = لسه بس بعتوا واتساب ومتسجلوش. بيتبعت للسيرفر كـ @registered
+// عشان الفلترة تبقى على مستوى الداتابيز مش بعد التحميل (متسقة مع الـ pagination)
+let contactsActiveTab = 'registered';
 
 // بيجيب صفحة واحدة بس (أقصى حاجة 20 عميل) من /api/contacts-paginated، مش كل
 // العملاء دفعة واحدة — لو فيه بحث بيتبعت للسيرفر نفسه (@q) عشان النتيجة تشمل
@@ -6132,7 +6165,11 @@ async function loadContactsPage(page = 1) {
     if (grid) grid.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">جاري التحميل...</div>';
     if (pager) pager.style.display = 'none';
     try {
-        const params = new URLSearchParams({ page: String(page), pageSize: String(CONTACTS_PAGE_SIZE) });
+        const params = new URLSearchParams({
+            page: String(page),
+            pageSize: String(CONTACTS_PAGE_SIZE),
+            registered: contactsActiveTab === 'registered' ? 'yes' : 'no',
+        });
         if (contactsSearchQuery) params.set('q', contactsSearchQuery);
         const res = await apiFetch(`/api/contacts-paginated?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to fetch contacts');
@@ -6140,12 +6177,32 @@ async function loadContactsPage(page = 1) {
         contactsData = data.contacts || [];
         contactsCurrentPage = data.page || 1;
         contactsTotalPages = data.totalPages || 1;
+        renderContactsTabs(data.counts);
         renderContacts();
         renderContactsPagination();
     } catch (err) {
         console.error('[API] loadContactsPage error:', err);
         if (grid) grid.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">تعذر تحميل جهات الاتصال</div>';
     }
+}
+
+// بيبدّل التاب (عملاء مسجلين / لسه بس واتساب)، بيرجع لأول صفحة، ويحمّل تاني
+function switchContactsTab(tab) {
+    if (tab === contactsActiveTab) return;
+    contactsActiveTab = tab;
+    document.querySelectorAll('#contacts-tabs .contacts-tab').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    loadContactsPage(1);
+}
+
+// بيحدّث الأرقام فوق التابين (بتتغير حسب نتيجة البحث كمان لو فيه بحث شغال)
+function renderContactsTabs(counts) {
+    if (!counts) return;
+    const regEl = document.getElementById('contacts-tab-count-registered');
+    const unregEl = document.getElementById('contacts-tab-count-unregistered');
+    if (regEl) regEl.textContent = counts.registered || 0;
+    if (unregEl) unregEl.textContent = counts.unregistered || 0;
 }
 
 // البحث بقى من السيرفر مش فلترة محلية على صفحة واحدة بس — عشان لو النتيجة في
@@ -6159,7 +6216,10 @@ function onContactsSearchInput(value) {
 function renderContacts() {
     const grid = document.getElementById('contacts-grid');
     if (contactsData.length === 0) {
-        grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${contactsSearchQuery ? 'لا توجد نتائج مطابقة' : 'لا توجد جهات اتصال لعرضها'}</div>`;
+        const emptyMsg = contactsSearchQuery
+            ? 'لا توجد نتائج مطابقة'
+            : (contactsActiveTab === 'registered' ? 'لا يوجد عملاء مسجلين لعرضهم' : 'لا يوجد عملاء بعتوا واتساب ولسه متسجلوش');
+        grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${emptyMsg}</div>`;
         return;
     }
     grid.innerHTML = contactsData.map(c => {
@@ -6239,6 +6299,52 @@ function validateCustomerCardPhone() {
     return valid;
 }
 
+// نفس قايمة الموديولات الجاهزة اللي في الباك إند (src/utils/contactModules.js) —
+// لازم الاتنين يفضلوا متزامنين لو اتضاف/اتشال موديول من القايمة
+const CONTACT_MODULES_LIST = [
+    'حسابات عامه',
+    'اداره المخازن (مخزن)',
+    'اداره المخازن(مطعم)',
+    'اداره المخازن(ماركت)',
+    'شئون موظفيين',
+    'التوكيلات التجاريه',
+    'الاداره التجاريه',
+    'قطع الغيار',
+    'السيارات',
+    'شركات النقل',
+    'المخازن(المخازن وحسابات)',
+    'المخازن(التصنيع)',
+    'المجوهرات',
+    'فلاتر المياه',
+    'المقاولات',
+    'الحجوزات',
+    'فاتوره الكترونيه ( مصريه )',
+    'فاتوره الكترونيه ( سعوديه )',
+];
+
+// بيرسم الـ checkboxes بتاعة الموديولات جوه مودال إضافة/تعديل العميل، وبيحدد
+// اللي متسجلين قبل كده (selectedNames) لو في وضع تعديل
+function renderCustomerCardModulesGrid(selectedNames) {
+    const grid = document.getElementById('customer-card-modules-grid');
+    if (!grid) return;
+    const selectedSet = new Set(selectedNames || []);
+    grid.innerHTML = CONTACT_MODULES_LIST.map((m, i) => `
+        <label class="contact-modules-item">
+            <input type="checkbox" value="${escapeHtml(m)}" id="cc-module-${i}" ${selectedSet.has(m) ? 'checked' : ''}>
+            ${escapeHtml(m)}
+        </label>
+    `).join('');
+}
+
+// بيجمع كل الموديولات المختارة: اللي متعلم عليها من القايمة الجاهزة + اللي
+// الأدمن كتبها بايده في التيكست بوكس (مفصولين بفاصلة)
+function getSelectedCustomerCardModules() {
+    const checked = Array.from(document.querySelectorAll('#customer-card-modules-grid input[type="checkbox"]:checked')).map((el) => el.value);
+    const customRaw = document.getElementById('customer-card-modules-custom').value || '';
+    const custom = customRaw.split(',').map((s) => s.trim()).filter(Boolean);
+    return [...new Set([...checked, ...custom])];
+}
+
 function openAddCustomerModal() {
     customerCardMode = 'add';
     customerCardEditingId = null;
@@ -6249,6 +6355,7 @@ function openAddCustomerModal() {
     document.getElementById('customer-card-phone').value = '';
     document.getElementById('customer-card-phone').disabled = false;
     document.getElementById('customer-card-signed-contract-date').value = '';
+    document.getElementById('customer-card-manager-name').value = '';
     document.getElementById('customer-card-manager-phone').value = '';
     document.getElementById('customer-card-contract-start').value = '';
     document.getElementById('customer-card-contract-end').value = '';
@@ -6256,6 +6363,8 @@ function openAddCustomerModal() {
     document.getElementById('customer-card-contract-hint').style.display = '';
     document.getElementById('customer-card-phone-hint').style.color = '';
     document.getElementById('customer-card-error').textContent = '';
+    renderCustomerCardModulesGrid([]);
+    document.getElementById('customer-card-modules-custom').value = '';
     document.getElementById('customer-card-overlay').classList.add('show');
     lucide.createIcons();
 }
@@ -6280,7 +6389,9 @@ async function submitCustomerCard() {
     }
 
     const signedContractDate = document.getElementById('customer-card-signed-contract-date').value;
+    const managerName = document.getElementById('customer-card-manager-name').value.trim();
     const managerPhone = document.getElementById('customer-card-manager-phone').value.trim();
+    const modules = getSelectedCustomerCardModules();
 
     const contractStart = customerCardMode === 'add' ? document.getElementById('customer-card-contract-start').value : '';
     const contractEnd = customerCardMode === 'add' ? document.getElementById('customer-card-contract-end').value : '';
@@ -6299,8 +6410,8 @@ async function submitCustomerCard() {
             : `/api/contacts/${customerCardEditingId}/customer-card`;
         const method = customerCardMode === 'add' ? 'POST' : 'PATCH';
         const body = customerCardMode === 'add'
-            ? { name, location, phone, signedContractDate: signedContractDate || undefined, managerPhone: managerPhone || undefined, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined }
-            : { name, location, signedContractDate: signedContractDate || undefined, managerPhone: managerPhone || undefined };
+            ? { name, location, phone, signedContractDate: signedContractDate || undefined, managerName: managerName || undefined, managerPhone: managerPhone || undefined, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined, modules }
+            : { name, location, signedContractDate: signedContractDate || undefined, managerName: managerName || undefined, managerPhone: managerPhone || undefined, modules };
 
         const res = await apiFetch(url, { method, body: JSON.stringify(body) });
         const data = await res.json();
@@ -6368,9 +6479,25 @@ async function openCustomerDetails(contactId) {
    لو موجود، وإلا آخر عقد انتهى)، تاريخه، مدته، والوقت المتبقي/المنقضي عليه.
    بنفصلها في دالة لوحدها عشان نقدر نحدّثها بعد إضافة عقد جديد من غير ما نعيد
    تحميل الصفحة كلها أو نرجّع التاب المختار لـ "الزيارات"*/
+// بيعرض الموديولات اللي العميل مشترك فيها كـ badges — أول ما كارت العميل يتفتح.
+// الموديولات اللي مش من القايمة الجاهزة (is_custom) بتاخد لون مختلف عشان تتميّز
+function renderCustomerDetailsModules(modules) {
+    const el = document.getElementById('customer-details-modules');
+    if (!el) return;
+    if (!modules || !modules.length) {
+        el.innerHTML = '<span style="color:var(--text-secondary);font-size:12.5px">لا يوجد موديولات مسجلة</span>';
+        return;
+    }
+    el.innerHTML = modules.map((m) =>
+        `<span class="contact-modules-badge${m.isCustom ? ' is-custom' : ''}">${escapeHtml(m.name)}</span>`
+    ).join('');
+}
+
 function renderCustomerDetailsStats(c) {
     document.getElementById('customer-details-signed-contract-date').textContent = formatSchedDate(c.contract_date);
+    document.getElementById('customer-details-manager-name').textContent = c.manager_name || '-';
     document.getElementById('customer-details-manager-phone').textContent = c.manager_phone || '-';
+    renderCustomerDetailsModules(c.modules);
 
     document.getElementById('customer-details-contract-date').textContent = formatSchedDate(c.maintenance_start_date);
     document.getElementById('customer-details-maintenance-date').textContent = formatSchedDate(c.maintenance_end_date);
@@ -6546,7 +6673,11 @@ function editCurrentCustomerCard() {
     document.getElementById('customer-card-phone').disabled = true; // الرقم مش بيتعدل من هنا
     document.getElementById('customer-card-phone-hint').style.color = '';
     document.getElementById('customer-card-signed-contract-date').value = c.contract_date ? c.contract_date.substring(0, 10) : '';
+    document.getElementById('customer-card-manager-name').value = c.manager_name || '';
     document.getElementById('customer-card-manager-phone').value = c.manager_phone || '';
+    const existingModules = c.modules || [];
+    renderCustomerCardModulesGrid(existingModules.filter((m) => !m.isCustom).map((m) => m.name));
+    document.getElementById('customer-card-modules-custom').value = existingModules.filter((m) => m.isCustom).map((m) => m.name).join(', ');
     document.getElementById('customer-card-contract-row').style.display = 'none'; // عقد الصيانة بيتضاف/يتجدد من صفحة التفاصيل مش من هنا
     document.getElementById('customer-card-contract-hint').style.display = 'none';
     document.getElementById('customer-card-error').textContent = '';
@@ -8038,7 +8169,8 @@ async function iwDeleteInbox(id) {
                 <input type="date" class="iw-input" id="customer-card-signed-contract-date">
             </div>
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
-                <div class="resolve-cats-label">رقم المدير</div>
+                <div class="resolve-cats-label">اسم ورقم المدير</div>
+                <input type="text" class="iw-input" id="customer-card-manager-name" placeholder="اسم المدير" style="margin-bottom:8px">
                 <input type="text" class="iw-input" id="customer-card-manager-phone" placeholder="رقم تليفون المدير">
             </div>
         </div>
@@ -8055,6 +8187,10 @@ async function iwDeleteInbox(id) {
             </div>
         </div>
         <div class="iw-form-hint" id="customer-card-contract-hint" style="margin-top:-8px;margin-bottom:12px">هيتسجل كأول عقد صيانة للعميل فورًا.</div>
+
+        <div class="resolve-cats-label">الموديولات اللي العميل مشترك فيها</div>
+        <div class="contact-modules-grid" id="customer-card-modules-grid"></div>
+        <input type="text" class="iw-input" id="customer-card-modules-custom" placeholder="موديول تاني مش في القايمة؟ اكتبه هنا (افصل بفاصلة لو أكتر من واحد)" style="margin-top:8px;margin-bottom:12px">
 
         <div class="login-error" id="customer-card-error" style="color:var(--danger);font-size:12.5px;margin-top:8px;text-align:center"></div>
 
