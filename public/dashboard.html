@@ -1469,6 +1469,16 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send CSAT after resolution</div><div class="rule-row-desc" id="csat-desc">When conversation is resolved → Send satisfaction survey</div></div></div>
                 <div class="rule-row-right"><button class="toggle" id="csat-toggle" onclick="toggleAutomationRule('csat')"></button><button class="st-icon-btn" onclick="openAutomationModal('csat')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
             </div>
+
+            <div class="rule-row" id="rule-row-contract_expired">
+                <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(239,68,68,0.1);color:var(--danger, #ef4444)"><i data-lucide="calendar-x" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">عقد الصيانة منتهي</div><div class="rule-row-desc" id="contract_expired-desc">لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → يتبعتله رسالة أتمتة مرة واحدة</div></div></div>
+                <div class="rule-row-right"><button class="toggle" id="contract_expired-toggle" onclick="toggleAutomationRule('contract_expired')"></button><button class="st-icon-btn" onclick="openAutomationModal('contract_expired')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
+            </div>
+
+            <div class="rule-row" id="rule-row-rating">
+                <div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="star" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">تقييم بعد الحل (5 نجوم)</div><div class="rule-row-desc" id="rating-desc">لما محادثة تتقفل (Resolve) → يتبعت تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري</div></div></div>
+                <div class="rule-row-right"><button class="toggle" id="rating-toggle" onclick="toggleAutomationRule('rating')"></button><button class="st-icon-btn" onclick="openAutomationModal('rating')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div>
+            </div>
         </div>
         </div>
 
@@ -8743,6 +8753,24 @@ async function saveTeamMembers() {
             <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">بتتبعت للعميل بدل الرسالة الأساسية لو المحادثة اتفتحت في وقت برّا الجدول اللي فوق.</div>
         </div>
 
+        <!-- Post-Resolve Rating فقط: 4 رسائل منفصلة (تقييم المشكلة / تقييم الإيجنت / طلب تعليق / شكر) -->
+        <div id="automation-rating-field" style="display:none">
+            <div class="resolve-cats-label">1) رسالة تقييم حل المشكلة (نجوم 1-5)</div>
+            <textarea class="resolve-notes" id="automation-rating-issue-input" style="min-height:80px;margin-bottom:12px" maxlength="4000" placeholder="شكرًا لتواصلك معانا 🙏
+من فضلك قيّم مدى رضاك عن حل المشكلة من 1 لـ 5 (ابعت رقم من 1 لـ 5):
+1 = غير راضي خالص … 5 = راضي جدًا"></textarea>
+
+            <div class="resolve-cats-label">2) رسالة تقييم ممثل خدمة العملاء (نجوم 1-5)</div>
+            <textarea class="resolve-notes" id="automation-rating-agent-input" style="min-height:70px;margin-bottom:12px" maxlength="4000" placeholder="تمام، شكرًا ليك! دلوقتي قيّم ممثل خدمة العملاء اللي اتعامل معاك من 1 لـ 5 (ابعت رقم من 1 لـ 5)"></textarea>
+
+            <div class="resolve-cats-label">3) رسالة طلب تعليق نصي (اختياري)</div>
+            <textarea class="resolve-notes" id="automation-rating-feedback-input" style="min-height:70px;margin-bottom:12px" maxlength="4000" placeholder="لو حابب تسيبلنا أي تعليق أو ملاحظة تساعدنا نتحسن، اكتبها دلوقتي. أو ابعت &quot;تخطي&quot; لو مش حابب تضيف تعليق"></textarea>
+
+            <div class="resolve-cats-label">رسالة الشكر بعد التقييم</div>
+            <textarea class="resolve-notes" id="automation-rating-thanks-input" style="min-height:70px;margin-bottom:6px" maxlength="4000" placeholder="شكرًا جدًا لوقتك وتقييمك، ده بيساعدنا نقدملك خدمة أحسن 🌟"></textarea>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">سيب أي حقل فاضي عشان يتبعت النص الافتراضي الموضّح كـ placeholder.</div>
+        </div>
+
         <div class="resolve-modal-actions">
             <button class="resolve-cancel-btn" onclick="closeAutomationModal()">إلغاء</button>
             <button class="resolve-confirm-btn" id="automation-save-btn" onclick="saveAutomationModal()">
@@ -8770,7 +8798,7 @@ let AUTOMATION_SETTINGS_CACHE = null;
 let AUTOMATION_AGENTS_CACHE = [];
 let AUTOMATION_TEAMS_CACHE = [];
 let KEYWORD_ROUTING_RULES_DRAFT = []; // [{ team_id, keywords: [...] }, ...]
-let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat' | 'keyword_routing'
+let automationModalType = null; // 'auto_assign' | 'welcome' | 'csat' | 'keyword_routing' | 'contract_expired' | 'rating'
 
 const WELCOME_SCHEDULE_DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WELCOME_SCHEDULE_DAY_LABELS = { sun: 'الأحد', mon: 'الاثنين', tue: 'الثلاثاء', wed: 'الأربعاء', thu: 'الخميس', fri: 'الجمعة', sat: 'السبت' };
@@ -8805,6 +8833,21 @@ const AUTOMATION_RULE_META = {
         icon: 'workflow',
         enableDesc: 'When a customer message matches any of the keywords, move the conversation to the selected team',
         offDesc: 'When message contains chosen keywords → Assign to selected team',
+    },
+    contract_expired: {
+        title: 'عقد الصيانة منتهي',
+        icon: 'calendar-x',
+        enableDesc: 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد، ابعتله الرسالة دي أوتوماتيك (مرة واحدة بس لكل عقد)',
+        offDesc: 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → يتبعتله رسالة أتمتة مرة واحدة',
+        messageLabel: 'الرسالة اللي هتتبعت للعميل',
+        messageHint: 'بتتبعت مرة واحدة بس لكل عقد، أول ما تاريخ نهايته يعدّي من غير تجديد.',
+        placeholder: 'عزيزي العميل، عقد الصيانة الخاص بيك انتهى. للتجديد وضمان استمرار الخدمة، برجاء التواصل معانا 🙏',
+    },
+    rating: {
+        title: 'تقييم بعد الحل (Post-Resolve Rating)',
+        icon: 'star',
+        enableDesc: 'لما محادثة تتقفل (Resolve)، ابعت للعميل تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري',
+        offDesc: 'لما محادثة تتقفل (Resolve) → يتبعت تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري',
     },
 };
 
@@ -9037,6 +9080,8 @@ function renderAutomationSettings() {
     const welcomeToggle = document.getElementById('welcome-toggle');
     const csatToggle = document.getElementById('csat-toggle');
     const keywordRoutingToggle = document.getElementById('keyword_routing-toggle');
+    const contractExpiredToggle = document.getElementById('contract_expired-toggle');
+    const ratingToggle = document.getElementById('rating-toggle');
 
     if (autoAssignToggle) {
         autoAssignToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
@@ -9053,6 +9098,14 @@ function renderAutomationSettings() {
     if (keywordRoutingToggle) {
         keywordRoutingToggle.classList.toggle('on', Boolean(s.keyword_routing_enabled));
         keywordRoutingToggle.disabled = !canEdit;
+    }
+    if (contractExpiredToggle) {
+        contractExpiredToggle.classList.toggle('on', Boolean(s.contract_expired_enabled));
+        contractExpiredToggle.disabled = !canEdit;
+    }
+    if (ratingToggle) {
+        ratingToggle.classList.toggle('on', Boolean(s.rating_enabled));
+        ratingToggle.disabled = !canEdit;
     }
 
     const autoAssignDesc = document.getElementById('auto_assign-desc');
@@ -9096,6 +9149,23 @@ function renderAutomationSettings() {
             keywordRoutingDesc.textContent = 'When message contains chosen keywords → Assign to selected team (disabled)';
         }
     }
+
+    const contractExpiredDesc = document.getElementById('contract_expired-desc');
+    if (contractExpiredDesc) {
+        if (s.contract_expired_enabled && s.contract_expired_message) {
+            const preview = s.contract_expired_message.length > 70 ? s.contract_expired_message.slice(0, 70) + '…' : s.contract_expired_message;
+            contractExpiredDesc.textContent = `لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → «${preview}»`;
+        } else {
+            contractExpiredDesc.textContent = 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → يتبعتله رسالة أتمتة مرة واحدة (متوقفة)';
+        }
+    }
+
+    const ratingDesc = document.getElementById('rating-desc');
+    if (ratingDesc) {
+        ratingDesc.textContent = s.rating_enabled
+            ? 'لما محادثة تتقفل (Resolve) → يتبعت تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري'
+            : 'لما محادثة تتقفل (Resolve) → يتبعت تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري (متوقفة)';
+    }
 }
 
 /* تبديل سريع من زرار التوجل نفسه في الليستة (من غير فتح المودال) — بيتحفظ فورًا،
@@ -9130,6 +9200,16 @@ async function toggleAutomationRule(type) {
             return;
         }
         await patchAutomationSettings({ keyword_routing_enabled: !s.keyword_routing_enabled });
+    } else if (type === 'contract_expired') {
+        // لازم يكون في رسالة "عقد الصيانة منتهي" متسجلة الأول قبل التفعيل (نفس شرط الباك إند)
+        if (!s.contract_expired_enabled && !s.contract_expired_message) {
+            openAutomationModal('contract_expired');
+            return;
+        }
+        await patchAutomationSettings({ contract_expired_enabled: !s.contract_expired_enabled });
+    } else if (type === 'rating') {
+        // القاعدة دي عندها رسائل افتراضية جاهزة، فمينفعش تتفعل مباشرة من غير ما تدخل تعدّل الرسائل
+        await patchAutomationSettings({ rating_enabled: !s.rating_enabled });
     }
 }
 
@@ -9170,6 +9250,7 @@ async function openAutomationModal(type) {
     const messageInput = document.getElementById('automation-message-input');
     const scheduleToggleField = document.getElementById('automation-schedule-toggle-field');
     const scheduleField = document.getElementById('automation-schedule-field');
+    const ratingField = document.getElementById('automation-rating-field');
 
     // بنقفل كل الحقول الاختيارية الأول، وبعدين نفتح بس اللي مناسب للنوع الحالي
     agentField.style.display = 'none';
@@ -9177,6 +9258,7 @@ async function openAutomationModal(type) {
     messageField.style.display = 'none';
     scheduleToggleField.style.display = 'none';
     scheduleField.style.display = 'none';
+    ratingField.style.display = 'none';
 
     if (type === 'auto_assign') {
         enableToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
@@ -9189,11 +9271,20 @@ async function openAutomationModal(type) {
         const existingRules = Array.isArray(s.keyword_routing_rules) ? s.keyword_routing_rules : [];
         KEYWORD_ROUTING_RULES_DRAFT = existingRules.map((r) => ({ team_id: r.team_id || null, keywords: Array.isArray(r.keywords) ? [...r.keywords] : [] }));
         renderKeywordRoutingRules();
-    } else {
-        enableToggle.classList.toggle('on', Boolean(type === 'welcome' ? s.welcome_enabled : s.csat_enabled));
+    } else if (type === 'rating') {
+        enableToggle.classList.toggle('on', Boolean(s.rating_enabled));
+        ratingField.style.display = '';
+        document.getElementById('automation-rating-issue-input').value = s.rating_issue_message || '';
+        document.getElementById('automation-rating-agent-input').value = s.rating_agent_message || '';
+        document.getElementById('automation-rating-feedback-input').value = s.rating_feedback_message || '';
+        document.getElementById('automation-rating-thanks-input').value = s.rating_thanks_message || '';
+    } else if (type === 'welcome' || type === 'csat' || type === 'contract_expired') {
+        const enabledMap = { welcome: s.welcome_enabled, csat: s.csat_enabled, contract_expired: s.contract_expired_enabled };
+        const messageMap = { welcome: s.welcome_message, csat: s.csat_message, contract_expired: s.contract_expired_message };
+        enableToggle.classList.toggle('on', Boolean(enabledMap[type]));
         messageField.style.display = '';
         messageInput.placeholder = meta.placeholder;
-        messageInput.value = (type === 'welcome' ? s.welcome_message : s.csat_message) || '';
+        messageInput.value = messageMap[type] || '';
 
         if (type === 'welcome') {
             scheduleToggleField.style.display = '';
@@ -9440,6 +9531,14 @@ async function saveAutomationModal() {
         }
         body.keyword_routing_enabled = enabled;
         body.keyword_routing_rules = completeRules;
+    } else if (automationModalType === 'rating') {
+        // القاعدة دي عندها رسائل افتراضية جاهزة (موضّحة كـ placeholder)، فمينفعش
+        // نجبر اليوزر يكتب نص قبل التفعيل زي باقي القواعد
+        body.rating_enabled = enabled;
+        body.rating_issue_message = document.getElementById('automation-rating-issue-input').value.trim();
+        body.rating_agent_message = document.getElementById('automation-rating-agent-input').value.trim();
+        body.rating_feedback_message = document.getElementById('automation-rating-feedback-input').value.trim();
+        body.rating_thanks_message = document.getElementById('automation-rating-thanks-input').value.trim();
     } else {
         const text = document.getElementById('automation-message-input').value.trim();
         if (enabled && !text) {
@@ -9467,6 +9566,9 @@ async function saveAutomationModal() {
                 body.welcome_offhours_message = offhoursText;
                 body.welcome_schedule = schedule;
             }
+        } else if (automationModalType === 'contract_expired') {
+            body.contract_expired_enabled = enabled;
+            body.contract_expired_message = text;
         } else {
             body.csat_enabled = enabled;
             body.csat_message = text;
