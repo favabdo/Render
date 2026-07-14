@@ -1,5 +1,6 @@
 // controllers/cannedResponse.controller.js
 const repo = require('../repositories/cannedResponse.repo');
+const notificationService = require('../services/notification.service');
 
 async function list(req, res) {
   const items = await repo.listCannedResponses();
@@ -17,6 +18,7 @@ async function create(req, res) {
     createdBy: req.user.userId,
   });
   res.status(201).json(created);
+  notificationService.logActivity(req, `أضاف رد جاهز جديد "${created.label}"`, created.id);
 }
 
 async function update(req, res) {
@@ -30,11 +32,13 @@ async function update(req, res) {
   });
   if (!updated) return res.status(404).json({ error: 'الرد ده مش موجود' });
   res.json(updated);
+  notificationService.logActivity(req, `عدّل رد جاهز "${updated.label}"`, updated.id);
 }
 
 async function remove(req, res) {
   await repo.deleteCannedResponse(req.params.id);
   res.json({ ok: true });
+  notificationService.logActivity(req, 'مسح رد جاهز', req.params.id);
 }
 
 // بيستقبل { orderedIds: [3,1,2,...] } بالترتيب الجديد بعد السحب في الواجهة

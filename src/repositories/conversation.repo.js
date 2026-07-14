@@ -510,6 +510,25 @@ async function finalizeOutgoingMessage(id, { waMessageId = null, status }) {
   return result.recordset[0] || null;
 }
 
+// بيرجع الـ ids بتاعة الإيجنتس اللي ردوا/كتبوا نوت قبل كده في المحادثة دي (المشاركين
+// فيها) — مستخدمة عشان نبعت إشعار "رسالة جديدة في محادثة أنت مشارك فيها" لأي حد
+// شارك فيها قبل كده غير الإيجنت المعين عليها (ده بياخد إشعار تاني منفصل)
+async function getParticipantAgentIds(conversationId, excludeIds = []) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .query(`
+      SELECT DISTINCT sent_by_user_id
+      FROM [dbo].[${TABLE_NAME}]
+      WHERE conversation_id = @conversationId AND sent_by_user_id IS NOT NULL
+    `);
+  const excludeSet = new Set((excludeIds || []).map((id) => String(id)));
+  return result.recordset
+    .map((r) => r.sent_by_user_id)
+    .filter((id) => id !== null && !excludeSet.has(String(id)));
+}
+
 module.exports = {
   findOrCreateConversation,
   setConversationContact,

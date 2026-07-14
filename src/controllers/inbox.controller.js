@@ -2,6 +2,7 @@
 const inboxRepo = require('../repositories/inbox.repo');
 const userRepo = require('../repositories/user.repo');
 const whatsappService = require('../services/whatsapp.service');
+const notificationService = require('../services/notification.service');
 const { PHONE_REGEX } = require('../utils/helpers');
 
 // ===== قنوات الاتصال المتاحة (Step 1: Choose Channel) =====
@@ -103,6 +104,7 @@ async function createInbox(req, res) {
   });
 
   res.status(201).json({ ok: true, inbox });
+  notificationService.logActivity(req, `أضاف Inbox جديد باسم "${name}"`, inbox.id);
 }
 
 // ===== قايمة الـ Inboxes (لعرضها في صفحة الإعدادات) =====
@@ -120,6 +122,7 @@ async function updateInboxStatus(req, res) {
   if (!inbox) return res.status(404).json({ error: 'الـ Inbox مش موجود' });
   whatsappService.invalidateCredentialsCache(req.params.id);
   res.json({ ok: true, inbox });
+  notificationService.logActivity(req, `غيّر حالة Inbox "${inbox.name || ''}" إلى ${status}`, inbox.id);
 }
 
 async function deleteInbox(req, res) {
@@ -127,6 +130,7 @@ async function deleteInbox(req, res) {
   if (!deleted) return res.status(404).json({ error: 'الـ Inbox مش موجود' });
   whatsappService.invalidateCredentialsCache(req.params.id);
   res.json({ ok: true });
+  notificationService.logActivity(req, 'مسح Inbox', req.params.id);
 }
 
 // ===== Step 3: Add Agents =====

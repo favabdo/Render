@@ -81,4 +81,54 @@ async function sendInviteEmail({ to, inviteUrl, logoUrl }) {
   }
 }
 
-module.exports = { sendInviteEmail };
+// إيميل إشعار عام (بسيط) — مستخدم لأي حدث اليوزر مفعّل عليه "Email" في تفضيلات
+// الإشعارات (محادثة جديدة / تعيين / منشن / رسالة جديدة...)، عكس إيميل الدعوة
+// اللي شكله مختلف تمامًا وله قالب خاص بيه
+function buildNotificationEmailHtml({ title, message, logoUrl }) {
+  const logoBlock = logoUrl
+    ? `<img src="${logoUrl}" alt="NileChat" width="100" style="display:block;height:auto;margin-bottom:18px" />`
+    : '';
+  return `
+  <div style="font-family:'DM Sans',Arial,sans-serif;background:#f0f2f5;padding:40px 0">
+    <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px;box-shadow:0 10px 30px rgba(0,0,0,0.08)">
+      ${logoBlock}
+      <h3 style="margin:0 0 10px;color:#1a1a2e;font-family:Arial,sans-serif">${title}</h3>
+      <p style="color:#4b5563;font-size:14px;line-height:1.7;margin:0;font-family:Arial,sans-serif;white-space:pre-line">${message}</p>
+    </div>
+  </div>`;
+}
+
+async function sendNotificationEmail({ to, title, message, logoUrl = null }) {
+  if (!env.RESEND_API_KEY) {
+    logger.warn(`⚠️ RESEND_API_KEY مش متظبط — إشعار الإيميل لـ ${to} اتسجل في اللوج بس: ${title}`);
+    return { sent: false, error: 'RESEND_API_KEY مش متظبط' };
+  }
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: env.MAIL_FROM,
+        to: [to],
+        subject: title,
+        html: buildNotificationEmailHtml({ title, message, logoUrl }),
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      logger.error('❌ فشل إرسال إيميل إشعار عن طريق Resend:', errText);
+      return { sent: false, error: errText };
+    }
+    return { sent: true };
+  } catch (err) {
+    logger.error('❌ خطأ في الاتصال بـ Resend (إشعار):', err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+module.exports = { sendInviteEmail, sendNotificationEmail };

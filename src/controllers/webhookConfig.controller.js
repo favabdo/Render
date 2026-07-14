@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const webhookConfigRepo = require('../repositories/webhookConfig.repo');
 const webhookDispatchService = require('../services/webhookDispatch.service');
+const notificationService = require('../services/notification.service');
 
 const MAX_WEBHOOKS_PER_COMPANY = 10;
 
@@ -62,6 +63,7 @@ async function create(req, res) {
   });
 
   res.json({ ok: true, webhook });
+  notificationService.logActivity(req, `أضاف Webhook جديد على ${webhook.url}`, webhook.id);
 }
 
 async function update(req, res) {
@@ -90,6 +92,7 @@ async function update(req, res) {
 
   const webhook = await webhookConfigRepo.update(req.params.id, fields);
   res.json({ ok: true, webhook });
+  notificationService.logActivity(req, `عدّل إعدادات Webhook (${webhook.url})`, webhook.id);
 }
 
 async function remove(req, res) {
@@ -98,6 +101,7 @@ async function remove(req, res) {
 
   await webhookConfigRepo.remove(req.params.id);
   res.json({ ok: true });
+  notificationService.logActivity(req, `مسح Webhook (${existing.url})`, req.params.id);
 }
 
 // بتولّد secret جديد للـ Webhook (لو حصل تسريب مثلاً واليوزر عايز يغيّره)

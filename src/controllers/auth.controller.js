@@ -8,6 +8,8 @@ const userRepo = require('../repositories/user.repo');
 const companyRepo = require('../repositories/company.repo');
 const mailer = require('../services/mailer.service');
 const mediaStorage = require('../utils/mediaStorage');
+const notificationService = require('../services/notification.service');
+const logger = require('../utils/logger');
 const { invalidateUserStatusCache } = require('../middlewares/auth');
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // الدعوة صالحة لمدة 7 أيام
@@ -50,6 +52,11 @@ async function login(req, res) {
       display_name: userRepo.resolveDisplayName(user),
     },
   });
+
+  // إشعار تسجيل الدخول — بيتسجل في الخلفية من غير ما يأخر رد اللوجين خالص
+  notificationService
+    .notifyLogin({ userId: user.id }, { ip: req.ip })
+    .catch((err) => logger.error('❌ فشل تسجيل إشعار اللوجين:', err.message));
 }
 
 // إنشاء أول موظف/أدمن (مرة واحدة بس، بمفتاح سري من إعدادات السيرفر)
@@ -297,6 +304,8 @@ async function createUserAccount(req, res) {
     // ويبعته يدويًا للإيجنت لو الإيميل راح للسبام أو اتأخر
     invite_link: inviteUrl,
   });
+
+  notificationService.logActivity(req, `دعا إيجنت جديد بالإيميل ${email}`, user.id);
 }
 
 // بيتأكد إن لينك الدعوة صحيح ولسه صالح قبل ما يعرض فورم تحديد كلمة السر
@@ -350,6 +359,7 @@ async function updateUserAccount(req, res) {
   }
 
   res.json({ ok: true, user });
+  notificationService.logActivity(req, `عدّل بيانات حساب الإيجنت ${user.email}`, user.id);
 }
 
 // مسح إيجنت نهائيًا — لازم الأدمن اللي بيمسح يأكد بكلمة سره الشخصية (مش كلمة سر الإيجنت المحذوف)
@@ -388,6 +398,7 @@ async function deleteUserAccount(req, res) {
   if (io) io.emit('agent_status_changed', { userId: deleted.id, status: 'deleted', reason: 'deleted' });
 
   res.json({ ok: true });
+  notificationService.logActivity(req, `مسح حساب الإيجنت ${deleted.email}`, deleted.id);
 }
 
 module.exports = {

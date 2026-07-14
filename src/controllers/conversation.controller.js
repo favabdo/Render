@@ -8,6 +8,7 @@ const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
 const groqAiService = require('../services/groqAi.service');
+const notificationService = require('../services/notification.service');
 const mediaStorage = require('../utils/mediaStorage');
 const env = require('../config/env');
 const logger = require('../utils/logger');
@@ -109,6 +110,17 @@ async function assign(req, res) {
       }
     })
     .catch((err) => logger.error('❌ فشل تحديث المحادثة بعد الأسين (broadcast خلفي):', err.message));
+
+  // إشعار "A conversation is assigned to you" — بس لو حد تاني هو اللي عيّنها
+  // (مش self-assign)، لصاحب المحادثة الجديد
+  if (!isSelfAssign) {
+    notificationService.notifyEvent(notificationService.NOTIFICATION_TYPES.CONVERSATION_ASSIGNED, {
+      title: 'تم تعيين محادثة لك',
+      message: `${actingName} عيّن لك محادثة مع ${conversation.contact_name || conversation.contact_number}`,
+      referenceId: req.params.id,
+      targetUserIds: [targetAgentId],
+    });
+  }
 }
 
 // إغلاق المحادثة فعليًا في الداتابيز (Resolve حقيقي مش شكلي)
@@ -251,6 +263,33 @@ async function addNote(req, res) {
       logger.error('❌ فشل تسجيل ملاحظة خاصة:', err.message);
       if (io) io.emit('note_failed', { conversationId: conversation.id, text: trimmedText });
     });
+
+  // "You are mentioned in a conversation" — بندور في نص الملاحظة على @اسم أي
+  // إيجنت تاني (زي @Ahmed)، ولو لقيناه بنبعتله إشعار منشن
+  notifyMentionedAgents(req, conversation, trimmedText, senderName).catch((err) =>
+    logger.error('❌ فشل اكتشاف/إشعار المنشن:', err.message)
+  );
+}
+
+async function notifyMentionedAgents(req, conversation, text, senderName) {
+  const agents = await userRepo.listUsers();
+  const mentionedIds = [];
+  for (const agent of agents) {
+    if (String(agent.id) === String(req.user.userId)) continue;
+    if (agent.status !== 'active') continue;
+    const name = userRepo.resolveDisplayName(agent);
+    if (!name) continue;
+    const pattern = new RegExp(`@${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (pattern.test(text)) mentionedIds.push(agent.id);
+  }
+  if (!mentionedIds.length) return;
+
+  await notificationService.notifyEvent(notificationService.NOTIFICATION_TYPES.CONVERSATION_MENTION, {
+    title: 'تم ذكرك في محادثة',
+    message: `${senderName || 'أحد الإيجنتس'} ذكرك في ملاحظة على محادثة مع ${conversation.contact_name || conversation.contact_number}`,
+    referenceId: conversation.id,
+    targetUserIds: mentionedIds,
+  });
 }
 
 // زرار "Generate Reply" — بيقترح رد جاهز بالذكاء الاصطناعي (Groq) بناءً على كل
@@ -319,6 +358,16 @@ async function reply(req, res) {
           created_at: message.created_at,
         },
       }).catch((err) => logger.error('❌ فشل إرسال Webhook message_created:', err.message));
+
+      // "أي إضافة رد" — نشاط عام يوصل لكل الإيجنتس (audit log)
+      if (senderInfo) {
+        notificationService.broadcastActivity({
+          actorId: senderInfo.id,
+          actorName: senderInfo.name,
+          action: `رد على محادثة مع ${conversation.contact_name || conversation.contact_number}`,
+          referenceId: conversation.id,
+        });
+      }
     })
     .catch((err) => {
       logger.error('❌ فشل تسجيل/إرسال الرد:', err.message);
@@ -392,6 +441,15 @@ async function replyMedia(req, res) {
           created_at: message.created_at,
         },
       }).catch((err) => logger.error('❌ فشل إرسال Webhook message_created:', err.message));
+
+      if (senderInfo) {
+        notificationService.broadcastActivity({
+          actorId: senderInfo.id,
+          actorName: senderInfo.name,
+          action: `رد بملف (${messageType}) على محادثة مع ${conversation.contact_name || conversation.contact_number}`,
+          referenceId: conversation.id,
+        });
+      }
     })
     .catch((err) => {
       logger.error('❌ فشل تسجيل/إرسال رد الوسائط:', err.message);

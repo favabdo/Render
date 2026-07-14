@@ -4,11 +4,13 @@ const env = require('./config/env');
 const logger = require('./utils/logger');
 const { initSocket } = require('./socket/socket');
 const { startAutoResolveScheduler } = require('./services/autoResolve.service');
+const notificationService = require('./services/notification.service');
 
 const server = http.createServer(app);
 const io = initSocket(server);
 
 app.set('io', io); // عشان أي route يقدر يبعت realtime events
+notificationService.setIo(io); // عشان خدمة الإشعارات تقدر تبعت 'new_notification' لايف
 
 server.listen(env.PORT, () => {
   logger.info(`🚀 السيرفر شغال على بورت ${env.PORT}`);

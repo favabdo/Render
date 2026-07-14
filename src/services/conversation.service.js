@@ -9,6 +9,7 @@ const teamRepo = require('../repositories/team.repo');
 const webhookDispatchService = require('./webhookDispatch.service');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
+const notificationService = require('./notification.service');
 const logger = require('../utils/logger');
 const { isWithinBusinessHours } = require('../utils/welcomeSchedule');
 
@@ -204,6 +205,13 @@ async function processIncomingMessages(value, io) {
       }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_created:', err.message));
     }
 
+    // إشعارات الإيجنتس: "محادثة جديدة" لكل الإيجنتس النشطين لو دي فعلاً أول رسالة،
+    // و"رسالة جديدة في محادثة معينة عليك" للإيجنت المعين، و"رسالة جديدة في محادثة
+    // أنت مشارك فيها" لأي إيجنت رد فيها قبل كده (غير المعين نفسه)
+    notifyAgentsAboutIncomingMessage({ conversationId, isNew, contactName, phoneNumber: msg.from }).catch(
+      (err) => logger.error('❌ فشل تنفيذ إشعارات الرسالة الواردة:', err.message)
+    );
+
     // قاعدة الـ Keyword Routing: بتتفحص مع كل رسالة نصية جاية من العميل (مش
     // بس أول رسالة بتفتح المحادثة)، عشان لو العميل ذكر كلمة زي "فاتورة" في
     // نص المحادثة في أي وقت، تتحول المحادثة فورًا للتيم المحدد
@@ -227,6 +235,51 @@ async function processIncomingMessages(value, io) {
 // بتنفذ قاعدتين من قواعد الأتمتة على أي محادثة جديدة اتفتحت فعلاً:
 // 1) Auto-assign: لو مفعّلة، بتعين المحادثة فورًا للإيجنت المحدد في الإعدادات
 // 2) رسالة الترحيب: لو مفعّلة، بتبعت نص ثابت للعميل بمجرد ما المحادثة تتفتح
+// بيبعت إشعارات الرسايل الواردة: محادثة جديدة (للكل)، رسالة في محادثة معينة عليك
+// (للإيجنت المعين)، ورسالة في محادثة أنت مشارك فيها (لأي إيجنت رد فيها قبل كده)
+async function notifyAgentsAboutIncomingMessage({ conversationId, isNew, contactName, phoneNumber }) {
+  const displayName = contactName || phoneNumber;
+
+  if (isNew) {
+    const allAgents = await userRepo.listUsers();
+    const allAgentIds = allAgents.filter((u) => u.status === 'active').map((u) => u.id);
+    await notificationService.notifyEvent(notificationService.NOTIFICATION_TYPES.CONVERSATION_CREATED, {
+      title: 'محادثة جديدة',
+      message: `بدأت محادثة جديدة مع ${displayName}`,
+      referenceId: conversationId,
+      targetUserIds: allAgentIds,
+    });
+    return; // أول محادثة لسه معملهاش حد assign ولا رد عليها، فمفيش participants/assigned agent لسه
+  }
+
+  const conversation = await conversationRepo.getConversationById(conversationId);
+  if (!conversation) return;
+
+  const assignedAgentId = conversation.assigned_agent_id || null;
+
+  if (assignedAgentId) {
+    await notificationService.notifyEvent(notificationService.NOTIFICATION_TYPES.ASSIGNED_CONVERSATION_MESSAGE, {
+      title: 'رسالة جديدة في محادثة معينة عليك',
+      message: `وصلت رسالة جديدة من ${displayName} في محادثة معينة عليك`,
+      referenceId: conversationId,
+      targetUserIds: [assignedAgentId],
+    });
+  }
+
+  const participantIds = await conversationRepo.getParticipantAgentIds(
+    conversationId,
+    assignedAgentId ? [assignedAgentId] : []
+  );
+  if (participantIds.length) {
+    await notificationService.notifyEvent(notificationService.NOTIFICATION_TYPES.PARTICIPATING_CONVERSATION_MESSAGE, {
+      title: 'رسالة جديدة في محادثة أنت مشارك فيها',
+      message: `وصلت رسالة جديدة من ${displayName} في محادثة أنت شاركت فيها قبل كده`,
+      referenceId: conversationId,
+      targetUserIds: participantIds,
+    });
+  }
+}
+
 async function applyAutomationForNewConversation(conversationId, inboxId, contactNumber, io) {
   const settings = await companyRepo.getAutomationSettings();
   if (!settings) return;

@@ -1797,9 +1797,143 @@ function logout() {
     window.location.href = '/index.html';
 }
 
-/* زرار الإشعارات في السايد بار — لسه بسيط (توست) لحد ما نبني صفحة إشعارات كاملة */
-function openNotifications() {
-    showToast('لسه مفيش إشعارات جديدة', 'info');
+/* ============================================================
+   جرس الإشعارات في السايد بار — قايمة حقيقية متصلة بـ
+   GET/PATCH /api/notifications (شوف notification.controller.js)
+============================================================ */
+let NOTIFICATIONS_CACHE = [];
+let NOTIFICATIONS_UNREAD_COUNT = 0;
+
+const NOTIFICATION_TYPE_ICONS = {
+    conversation_created: 'message-circle-plus',
+    conversation_assigned: 'user-check',
+    conversation_mention: 'at-sign',
+    assigned_conversation_message: 'inbox',
+    participating_conversation_message: 'messages-square',
+    login: 'log-in',
+    activity: 'activity',
+};
+
+function renderNotificationsBadge() {
+    const badge = document.getElementById('sidebar-notifications-badge');
+    if (!badge) return;
+    if (NOTIFICATIONS_UNREAD_COUNT > 0) {
+        badge.style.display = '';
+        badge.textContent = NOTIFICATIONS_UNREAD_COUNT > 99 ? '99+' : String(NOTIFICATIONS_UNREAD_COUNT);
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+async function refreshNotificationsUnreadCount() {
+    try {
+        const res = await apiFetch('/api/notifications/unread-count');
+        const data = await res.json();
+        if (!res.ok) return;
+        NOTIFICATIONS_UNREAD_COUNT = data.unread || 0;
+        renderNotificationsBadge();
+    } catch (err) {
+        console.error('[API] refreshNotificationsUnreadCount error:', err);
+    }
+}
+
+async function openNotifications() {
+    document.getElementById('notifications-modal-overlay').classList.add('show');
+    try {
+        const res = await apiFetch('/api/notifications');
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحميل الإشعارات');
+        NOTIFICATIONS_CACHE = data.notifications || [];
+        NOTIFICATIONS_UNREAD_COUNT = NOTIFICATIONS_CACHE.filter((n) => n.status === 1).length;
+        renderNotificationsBadge();
+        renderNotificationsList();
+    } catch (err) {
+        console.error('[API] openNotifications error:', err);
+        showToast(err.message || 'فشل تحميل الإشعارات', 'error');
+    }
+}
+
+function closeNotificationsModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('notifications-modal-overlay').classList.remove('show');
+}
+
+function timeAgo(dateStr) {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'الآن';
+    if (mins < 60) return `من ${mins} دقيقة`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `من ${hours} ساعة`;
+    const days = Math.floor(hours / 24);
+    return `من ${days} يوم`;
+}
+
+function renderNotificationsList() {
+    const list = document.getElementById('notifications-list');
+    if (!list) return;
+
+    if (NOTIFICATIONS_CACHE.length === 0) {
+        list.innerHTML = `<div style="padding:40px 20px;text-align:center;color:var(--text-secondary)">
+            <i data-lucide="bell-off" style="width:32px;height:32px;margin-bottom:10px;opacity:.5"></i>
+            <div>لسه مفيش أي إشعارات</div>
+        </div>`;
+        lucide.createIcons();
+        return;
+    }
+
+    list.innerHTML = NOTIFICATIONS_CACHE.map((n) => {
+        const isUnread = n.status === 1;
+        const icon = NOTIFICATION_TYPE_ICONS[n.type] || 'bell';
+        return `
+        <div class="notification-item${isUnread ? ' unread' : ''}" onclick="toggleNotificationRead(${n.id}, ${n.status})" style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;${isUnread ? 'background:var(--primary-light)' : ''}">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--surface-2,rgba(108,92,231,0.12));display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary)">
+                <i data-lucide="${icon}" style="width:17px;height:17px"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+                <div style="font-weight:${isUnread ? '700' : '600'};font-size:13.5px;color:var(--text)">${escapeHtml(n.title || '')}</div>
+                <div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;line-height:1.5">${escapeHtml(n.message || '')}</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">${timeAgo(n.created_at)}</div>
+            </div>
+            ${isUnread ? '<div style="width:8px;height:8px;border-radius:50%;background:var(--primary);flex-shrink:0;margin-top:6px"></div>' : ''}
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+}
+
+async function toggleNotificationRead(id, currentStatus) {
+    const newStatus = currentStatus === 1 ? 0 : 1;
+    try {
+        const res = await apiFetch(`/api/notifications/${id}`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تحديث الإشعار');
+
+        const n = NOTIFICATIONS_CACHE.find((x) => String(x.id) === String(id));
+        if (n) n.status = newStatus;
+        NOTIFICATIONS_UNREAD_COUNT = NOTIFICATIONS_CACHE.filter((x) => x.status === 1).length;
+        renderNotificationsBadge();
+        renderNotificationsList();
+    } catch (err) {
+        console.error('[API] toggleNotificationRead error:', err);
+        showToast(err.message || 'فشل تحديث الإشعار', 'error');
+    }
+}
+
+async function markAllNotificationsRead() {
+    try {
+        const res = await apiFetch('/api/notifications/mark-all-read', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل تعليم الكل كمقروء');
+
+        NOTIFICATIONS_CACHE.forEach((n) => { n.status = 0; });
+        NOTIFICATIONS_UNREAD_COUNT = 0;
+        renderNotificationsBadge();
+        renderNotificationsList();
+        showToast('تم تعليم كل الإشعارات كمقروءة', 'success');
+    } catch (err) {
+        console.error('[API] markAllNotificationsRead error:', err);
+        showToast(err.message || 'فشل تعليم الكل كمقروء', 'error');
+    }
 }
 
 /* بنستخدمها قبل أي إدراج لنص جاي من اليوزر/الداتابيز جوه innerHTML (اسم إيجنت، نص رسالة...)
@@ -2493,6 +2627,21 @@ function initSocket() {
             if (!AUTH_USER || String(userId) !== String(AUTH_USER.id)) return;
             showToast('تم إيقاف حسابك أو حذفه، هيتم تسجيل خروجك الآن', 'error');
             setTimeout(logout, 1200);
+        });
+
+        /* السيرفر بيبعتها لأي إشعار جديد اتسجل (شوف notification.service.js -> emitToUser).
+           بنتأكد إنه إشعارنا إحنا بس، ولو آه بنزود عداد الجرس فورًا وبنضيفه لأول القايمة
+           لو صفحة الإشعارات مفتوحة دلوقتي */
+        socket.on('new_notification', ({ userId, notification } = {}) => {
+            if (!AUTH_USER || String(userId) !== String(AUTH_USER.id)) return;
+            NOTIFICATIONS_UNREAD_COUNT += 1;
+            renderNotificationsBadge();
+            if (notification) {
+                NOTIFICATIONS_CACHE.unshift(notification);
+                if (document.getElementById('notifications-modal-overlay')?.classList.contains('show')) {
+                    renderNotificationsList();
+                }
+            }
         });
     } catch (err) {
         console.error('[Socket.io] فشل تفعيل الـ realtime، الداشبورد هيفضل شغال من غيره:', err);
@@ -7092,6 +7241,7 @@ function init() {
     });
     updateSidebarAvatar();
     applyRoleVisibility();
+    refreshNotificationsUnreadCount();
     renderChatList('open', '');
     renderContacts();
 
@@ -7779,6 +7929,24 @@ async function iwDeleteInbox(id) {
                 <span id="customer-card-confirm-text">Add Customer</span>
             </button>
         </div>
+    </div>
+</div>
+
+<!-- جرس الإشعارات — قايمة حقيقية متصلة بـ /api/notifications -->
+<div class="resolve-overlay" id="notifications-modal-overlay" onclick="closeNotificationsModal(event)">
+    <div class="resolve-modal" id="notifications-modal" style="padding:0;width:400px;max-height:min(600px,calc(100vh - 48px));display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 18px 14px;border-bottom:1px solid var(--border)">
+            <div style="font-weight:800;font-size:15.5px;color:var(--text)">Notifications</div>
+            <div style="display:flex;align-items:center;gap:6px">
+                <button class="st-icon-btn" type="button" onclick="markAllNotificationsRead()" title="Mark all as read">
+                    <i data-lucide="check-check" style="width:16px;height:16px"></i>
+                </button>
+                <button class="st-icon-btn" type="button" onclick="closeNotificationsModal()" title="Close">
+                    <i data-lucide="x" style="width:16px;height:16px"></i>
+                </button>
+            </div>
+        </div>
+        <div id="notifications-list" style="overflow-y:auto;flex:1"></div>
     </div>
 </div>
 

@@ -5,6 +5,7 @@ const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
 const teamRepo = require('../repositories/team.repo');
 const { DAY_KEYS, normalizeSchedule } = require('../utils/welcomeSchedule');
+const notificationService = require('../services/notification.service');
 
 // أقصى عدد قواعد (كل قاعدة = تيم + كلماته) وأقصى عدد كلمات في القاعدة الواحدة، وأقصى طول للكلمة
 const MAX_KEYWORD_ROUTING_RULES = 15;
@@ -87,6 +88,7 @@ async function updateSettings(req, res) {
     code: updated.code,
     auto_resolve_days: updated.auto_resolve_days,
   });
+  notificationService.logActivity(req, 'غيّر إعدادات الحساب (Account Settings)');
 }
 
 module.exports = { getSettings, updateSettings, getAutomationSettings, updateAutomationSettings };
@@ -284,4 +286,5 @@ async function updateAutomationSettings(req, res) {
 
   const updated = await companyRepo.updateAutomationSettings(company.id, fields);
   res.json({ ok: true, ...updated });
+  notificationService.logActivity(req, 'غيّر إعدادات الأتمتة (Automation)');
 }

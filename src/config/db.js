@@ -907,6 +907,35 @@ async function ensureWebhooksTableExists() {
   logger.info('✅ جدول الـ Webhooks الصادرة جاهز.');
 }
 
+// جدول الإشعارات — كل إشعار (In-App / Push) بيتخزن هنا لكل يوزر لوحده،
+// عمود status: 1 = جديد/لسه ملقوش، 0 = مقروء. النوع (type) بيحدد شكل الإشعار:
+// conversation_created / conversation_assigned / conversation_mention /
+// assigned_conversation_message / participating_conversation_message /
+// login (تسجيل دخول) / activity (نشاط عام: رد جديد أو تغيير في الإعدادات، بيوصل للكل)
+async function ensureNotificationsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_Notifications_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_Notifications_byA] (
+        id              BIGINT IDENTITY(1,1) PRIMARY KEY,
+        user_id         BIGINT NOT NULL,
+        type            NVARCHAR(50) NOT NULL,
+        title           NVARCHAR(300) NULL,
+        message         NVARCHAR(MAX) NULL,
+        reference_id    BIGINT NULL,
+        status          INT NOT NULL DEFAULT 1,
+        actor_id        BIGINT NULL,
+        actor_name      NVARCHAR(200) NULL,
+        created_at      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+      CREATE INDEX IX_NileChat_Notifications_byA_user_id
+        ON [dbo].[NileChat_Notifications_byA](user_id, created_at DESC);
+    END
+  `);
+  logger.info('✅ جدول الإشعارات (Notifications) جاهز.');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -942,6 +971,7 @@ async function ensureSchema() {
   await ensureTeamMembersTableExists();
   await ensureConversationTeamsTableExists();
   await ensureWebhooksTableExists();
+  await ensureNotificationsTableExists();
 }
 
 module.exports = {
@@ -982,6 +1012,7 @@ module.exports = {
   ensureTeamMembersTableExists,
   ensureConversationTeamsTableExists,
   ensureWebhooksTableExists,
+  ensureNotificationsTableExists,
   ensureSchema,
   TABLE_NAME,
 };
