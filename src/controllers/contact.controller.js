@@ -96,6 +96,8 @@ async function addPhone(req, res) {
   }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
 
   res.status(201).json({ ok: true, contact: result.contact });
+
+  notificationService.logActivity(req, `أضاف رقم تليفون جديد للعميل "${result.contact.name}"`, result.contact.id);
 }
 
 // بنحط/بنعدّل ليبل على رقم معين بتاع الكونتاكت ده (مفيد لو عنده أكتر من رقم واحد،
@@ -118,9 +120,9 @@ async function updatePhoneLabel(req, res) {
   }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
 
   res.json({ ok: true, contact });
-}
 
-// بيربط رقم المحادثة دي بكونتاكت موجود بالفعل (دمج) — أو ينشئ كونتاكت جديد منفصل بيه
+  notificationService.logActivity(req, `عدّل ليبل رقم تليفون العميل "${contact.name}"`, contact.id);
+}
 // body: { mode: 'link', contactId } أو { mode: 'new', name }
 async function linkConversationContact(req, res) {
   const { mode, contactId, name } = req.body || {};
@@ -254,6 +256,8 @@ async function unlinkPhone(req, res) {
   }
 
   res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
+
+  notificationService.logActivity(req, `فصل رقم تليفون عن العميل "${updatedOldContact?.name || ''}" وعمل بيه عميل منفصل باسم "${newContact.name}"`, newContact.id);
 }
 
 // "مسح" عميل (Soft Delete): بيحول status بتاعه لـ 0 بس، فبيختفي من صفحة
