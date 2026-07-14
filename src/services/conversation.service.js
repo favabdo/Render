@@ -129,7 +129,10 @@ function buildFlowReplySummaryText(nfmReply) {
 }
 
 // بيتعامل مع الرسائل الواردة من webhook واتساب (رسائل جديدة من عملاء)
-async function processIncomingMessages(value, io) {
+// wabaId: الـ Business Account ID اللي ميتا بعتته مع الـ webhook ده (entry.id) —
+// لو الـ Inbox المطابق لسه مالوش business_account_id متسجل، بنسجله هنا تلقائيًا
+// (لازم لإنشاء WhatsApp Flow "تقييم بعد الحل" بعدين، من غير أي إدخال يدوي)
+async function processIncomingMessages(value, io, wabaId = null) {
   const contact = value.contacts?.[0];
 
   // بنحدد أي Inbox (رقم واتساب) استقبل الرسالة دي، عشان نربط المحادثة بيه
@@ -139,6 +142,16 @@ async function processIncomingMessages(value, io) {
     matchedInbox = await inboxRepo.findInboxByPhoneNumberId(incomingPhoneNumberId);
   } catch (err) {
     logger.error('❌ خطأ أثناء البحث عن الـ Inbox المطابق:', err.message);
+  }
+
+  if (matchedInbox && wabaId && !matchedInbox.business_account_id) {
+    try {
+      await inboxRepo.setBusinessAccountId(matchedInbox.id, wabaId);
+      matchedInbox.business_account_id = wabaId;
+      logger.info(`✅ اتسجل Business Account ID تلقائيًا لـ Inbox #${matchedInbox.id} من الـ webhook`);
+    } catch (err) {
+      logger.error('❌ فشل تسجيل Business Account ID تلقائيًا:', err.message);
+    }
   }
 
   for (const msg of value.messages) {

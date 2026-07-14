@@ -485,10 +485,14 @@ async function receiveWebhook(req, res) {
     if (!value) return;
 
     const io = req.app.get('io');
+    // ميتا بتبعت الـ WABA ID (Business Account ID) مجانًا مع كل webhook في entry.id
+    // — مش لازم نسأل عنه بشكل منفصل، بنلقطه هنا ونسجله تلقائيًا على أي Inbox
+    // اتطابق بالـ phone_number_id، فمفيش أي حاجة إضافية مطلوبة من المستخدم
+    const wabaId = entry?.id || null;
 
     // --- رسائل واردة من العملاء ---
     if (Array.isArray(value.messages)) {
-      await conversationService.processIncomingMessages(value, io);
+      await conversationService.processIncomingMessages(value, io, wabaId);
     }
 
     // --- تحديثات حالة الرسائل اللي بعتناها (sent/delivered/read/failed) ---
