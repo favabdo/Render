@@ -21,6 +21,7 @@
     --text: #1a1a2e;
     --text-secondary: #6b7280;
     --border: #e5e7eb;
+    --border-strong: #c7ccd6;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -489,6 +490,14 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .st-modal-readonly{flex:1;padding:9px 11px;border-radius:9px;background:var(--bg);border:1.5px solid var(--border)}
 .st-modal-readonly-label{font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
 .st-modal-readonly-value{font-size:13px;font-weight:600;color:var(--text)}
+/* صفحة تفاصيل العميل: خطوط أوضح شوية بين كل سيكشن، عشان كل جزء يبان منفصل عن اللي جنبه */
+#page-customer-details .page-header{padding-bottom:16px;margin-bottom:16px;border-bottom:1.5px solid var(--border-strong)}
+#page-customer-details .st-modal-readonly{border:1.5px solid var(--border-strong)}
+#page-customer-details .st-modal-readonly-row{padding-bottom:14px;margin-bottom:0;border-bottom:1.5px solid var(--border-strong)}
+#page-customer-details .st-modal-readonly-row + .st-modal-readonly-row,
+#page-customer-details .st-modal-readonly-row + .st-modal-readonly,
+#page-customer-details .st-modal-readonly + .st-modal-readonly-row{margin-top:14px}
+#page-customer-details .cd-tabs{border-bottom:1.5px solid var(--border-strong);margin-top:20px;padding-top:4px}
 .sched-tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;min-width:0}
 
 .empty-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text-secondary)}
@@ -1732,8 +1741,8 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">المكان</div>
-                <div class="st-modal-readonly-value" id="customer-details-location">-</div>
+                <div class="st-modal-readonly-label">الفروع</div>
+                <div id="customer-details-branches">-</div>
             </div>
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">أرقام التليفون</div>
@@ -1759,7 +1768,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <div class="st-modal-readonly-value" id="customer-details-signed-contract-date">-</div>
             </div>
             <div class="st-modal-readonly">
-                <div class="st-modal-readonly-label">اسم ورقم المدير</div>
+                <div class="st-modal-readonly-label">اسم ورقم صاحب المؤسسة</div>
                 <div class="st-modal-readonly-value" id="customer-details-manager-name">-</div>
                 <div class="st-modal-readonly-value" id="customer-details-manager-phone">-</div>
             </div>
@@ -6457,13 +6466,54 @@ function getSelectedCustomerCardModules() {
     return [...new Set([...checked, ...custom])];
 }
 
+/* فروع العميل: كل صف فيه اسم الفرع + مكانه، وزرار حذف الصف */
+let customerCardBranchSeq = 0;
+
+function addCustomerCardBranchRow(name = '', location = '') {
+    const container = document.getElementById('customer-card-branches');
+    if (!container) return;
+    const rowId = `cc-branch-${++customerCardBranchSeq}`;
+    const row = document.createElement('div');
+    row.id = rowId;
+    row.style.cssText = 'display:flex;gap:8px;align-items:center';
+    row.innerHTML = `
+        <input type="text" class="iw-input cc-branch-name" placeholder="اسم الفرع (مثال: فرع المعادي)" value="${escapeHtml(name)}" style="flex:1">
+        <input type="text" class="iw-input cc-branch-location" placeholder="عنوان الفرع" value="${escapeHtml(location)}" style="flex:1.4">
+        <button type="button" class="st-icon-btn" title="حذف الفرع" onclick="document.getElementById('${rowId}').remove()">
+            <i data-lucide="x" style="width:14px;height:14px"></i>
+        </button>
+    `;
+    container.appendChild(row);
+    lucide.createIcons();
+}
+
+function renderCustomerCardBranches(branches) {
+    const container = document.getElementById('customer-card-branches');
+    if (!container) return;
+    container.innerHTML = '';
+    const list = (branches && branches.length) ? branches : [{ name: '', location: '' }];
+    list.forEach((b) => addCustomerCardBranchRow(b.name || '', b.location || ''));
+}
+
+// بتجمع كل صفوف الفروع المكتوبة في الفورم، وبتشيل أي صف فاضي تمامًا
+function getCustomerCardBranches() {
+    const container = document.getElementById('customer-card-branches');
+    if (!container) return [];
+    return Array.from(container.children)
+        .map((row) => ({
+            name: row.querySelector('.cc-branch-name')?.value.trim() || '',
+            location: row.querySelector('.cc-branch-location')?.value.trim() || '',
+        }))
+        .filter((b) => b.name || b.location);
+}
+
 function openAddCustomerModal() {
     customerCardMode = 'add';
     customerCardEditingId = null;
     document.getElementById('customer-card-modal-title').textContent = 'Add Customer';
     document.getElementById('customer-card-confirm-text').textContent = 'Add Customer';
     document.getElementById('customer-card-name').value = '';
-    document.getElementById('customer-card-location').value = '';
+    renderCustomerCardBranches([]);
     document.getElementById('customer-card-phone').value = '';
     document.getElementById('customer-card-phone').disabled = false;
     document.getElementById('customer-card-signed-contract-date').value = '';
@@ -6488,12 +6538,12 @@ function closeCustomerCardModal(event) {
 
 async function submitCustomerCard() {
     const name = document.getElementById('customer-card-name').value.trim();
-    const location = document.getElementById('customer-card-location').value.trim();
+    const branches = getCustomerCardBranches();
     const phone = document.getElementById('customer-card-phone').value.trim();
     const errorEl = document.getElementById('customer-card-error');
     errorEl.textContent = '';
 
-    if (!name) return (errorEl.textContent = 'لازم تكتب اسم العميل');
+    if (!name) return (errorEl.textContent = 'لازم تكتب اسم الشركة');
     if (customerCardMode === 'add' && !phone) return (errorEl.textContent = 'لازم تكتب رقم تليفون العميل');
     if (customerCardMode === 'add' && !CUSTOMER_PHONE_REGEX.test(phone)) {
         validateCustomerCardPhone();
@@ -6522,8 +6572,8 @@ async function submitCustomerCard() {
             : `/api/contacts/${customerCardEditingId}/customer-card`;
         const method = customerCardMode === 'add' ? 'POST' : 'PATCH';
         const body = customerCardMode === 'add'
-            ? { name, location, phone, signedContractDate: signedContractDate || undefined, managerName: managerName || undefined, managerPhone: managerPhone || undefined, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined, modules }
-            : { name, location, signedContractDate: signedContractDate || undefined, managerName: managerName || undefined, managerPhone: managerPhone || undefined, modules };
+            ? { name, branches, phone, signedContractDate: signedContractDate || undefined, managerName: managerName || undefined, managerPhone: managerPhone || undefined, contractDate: contractStart || undefined, maintenanceEndDate: contractEnd || undefined, modules }
+            : { name, branches, signedContractDate: signedContractDate || undefined, managerName: managerName || undefined, managerPhone: managerPhone || undefined, modules };
 
         const res = await apiFetch(url, { method, body: JSON.stringify(body) });
         const data = await res.json();
@@ -6598,7 +6648,7 @@ async function openCustomerDetails(contactId) {
         customerDetailsCache = c;
 
         document.getElementById('customer-details-name').textContent = c.name || 'بدون اسم';
-        document.getElementById('customer-details-location').textContent = c.location || '-';
+        renderCustomerDetailsBranches(c);
         renderCustomerDetailsPhones(c);
         renderCustomerDetailsStats(c);
         loadCustomerDetailsScheduledTask(c.id);
@@ -6635,6 +6685,22 @@ function renderCustomerDetailsModules(modules) {
     el.innerHTML = modules.map((m) =>
         `<span class="contact-modules-badge${m.isCustom ? ' is-custom' : ''}">${escapeHtml(m.name)}</span>`
     ).join('');
+}
+
+// بيعرض فروع العميل في صفحة التفاصيل — كل فرع في سطر لوحده (اسمه لو موجود + مكانه)
+function renderCustomerDetailsBranches(c) {
+    const el = document.getElementById('customer-details-branches');
+    if (!el) return;
+    const branches = (c.branches && c.branches.length) ? c.branches : (c.location ? [{ name: null, location: c.location }] : []);
+    if (!branches.length) {
+        el.innerHTML = '<div class="st-modal-readonly-value">-</div>';
+        return;
+    }
+    el.innerHTML = branches.map((b) => {
+        const label = b.name ? escapeHtml(b.name) : 'الفرع';
+        const location = b.location ? escapeHtml(b.location) : '-';
+        return `<div class="st-modal-readonly-value" style="margin-bottom:4px"><b>${label}</b>: ${location}</div>`;
+    }).join('');
 }
 
 function renderCustomerDetailsStats(c) {
@@ -6851,7 +6917,7 @@ function editCurrentCustomerCard() {
     document.getElementById('customer-card-modal-title').textContent = 'Edit Customer';
     document.getElementById('customer-card-confirm-text').textContent = 'Save Changes';
     document.getElementById('customer-card-name').value = c.name || '';
-    document.getElementById('customer-card-location').value = c.location || '';
+    renderCustomerCardBranches(c.branches && c.branches.length ? c.branches : (c.location ? [{ name: '', location: c.location }] : []));
     document.getElementById('customer-card-phone').value = (c.phones || []).map(p => p.phone_number).join(', ');
     document.getElementById('customer-card-phone').disabled = true; // الرقم مش بيتعدل من هنا
     document.getElementById('customer-card-phone-hint').style.color = '';
@@ -8363,11 +8429,14 @@ async function iwDeleteInbox(id) {
         </div>
         <div class="resolve-modal-sub">بيانات العميل الأساسية — وعقد الصيانة كمان لو حابب تسجله من هنا على طول</div>
 
-        <div class="resolve-cats-label">اسم العميل</div>
-        <input type="text" class="iw-input" id="customer-card-name" placeholder="اسم العميل" style="margin-bottom:12px">
+        <div class="resolve-cats-label">اسم الشركة</div>
+        <input type="text" class="iw-input" id="customer-card-name" placeholder="اسم الشركة" style="margin-bottom:12px">
 
-        <div class="resolve-cats-label">مكان العميل</div>
-        <input type="text" class="iw-input" id="customer-card-location" placeholder="العنوان / المكان" style="margin-bottom:12px">
+        <div class="resolve-cats-label">الفروع</div>
+        <div id="customer-card-branches" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+        <button type="button" class="resolve-cancel-btn" style="padding:6px 12px;font-size:12.5px;margin-bottom:12px" onclick="addCustomerCardBranchRow()">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> إضافة فرع
+        </button>
 
         <div class="resolve-cats-label">رقم التليفون</div>
         <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 201001234567" maxlength="12" oninput="validateCustomerCardPhone()">
@@ -8379,9 +8448,9 @@ async function iwDeleteInbox(id) {
                 <input type="date" class="iw-input" id="customer-card-signed-contract-date">
             </div>
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
-                <div class="resolve-cats-label">اسم ورقم المدير</div>
-                <input type="text" class="iw-input" id="customer-card-manager-name" placeholder="اسم المدير" style="margin-bottom:8px">
-                <input type="text" class="iw-input" id="customer-card-manager-phone" placeholder="رقم تليفون المدير">
+                <div class="resolve-cats-label">اسم ورقم صاحب المؤسسة</div>
+                <input type="text" class="iw-input" id="customer-card-manager-name" placeholder="اسم صاحب المؤسسة" style="margin-bottom:8px">
+                <input type="text" class="iw-input" id="customer-card-manager-phone" placeholder="رقم تليفون صاحب المؤسسة">
             </div>
         </div>
         <div class="iw-form-hint" style="margin-top:-8px;margin-bottom:12px">معلومات مستقلة بس عشان نعرف امتى اتعاقدنا مع العميل ده لأول مرة — مالهاش أي علاقة بعقد الصيانة</div>

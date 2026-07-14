@@ -444,6 +444,28 @@ async function ensureContactPhonesTableExists() {
   `);
 }
 
+// فروع العميل: عميل (شركة) ممكن يكون ليه أكتر من فرع/مكان، كل فرع ليه اسمه
+// وعنوانه بشكل مستقل. عمود location القديم على الكونتاكت نفسه فضل موجود
+// كمان (بيتحدّث تلقائيًا بأول فرع) عشان أي كويري قديمة بتستخدمه (listContacts،
+// البحث، رسايل الزيارات...) تفضل شغالة من غير ما نلمسها كلها
+async function ensureContactBranchesTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NileChat_ContactBranches_byA')
+    BEGIN
+      CREATE TABLE [dbo].[NileChat_ContactBranches_byA] (
+        id         BIGINT IDENTITY(1,1) PRIMARY KEY,
+        contact_id BIGINT NOT NULL,
+        name       NVARCHAR(200) NULL,
+        location   NVARCHAR(300) NULL,
+        created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+      CREATE INDEX IX_NileChat_ContactBranches_byA_contact_id
+        ON [dbo].[NileChat_ContactBranches_byA](contact_id);
+    END
+  `);
+}
+
 // الموديولات اللي كل عميل مشترك فيها (حسابات عامة، إدارة مخازن، شئون موظفين...
 // إلخ) — عميل ممكن يكون مشترك في أكتر من موديول مع بعض، فبنخزنهم في جدول
 // منفصل (صف لكل موديول لكل عميل) بدل عمود واحد. is_custom بتفرّق الموديول اللي
@@ -1097,6 +1119,7 @@ async function ensureSchema() {
   await ensureContactPhonesTableExists();
   await ensureContactPhonesHaveLabelColumn();
   await ensureContactModulesTableExists();
+  await ensureContactBranchesTableExists();
   await ensureConversationsHaveContactColumn();
   await ensureDevicesTableExists();
   await ensureScheduledTasksTableExists();
@@ -1139,6 +1162,7 @@ module.exports = {
   ensureContactsHaveStatusColumn,
   ensureContactPhonesTableExists,
   ensureContactPhonesHaveLabelColumn,
+  ensureContactBranchesTableExists,
   ensureConversationsHaveContactColumn,
   ensureDevicesTableExists,
   ensureScheduledTasksTableExists,

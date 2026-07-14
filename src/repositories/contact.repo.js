@@ -105,6 +105,56 @@ async function getPhonesForContact(contactId) {
 // بيرجع { error: 'phone_taken' } لو الرقم ده أصلاً مرتبط بكونتاكت تاني (نفس
 // الكونتاكت أو غيره)، عشان الكنترولر يرجع رسالة واضحة بدل ما السيرفر يقع بإيرور
 // قاعدة بيانات (unique constraint) لو موجود
+// بترجع كل فروع العميل (كل فرع اسمه وعنوانه) مرتبين بترتيب إضافتهم
+async function getBranchesForContact(contactId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .query(`
+      SELECT id, name, location FROM [dbo].[NileChat_ContactBranches_byA]
+      WHERE contact_id = @contactId
+      ORDER BY created_at ASC, id ASC
+    `);
+  return result.recordset.map((r) => ({ id: r.id, name: r.name || null, location: r.location || null }));
+}
+
+// بتستبدل كل فروع العميل بالقايمة الجديدة دي (مسح القديم بالكامل وإضافة الجديد) —
+// أبسط طريقة نضمن بيها إن الفروع اللي المستخدم مسحها من الفورم فعلاً بتتمسح من
+// الداتابيز، من غير ما نحتاج نتتبع إضافة/تعديل/حذف كل فرع لوحده. بتحدّث كمان
+// عمود location القديم على الكونتاكت نفسه بعنوان أول فرع، عشان أي كويري تانية
+// (listContacts، البحث، رسايل الزيارات...) لسه بتستخدم العمود ده تفضل شغالة
+async function replaceBranchesForContact(contactId, branches) {
+  const pool = await getPool();
+  const cleaned = (branches || [])
+    .map((b) => ({ name: (b?.name || '').trim() || null, location: (b?.location || '').trim() || null }))
+    .filter((b) => b.name || b.location);
+
+  await pool.request().input('contactId', sql.BigInt, contactId).query(`
+    DELETE FROM [dbo].[NileChat_ContactBranches_byA] WHERE contact_id = @contactId
+  `);
+
+  for (const branch of cleaned) {
+    await pool
+      .request()
+      .input('contactId', sql.BigInt, contactId)
+      .input('name', sql.NVarChar(200), branch.name)
+      .input('location', sql.NVarChar(300), branch.location)
+      .query(`
+        INSERT INTO [dbo].[NileChat_ContactBranches_byA] (contact_id, name, location)
+        VALUES (@contactId, @name, @location)
+      `);
+  }
+
+  await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .input('location', sql.NVarChar(300), cleaned[0]?.location || null)
+    .query(`
+      UPDATE [dbo].[NileChat_Contacts_byA] SET location = @location WHERE id = @contactId
+    `);
+}
+
 async function addPhoneToContact(contactId, phoneNumber) {
   const pool = await getPool();
 
@@ -204,7 +254,8 @@ async function getContactByIdWithPhones(id) {
   if (!contact) return null;
   const phones = await getPhonesForContact(id);
   const modules = await getModulesForContact(id);
-  return { ...contact, phones, modules };
+  const branches = await getBranchesForContact(id);
+  return { ...contact, phones, modules, branches };
 }
 
 // كل الكونتاكتس (تُستخدم في صفحة Contacts وفي قايمة اختيار "اربط بكونتاكت موجود")
@@ -463,6 +514,7 @@ async function createCustomerContact({
   name,
   phoneNumber,
   location,
+  branches,
   signedContractDate,
   managerName,
   managerPhone,
@@ -496,6 +548,14 @@ async function createCustomerContact({
       VALUES (@contactId, @phone)
     `);
 
+  // فروع العميل: لو الفورم بعتت قايمة فروع (اسم + مكان) بنخزنها في جدول
+  // الفروع، وإلا لو بعتت location بس (الأسلوب القديم) بنعمله فرع واحد بمكان
+  // بس من غير اسم، عشان يفضل مسجل في نفس المكان الموحّد
+  const branchList = (branches && branches.length) ? branches : (location ? [{ name: null, location }] : []);
+  if (branchList.length) {
+    await replaceBranchesForContact(contact.id, branchList);
+  }
+
   if (modules && modules.length) {
     await setContactModules(contact.id, modules);
   }
@@ -518,7 +578,7 @@ async function createCustomerContact({
 // زرار "إضافة عقد صيانة" في سجل الصيانة بتاع العميل (سجل كامل بعقود متعددة)،
 // مش من هنا، عشان لو عقد قديم اتعدّل هنا كان بيمسح تاريخ العقد اللي فات بدل ما
 // يحتفظ بيه كسجل منفصل
-async function updateCustomerDetails(id, { name, location, signedContractDate, managerName, managerPhone, modules }) {
+async function updateCustomerDetails(id, { name, location, branches, signedContractDate, managerName, managerPhone, modules }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -535,6 +595,10 @@ async function updateCustomerDetails(id, { name, location, signedContractDate, m
       WHERE id = @id
     `);
   if (!result.recordset[0]) return null;
+
+  if (branches !== undefined) {
+    await replaceBranchesForContact(id, branches);
+  }
 
   if (modules !== undefined) {
     await setContactModules(id, modules);
@@ -592,6 +656,8 @@ module.exports = {
   getPhonesForContact,
   addPhoneToContact,
   updatePhoneLabel,
+  getBranchesForContact,
+  replaceBranchesForContact,
   listContacts,
   listContactsPage,
   updateContactName,
