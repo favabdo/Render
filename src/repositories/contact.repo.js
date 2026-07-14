@@ -1,4 +1,4 @@
-const { getPool, sql } = require('../config/db');
+const { getPool, sql, TABLE_NAME } = require('../config/db');
 const maintenanceContractRepo = require('./maintenanceContract.repo');
 
 // نفس منطق "العقد الحالي" الموجود في maintenanceContract.repo.getCurrentContractForContact
@@ -370,6 +370,72 @@ async function updateCustomerDetails(id, { name, location }) {
   return getContactByIdWithPhones(id);
 }
 
+// مسح عميل نهائيًا بكل تفاصيله: رسايله، محادثاته (وكل حاجة مرتبطة بيها زي
+// الليبلات والتيمز والتقييمات)، أجهزة الدعم الفني بتاعته، التاسكات المجدولة،
+// الزيارات، عقود الصيانة، أرقام تليفوناته، وأخيرًا الكونتاكت نفسه. كل ده جوه
+// transaction واحدة عشان لو أي خطوة فشلت يرجع كل حاجة زي ما كانت (مفيش نص
+// عميل متمسوح). أدمن بس هو اللي يقدر ينادي على الدالة دي (اتأكد منها في
+// requireAdmin على الراوت + كلمة السر في contact.controller.deleteContact)
+async function deleteContactCompletely(contactId) {
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    // هات كل المحادثات بتاعة العميل ده الأول عشان نمسح كل حاجة متعلقة بيها
+    const convosResult = await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`SELECT id FROM [dbo].[NileChat_Conversations_byA] WHERE contact_id = @contactId`);
+    const conversationIds = convosResult.recordset.map((r) => r.id);
+
+    if (conversationIds.length > 0) {
+      const idsCsv = conversationIds.join(',');
+      await new sql.Request(transaction).query(`DELETE FROM [dbo].[${TABLE_NAME}] WHERE conversation_id IN (${idsCsv})`);
+      await new sql.Request(transaction).query(`DELETE FROM [dbo].[NileChat_ConversationLabels_byA] WHERE conversation_id IN (${idsCsv})`);
+      await new sql.Request(transaction).query(`DELETE FROM [dbo].[NileChat_ConversationTeams_byA] WHERE conversation_id IN (${idsCsv})`);
+      await new sql.Request(transaction).query(`DELETE FROM [dbo].[NileChat_ConversationRatings_byA] WHERE conversation_id IN (${idsCsv})`);
+    }
+
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_Conversations_byA] WHERE contact_id = @contactId`);
+
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_Devices_byA] WHERE contact_id = @contactId`);
+
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_ScheduledTasks_byA] WHERE contact_id = @contactId`);
+
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_Visits_byA] WHERE contact_id = @contactId`);
+
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_MaintenanceContracts_byA] WHERE contact_id = @contactId`);
+
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`DELETE FROM [dbo].[NileChat_ContactPhones_byA] WHERE contact_id = @contactId`);
+
+    const deletedResult = await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contactId)
+      .query(`
+        DELETE FROM [dbo].[NileChat_Contacts_byA]
+        OUTPUT DELETED.id, DELETED.name
+        WHERE id = @contactId
+      `);
+
+    await transaction.commit();
+    return deletedResult.recordset[0] || null;
+  } catch (err) {
+    await transaction.rollback().catch(() => {});
+    throw err;
+  }
+}
+
 module.exports = {
   findContactByPhone,
   createContactWithPhone,
@@ -386,4 +452,5 @@ module.exports = {
   linkPhoneToContact,
   unlinkPhoneToNewContact,
   deletePhonelessContact,
+  deleteContactCompletely,
 };

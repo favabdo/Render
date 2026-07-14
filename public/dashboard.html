@@ -1683,6 +1683,9 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border);display:none" id="customer-details-edit-btn" onclick="editCurrentCustomerCard()">
                     <i data-lucide="pencil" style="width:16px;height:16px"></i> تعديل
                 </button>
+                <button class="page-btn" style="background:var(--danger);color:#fff;display:none" id="customer-details-delete-btn" onclick="openDeleteContactModal()">
+                    <i data-lucide="trash-2" style="width:16px;height:16px"></i> حذف العميل
+                </button>
             </div>
         </div>
 
@@ -3106,6 +3109,70 @@ async function submitDeleteAgent() {
     } catch (err) {
         console.error('[API] submitDeleteAgent error:', err);
         errorBox.textContent = err.message || 'فشل مسح الإيجنت';
+    }
+}
+
+/* ============================================================
+   مسح عميل نهائيًا: زي مسح الإيجنت بالظبط، لازم الأدمن يأكد بكلمة
+   سره الشخصية. بتتفتح من كارت العميل في شبكة الكونتاكتس (بتبعت
+   id و name) أو من زرار "حذف العميل" في صفحة تفاصيل العميل نفسها
+   (من غير args، بتاخد البيانات من customerDetailsCache)
+============================================================ */
+let CONTACT_TO_DELETE = null;
+
+function openDeleteContactModal(id, name) {
+    if (id === undefined) {
+        if (!customerDetailsCache) return;
+        id = customerDetailsCache.id;
+        name = customerDetailsCache.name;
+    }
+    CONTACT_TO_DELETE = { id, name };
+    document.getElementById('delete-contact-name').textContent = name || 'العميل';
+    document.getElementById('delete-contact-password').value = '';
+    document.getElementById('delete-contact-error').textContent = '';
+    document.getElementById('delete-contact-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+function closeDeleteContactModal(e) {
+    if (e && e.target !== document.getElementById('delete-contact-overlay')) return;
+    document.getElementById('delete-contact-overlay').classList.remove('show');
+    CONTACT_TO_DELETE = null;
+}
+
+async function submitDeleteContact() {
+    if (!CONTACT_TO_DELETE) return;
+    const errorBox = document.getElementById('delete-contact-error');
+    errorBox.textContent = '';
+
+    const password = document.getElementById('delete-contact-password').value;
+    if (!password) {
+        errorBox.textContent = 'اكتب كلمة سرك الشخصية عشان تأكد المسح';
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`/api/contacts/${CONTACT_TO_DELETE.id}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data && data.error) || 'فشل مسح العميل');
+
+        document.getElementById('delete-contact-overlay').classList.remove('show');
+        showToast('تم مسح العميل بنجاح', 'success');
+
+        const wasOnDetailsPage = currentPage === 'customer-details' && customerDetailsCache && String(customerDetailsCache.id) === String(CONTACT_TO_DELETE.id);
+        CONTACT_TO_DELETE = null;
+
+        if (wasOnDetailsPage) {
+            customerDetailsCache = null;
+            closeCustomerDetailsPage();
+        }
+        await loadContactsPage();
+    } catch (err) {
+        console.error('[API] submitDeleteContact error:', err);
+        errorBox.textContent = err.message || 'فشل مسح العميل';
     }
 }
 
@@ -6099,7 +6166,8 @@ function renderContacts() {
                </div>`
             : '';
         return `
-        <div class="contact-card" onclick="openCustomerDetails(${c.id})">
+        <div class="contact-card" style="position:relative" onclick="openCustomerDetails(${c.id})">
+            ${isOwnerOrAdmin() ? `<button class="st-icon-btn" style="position:absolute;top:10px;left:10px;color:var(--danger)" title="حذف العميل" onclick="event.stopPropagation(); openDeleteContactModal(${c.id}, '${escapeHtml(c.name || 'العميل').replace(/'/g, "\\'")}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>` : ''}
             <div class="contact-card-avatar">${customerAvatarHtml(c.name, 'contact-' + c.id, 52)}</div>
             <div><div class="contact-card-name">${escapeHtml(c.name || 'بدون اسم')}</div>${(c.phones || []).map(p => `<div class="contact-card-info">${escapeHtml(p.phone_number)}${p.label ? ' · ' + escapeHtml(p.label) : ''}</div>`).join('')}${badge}</div>
         </div>
@@ -6265,9 +6333,10 @@ async function openCustomerDetails(contactId) {
         renderCustomerDetailsPhones(c);
         renderCustomerDetailsStats(c);
 
-        // زرار التعديل وزرار إضافة عقد صيانة بيظهروا للأدمن/الأونر بس
+        // زرار التعديل وزرار إضافة عقد صيانة وزرار حذف العميل بيظهروا للأدمن/الأونر بس
         document.getElementById('customer-details-edit-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
         document.getElementById('customer-details-add-contract-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
+        document.getElementById('customer-details-delete-btn').style.display = isOwnerOrAdmin() ? '' : 'none';
 
         switchCustomerDetailsTab('visits');
         navigateTo('customer-details');
@@ -7847,6 +7916,31 @@ async function iwDeleteInbox(id) {
         </div>
 
         <div class="login-error" id="delete-agent-error" style="color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center"></div>
+    </div>
+</div>
+
+<div class="resolve-overlay" id="delete-contact-overlay" onclick="closeDeleteContactModal(event)">
+    <div class="resolve-modal" id="delete-contact-modal">
+        <div class="resolve-modal-header">
+            <div class="resolve-modal-icon" style="background:rgba(239,68,68,0.12);color:var(--danger)">
+                <i data-lucide="trash-2" style="width:22px;height:22px"></i>
+            </div>
+            <div class="resolve-modal-title">مسح العميل</div>
+        </div>
+        <div class="resolve-modal-sub">هتمسح <strong id="delete-contact-name"></strong> نهائيًا بكل تفاصيله (المحادثات، الرسايل، الأجهزة، الزيارات، عقود الصيانة...). الإجراء ده نهائي ومش هينفع تتراجع عنه. اكتب كلمة سرك الشخصية عشان تأكد.</div>
+
+        <div class="resolve-cats-label">كلمة سرك الشخصية</div>
+        <input type="password" class="iw-input" id="delete-contact-password" placeholder="••••••••" style="margin-bottom:6px">
+
+        <div class="resolve-modal-actions">
+            <button class="resolve-cancel-btn" onclick="closeDeleteContactModal()">إلغاء</button>
+            <button class="resolve-confirm-btn" id="delete-contact-confirm-btn" onclick="submitDeleteContact()" style="background:var(--danger)">
+                <i data-lucide="trash-2" style="width:16px;height:16px"></i>
+                تأكيد المسح
+            </button>
+        </div>
+
+        <div class="login-error" id="delete-contact-error" style="color:var(--danger);font-size:12.5px;margin-top:10px;text-align:center"></div>
     </div>
 </div>
 

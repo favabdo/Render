@@ -4,6 +4,7 @@ const conversationRepo = require('../repositories/conversation.repo');
 const contactService = require('../services/contact.service');
 const webhookDispatchService = require('../services/webhookDispatch.service');
 const userRepo = require('../repositories/user.repo');
+const notificationService = require('../services/notification.service');
 const logger = require('../utils/logger');
 
 // كل الكونتاكتس الحقيقيين (لصفحة Contacts، وكمان لاختيار "اربط بكونتاكت موجود")
@@ -190,6 +191,48 @@ async function unlinkPhone(req, res) {
   res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
 }
 
+// مسح عميل نهائيًا بكل تفاصيله (محادثاته، رسايله، أجهزته، تاسكاته، زياراته،
+// عقود الصيانة بتاعته...) — أدمن بس (متأكد منها في الراوت بـ requireAdmin)،
+// وكمان لازم يأكد بكلمة سره الشخصية (مش كلمة سر حد تاني) زي بالظبط منطق مسح
+// الإيجنت في auth.controller.deleteUserAccount
+async function deleteContact(req, res) {
+  const { password } = req.body || {};
+
+  if (!password) {
+    return res.status(400).json({ error: 'لازم تأكد بكلمة سرك الشخصية عشان تمسح العميل ده' });
+  }
+
+  const contact = await contactRepo.getContactByIdWithPhones(req.params.id);
+  if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const actingUser = await userRepo.findUserByEmail(req.user.email);
+  if (!actingUser) {
+    return res.status(401).json({ error: 'الجلسة غير صالحة، سجل دخول تاني' });
+  }
+
+  const validPassword = await userRepo.verifyPassword(password, actingUser.password);
+  if (!validPassword) {
+    return res.status(401).json({ error: 'كلمة السر غلط' });
+  }
+
+  const deleted = await contactRepo.deleteContactCompletely(req.params.id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'العميل مش موجود أو تم مسحه بالفعل' });
+  }
+
+  const io = req.app.get('io');
+  if (io) io.emit('contact_deleted', { id: deleted.id });
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_DELETED, {
+    contact_id: deleted.id,
+    name: deleted.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_deleted:', err.message));
+
+  res.json({ ok: true });
+
+  notificationService.logActivity(req, `مسح العميل ${deleted.name} نهائيًا بكل تفاصيله`, deleted.id);
+}
+
 module.exports = {
   listContacts,
   listContactsPaginated,
@@ -201,4 +244,5 @@ module.exports = {
   unlinkPhone,
   createCustomerCard,
   updateCustomerCard,
+  deleteContact,
 };

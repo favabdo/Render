@@ -24,4 +24,7 @@ router.post('/api/conversations/:id/contact', asyncHandler(contactController.lin
 router.post('/api/contacts/customer-card', requireAdmin, asyncHandler(contactController.createCustomerCard));
 router.patch('/api/contacts/:id/customer-card', requireAdmin, asyncHandler(contactController.updateCustomerCard));
 
+// مسح عميل نهائيًا بكل تفاصيله (محادثات، رسايل، أجهزة، تاسكات، زيارات، عقود...) — أدمن بس + تأكيد كلمة السر
+router.delete('/api/contacts/:id', requireAdmin, asyncHandler(contactController.deleteContact));
+
 module.exports = router;

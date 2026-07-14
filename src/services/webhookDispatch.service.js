@@ -18,6 +18,7 @@ const EVENT_TYPES = {
   WEBWIDGET_TRIGGERED: 'webwidget_triggered',                   // فتح ويدجت الشات (مش متاحة فعليًا حاليًا — واتساب بس)
   CONTACT_CREATED: 'contact_created',                           // كونتاكت جديد اتسجل
   CONTACT_UPDATED: 'contact_updated',                           // بيانات كونتاكت اتعدلت
+  CONTACT_DELETED: 'contact_deleted',                           // عميل اتمسح نهائيًا بكل تفاصيله
 };
 
 const ALL_EVENT_TYPES = Object.values(EVENT_TYPES);
