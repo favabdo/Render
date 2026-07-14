@@ -8755,20 +8755,19 @@ async function saveTeamMembers() {
 
         <!-- Post-Resolve Rating فقط: 4 رسائل منفصلة (تقييم المشكلة / تقييم الإيجنت / طلب تعليق / شكر) -->
         <div id="automation-rating-field" style="display:none">
-            <div class="resolve-cats-label">1) رسالة تقييم حل المشكلة (نجوم 1-5)</div>
+            <div class="resolve-cats-label">1) رسالة تقييم حل المشكلة (يختارها العميل من قايمة 1-5)</div>
             <textarea class="resolve-notes" id="automation-rating-issue-input" style="min-height:80px;margin-bottom:12px" maxlength="4000" placeholder="شكرًا لتواصلك معانا 🙏
-من فضلك قيّم مدى رضاك عن حل المشكلة من 1 لـ 5 (ابعت رقم من 1 لـ 5):
-1 = غير راضي خالص … 5 = راضي جدًا"></textarea>
+من فضلك قيّم مدى رضاك عن حل المشكلة — اختار تقييمك من القايمة تحت 👇"></textarea>
 
-            <div class="resolve-cats-label">2) رسالة تقييم ممثل خدمة العملاء (نجوم 1-5)</div>
-            <textarea class="resolve-notes" id="automation-rating-agent-input" style="min-height:70px;margin-bottom:12px" maxlength="4000" placeholder="تمام، شكرًا ليك! دلوقتي قيّم ممثل خدمة العملاء اللي اتعامل معاك من 1 لـ 5 (ابعت رقم من 1 لـ 5)"></textarea>
+            <div class="resolve-cats-label">2) رسالة تقييم ممثل خدمة العملاء (يختارها العميل من قايمة 1-5)</div>
+            <textarea class="resolve-notes" id="automation-rating-agent-input" style="min-height:70px;margin-bottom:12px" maxlength="4000" placeholder="تمام، شكرًا ليك! دلوقتي قيّم ممثل خدمة العملاء اللي اتعامل معاك — اختار تقييمك من القايمة تحت 👇"></textarea>
 
-            <div class="resolve-cats-label">3) رسالة طلب تعليق نصي (اختياري)</div>
-            <textarea class="resolve-notes" id="automation-rating-feedback-input" style="min-height:70px;margin-bottom:12px" maxlength="4000" placeholder="لو حابب تسيبلنا أي تعليق أو ملاحظة تساعدنا نتحسن، اكتبها دلوقتي. أو ابعت &quot;تخطي&quot; لو مش حابب تضيف تعليق"></textarea>
+            <div class="resolve-cats-label">3) رسالة طلب تعليق نصي (فيها زرار "تخطي" جاهز)</div>
+            <textarea class="resolve-notes" id="automation-rating-feedback-input" style="min-height:70px;margin-bottom:12px" maxlength="4000" placeholder="لو حابب تسيبلنا أي تعليق أو ملاحظة تساعدنا نتحسن، اكتبها دلوقتي. أو دوس &quot;تخطي&quot; لو مش حابب تضيف تعليق"></textarea>
 
             <div class="resolve-cats-label">رسالة الشكر بعد التقييم</div>
             <textarea class="resolve-notes" id="automation-rating-thanks-input" style="min-height:70px;margin-bottom:6px" maxlength="4000" placeholder="شكرًا جدًا لوقتك وتقييمك، ده بيساعدنا نقدملك خدمة أحسن 🌟"></textarea>
-            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">سيب أي حقل فاضي عشان يتبعت النص الافتراضي الموضّح كـ placeholder.</div>
+            <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px">تقييم المشكلة وتقييم الإيجنت بيتبعتوا كقايمة اختيار (☆ 1 لـ 5) يضغط عليها العميل، ورسالة التعليق بتتبعت مع زرار "تخطي" جاهز — العميل برضه يقدر يرد بالكتابة العادية بدل الضغط لو حب. سيب أي حقل فاضي عشان يتبعت النص الافتراضي الموضّح كـ placeholder.</div>
         </div>
 
         <div class="resolve-modal-actions">

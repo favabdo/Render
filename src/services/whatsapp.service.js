@@ -124,6 +124,106 @@ async function sendTextMessage(toNumber, text, conversationId = null, inboxId = 
   return deliverOutgoingMessage(saved, { toNumber, text, inboxId });
 }
 
+// ===== رسائل تفاعلية (أزرار / قايمة اختيار) =====
+// بتتسجل في الداتابيز بنفس شكل رسالة نصية عادية (message_type: 'text',
+// message_text = نص الجسم) عشان تتعرض عادي في لوحة التحكم من غير أي تعديل في
+// الفرونت إند — الجزء التفاعلي (الأزرار/القايمة) بيتبعت لواتساب بس، مش بيتخزن
+// كعنصر منفصل. العميل برضه يقدر يرد بالكتابة العادية بدل ما يضغط على أي اختيار.
+
+/**
+ * بترسل رسالة "قايمة اختيار" (List Message) لواتساب — مناسبة لتقييم النجوم
+ * (1 لـ 5) عشان العميل يختار رقم بالضغط بدل ما يكتبه بنفسه.
+ */
+async function deliverOutgoingInteractiveMessage(savedMessage, { toNumber, interactive, inboxId }, onFinalized) {
+  let finalRow;
+  try {
+    const { phoneNumberId, accessToken } = await resolveCredentials(inboxId);
+    if (!phoneNumberId || !accessToken) {
+      throw new Error('مفيش بيانات اعتماد واتساب متاحة — ضيف Inbox من الإعدادات أو اضبط متغيرات الـ .env');
+    }
+
+    const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`;
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: toNumber,
+      type: 'interactive',
+      interactive,
+    };
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const waMessageId = response.data?.messages?.[0]?.id || null;
+    finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, {
+      waMessageId,
+      status: waMessageId ? 'sent' : 'failed',
+    });
+  } catch (err) {
+    logger.error('❌ فشل إرسال رسالة تفاعلية لواتساب:', err.response?.data?.error?.message || err.message);
+    finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, { status: 'failed' });
+  }
+  if (onFinalized) onFinalized(finalRow);
+  return finalRow;
+}
+
+// شكل قايمة اختيار نجوم من 1 لـ 5 (List Message برو واحد فيه 5 صفوف) — العميل
+// بيضغط على تقييمه بدل ما يكتب رقم بنفسه (بيفضل برضه يقدر يكتب رقم عادي لو حب)
+function buildStarRatingListInteractive(bodyText) {
+  return {
+    type: 'list',
+    body: { text: bodyText },
+    action: {
+      button: 'اختار تقييمك',
+      sections: [
+        {
+          title: 'التقييم من 1 لـ 5',
+          rows: [
+            { id: 'rating_1', title: '⭐ 1 نجمة' },
+            { id: 'rating_2', title: '⭐⭐ 2 نجوم' },
+            { id: 'rating_3', title: '⭐⭐⭐ 3 نجوم' },
+            { id: 'rating_4', title: '⭐⭐⭐⭐ 4 نجوم' },
+            { id: 'rating_5', title: '⭐⭐⭐⭐⭐ 5 نجوم' },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+// شكل رسالة فيها زرار واحد بس ("تخطي") جنب النص — العميل يقدر يدوس عليه عشان
+// يتخطى فورًا من غير ما يكتب حاجة، أو يفضل يكتب تعليقه عادي بالكتابة
+function buildSkippableTextInteractive(bodyText, skipLabel = 'تخطي') {
+  return {
+    type: 'button',
+    body: { text: bodyText },
+    action: {
+      buttons: [{ type: 'reply', reply: { id: 'feedback_skip', title: skipLabel } }],
+    },
+  };
+}
+
+async function sendStarRatingMessage(toNumber, bodyText, conversationId = null, inboxId = null, sender = null) {
+  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender);
+  return deliverOutgoingInteractiveMessage(saved, {
+    toNumber,
+    interactive: buildStarRatingListInteractive(bodyText),
+    inboxId,
+  });
+}
+
+async function sendSkippableTextMessage(toNumber, bodyText, conversationId = null, inboxId = null, sender = null, skipLabel = 'تخطي') {
+  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender);
+  return deliverOutgoingInteractiveMessage(saved, {
+    toNumber,
+    interactive: buildSkippableTextInteractive(bodyText, skipLabel),
+    inboxId,
+  });
+}
+
 // ===== وسائط (صور / فيديوهات / صوتيات / مستندات) =====
 
 /**
@@ -333,6 +433,8 @@ async function verifyWhatsappCredentials({ phoneNumber, phoneNumberId, accessTok
 
 module.exports = {
   sendTextMessage,
+  sendStarRatingMessage,
+  sendSkippableTextMessage,
   createOutgoingMessage,
   deliverOutgoingMessage,
   verifyWhatsappCredentials,

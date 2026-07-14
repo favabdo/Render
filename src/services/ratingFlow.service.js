@@ -16,11 +16,11 @@ const whatsappService = require('../services/whatsapp.service');
 const logger = require('../utils/logger');
 
 const DEFAULT_ISSUE_MESSAGE =
-  'شكرًا لتواصلك معانا 🙏\nمن فضلك قيّم مدى رضاك عن حل المشكلة من 1 لـ 5 (ابعت رقم من 1 لـ 5):\n1 = غير راضي خالص … 5 = راضي جدًا';
+  'شكرًا لتواصلك معانا 🙏\nمن فضلك قيّم مدى رضاك عن حل المشكلة — اختار تقييمك من القايمة تحت 👇';
 const DEFAULT_AGENT_MESSAGE =
-  'تمام، شكرًا ليك! دلوقتي قيّم ممثل خدمة العملاء اللي اتعامل معاك من 1 لـ 5 (ابعت رقم من 1 لـ 5)';
+  'تمام، شكرًا ليك! دلوقتي قيّم ممثل خدمة العملاء اللي اتعامل معاك — اختار تقييمك من القايمة تحت 👇';
 const DEFAULT_FEEDBACK_MESSAGE =
-  'لو حابب تسيبلنا أي تعليق أو ملاحظة تساعدنا نتحسن، اكتبها دلوقتي. أو ابعت "تخطي" لو مش حابب تضيف تعليق';
+  'لو حابب تسيبلنا أي تعليق أو ملاحظة تساعدنا نتحسن، اكتبها دلوقتي. أو دوس "تخطي" لو مش حابب تضيف تعليق';
 const DEFAULT_THANKS_MESSAGE = 'شكرًا جدًا لوقتك وتقييمك، ده بيساعدنا نقدملك خدمة أحسن 🌟';
 
 const SKIP_KEYWORDS = ['تخطي', 'لا', 'skip', 'no', 'مفيش', 'خلاص'];
@@ -48,13 +48,47 @@ function isSkipReply(text) {
   return SKIP_KEYWORDS.some((k) => normalized === k || normalized.startsWith(k));
 }
 
-async function sendFlowMessage(pending, text, io) {
+async function sendPlainFlowMessage(pending, text, io) {
   const message = await whatsappService.sendTextMessage(
     pending.contact_number,
     text,
     pending.conversation_id,
     pending.inbox_id,
     { id: null, name: 'Automation' }
+  );
+  await conversationRepo.touchConversation(pending.conversation_id);
+  if (io && message) {
+    io.emit('new_message', { conversationId: pending.conversation_id, message });
+  }
+  return message;
+}
+
+// بيبعت سؤال تقييم كقايمة اختيار (1 لـ 5) بدل ما يسيب العميل يكتب الرقم بنفسه
+async function sendStarRatingFlowMessage(pending, text, io) {
+  const message = await whatsappService.sendStarRatingMessage(
+    pending.contact_number,
+    text,
+    pending.conversation_id,
+    pending.inbox_id,
+    { id: null, name: 'Automation' }
+  );
+  await conversationRepo.touchConversation(pending.conversation_id);
+  if (io && message) {
+    io.emit('new_message', { conversationId: pending.conversation_id, message });
+  }
+  return message;
+}
+
+// بيبعت سؤال التعليق النصي مع زرار "تخطي" — العميل يقدر يدوس تخطي فورًا من غير
+// ما يكتب حاجة، أو يفضل يكتب تعليقه عادي بالكتابة
+async function sendSkippableFlowMessage(pending, text, io) {
+  const message = await whatsappService.sendSkippableTextMessage(
+    pending.contact_number,
+    text,
+    pending.conversation_id,
+    pending.inbox_id,
+    { id: null, name: 'Automation' },
+    'تخطي'
   );
   await conversationRepo.touchConversation(pending.conversation_id);
   if (io && message) {
@@ -82,7 +116,7 @@ async function startRatingFlow(conversation, io) {
   });
 
   const message = resolveMessage(settings.rating_issue_message, DEFAULT_ISSUE_MESSAGE);
-  await sendFlowMessage(pending, message, io);
+  await sendStarRatingFlowMessage(pending, message, io);
 }
 
 // بتتنادى مع أي رسالة واردة من رقم عنده طلب تقييم لسه مفتوح — بترجع true لو
@@ -93,24 +127,24 @@ async function handleIncomingRatingReply(pending, text, io) {
   if (pending.stage === 'awaiting_issue_rating') {
     const rating = parseStarRating(text);
     if (rating === null) {
-      await sendFlowMessage(pending, 'من فضلك ابعت رقم من 1 لـ 5 بس 🙏', io);
+      await sendStarRatingFlowMessage(pending, 'من فضلك اختار تقييم من 1 لـ 5 من القايمة تحت 🙏', io);
       return true;
     }
     const updated = await ratingRepo.setIssueRatingAndAdvance(pending.id, rating);
     const message = resolveMessage(settings?.rating_agent_message, DEFAULT_AGENT_MESSAGE);
-    await sendFlowMessage(updated, message, io);
+    await sendStarRatingFlowMessage(updated, message, io);
     return true;
   }
 
   if (pending.stage === 'awaiting_agent_rating') {
     const rating = parseStarRating(text);
     if (rating === null) {
-      await sendFlowMessage(pending, 'من فضلك ابعت رقم من 1 لـ 5 بس 🙏', io);
+      await sendStarRatingFlowMessage(pending, 'من فضلك اختار تقييم من 1 لـ 5 من القايمة تحت 🙏', io);
       return true;
     }
     const updated = await ratingRepo.setAgentRatingAndAdvance(pending.id, rating);
     const message = resolveMessage(settings?.rating_feedback_message, DEFAULT_FEEDBACK_MESSAGE);
-    await sendFlowMessage(updated, message, io);
+    await sendSkippableFlowMessage(updated, message, io);
     return true;
   }
 
@@ -118,7 +152,7 @@ async function handleIncomingRatingReply(pending, text, io) {
     const feedbackText = isSkipReply(text) ? null : String(text || '').trim() || null;
     const updated = await ratingRepo.completeWithFeedback(pending.id, feedbackText);
     const message = resolveMessage(settings?.rating_thanks_message, DEFAULT_THANKS_MESSAGE);
-    await sendFlowMessage(updated, message, io);
+    await sendPlainFlowMessage(updated, message, io);
     logger.info(
       `⭐ تقييم مكتمل لمحادثة #${pending.conversation_id}: حل=${updated.issue_rating}, إيجنت=${updated.agent_rating}, تعليق=${updated.feedback_text ? 'موجود' : 'متخطّى'}`
     );
