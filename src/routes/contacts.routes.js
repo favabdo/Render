@@ -16,6 +16,7 @@ router.get('/api/contacts-paginated', asyncHandler(contactController.listContact
 router.get('/api/contacts/:id', asyncHandler(contactController.getContact));
 router.get('/api/contacts/:id/conversations', asyncHandler(contactController.getContactConversations));
 router.patch('/api/contacts/:id', asyncHandler(contactController.updateContact));
+router.post('/api/contacts/:id/phones', asyncHandler(contactController.addPhone));
 router.patch('/api/contacts/:id/phones', asyncHandler(contactController.updatePhoneLabel));
 router.post('/api/contacts/:id/phones/unlink', asyncHandler(contactController.unlinkPhone));
 router.post('/api/conversations/:id/contact', asyncHandler(contactController.linkConversationContact));

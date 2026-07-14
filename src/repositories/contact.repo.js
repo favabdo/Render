@@ -100,6 +100,35 @@ async function getPhonesForContact(contactId) {
   return result.recordset.map((r) => ({ phone_number: r.phone_number, label: r.label || null }));
 }
 
+// بيضيف رقم تليفون جديد لكونتاكت موجود بالفعل (زرار "إضافة رقم" في صفحة تفاصيل
+// العميل / المحادثة) — من غير ما يمسح أو يأثر على الأرقام التانية بتاعته.
+// بيرجع { error: 'phone_taken' } لو الرقم ده أصلاً مرتبط بكونتاكت تاني (نفس
+// الكونتاكت أو غيره)، عشان الكنترولر يرجع رسالة واضحة بدل ما السيرفر يقع بإيرور
+// قاعدة بيانات (unique constraint) لو موجود
+async function addPhoneToContact(contactId, phoneNumber) {
+  const pool = await getPool();
+
+  const existing = await pool
+    .request()
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .query(`SELECT contact_id FROM [dbo].[NileChat_ContactPhones_byA] WHERE phone_number = @phone`);
+
+  if (existing.recordset.length > 0) {
+    return { error: 'phone_taken' };
+  }
+
+  await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .query(`
+      INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
+      VALUES (@contactId, @phone)
+    `);
+
+  return { contact: await getContactByIdWithPhones(contactId) };
+}
+
 // بنسمي رقم معين بتاع الكونتاكت ده (مثلاً "الشغل" أو "الرقم الشخصي") — مفيد لما يبقى
 // عنده أكتر من رقم واحد، مع إن كل الأرقام برضه بتفضل تحت نفس اسم العميل
 async function updatePhoneLabel(contactId, phoneNumber, label) {
@@ -582,6 +611,7 @@ module.exports = {
   getContactByIdWithCurrentContract,
   getContactByIdWithPhones,
   getPhonesForContact,
+  addPhoneToContact,
   updatePhoneLabel,
   listContacts,
   listContactsPage,

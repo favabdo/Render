@@ -72,6 +72,30 @@ async function updateContact(req, res) {
   res.json({ ok: true, contact });
 }
 
+// بيضيف رقم تليفون جديد لعميل موجود بالفعل (زرار "إضافة رقم" في صفحة تفاصيل
+// العميل أو جوه المحادثة نفسها)
+async function addPhone(req, res) {
+  const { phone } = req.body || {};
+  const trimmedPhone = (phone || '').trim();
+  if (!trimmedPhone) return res.status(400).json({ error: 'لازم تبعت رقم التليفون' });
+
+  const result = await contactRepo.addPhoneToContact(req.params.id, trimmedPhone);
+  if (result.error === 'phone_taken') {
+    return res.status(409).json({ error: 'الرقم ده مرتبط بعميل بالفعل' });
+  }
+  if (!result.contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
+
+  const io = req.app.get('io');
+  if (io) io.emit('contact_updated', result.contact);
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: result.contact.id,
+    name: result.contact.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
+  res.status(201).json({ ok: true, contact: result.contact });
+}
+
 // بنحط/بنعدّل ليبل على رقم معين بتاع الكونتاكت ده (مفيد لو عنده أكتر من رقم واحد،
 // مثلاً "الشغل" أو "الرقم الشخصي") — الرقم برضه بيفضل تحت نفس اسم العميل
 async function updatePhoneLabel(req, res) {
@@ -260,6 +284,7 @@ module.exports = {
   getContact,
   getContactConversations,
   updateContact,
+  addPhone,
   updatePhoneLabel,
   linkConversationContact,
   unlinkPhone,
