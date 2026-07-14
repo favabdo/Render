@@ -930,7 +930,8 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
             <div class="settings-top-row"><div><h2>Automation</h2><div class="settings-top-desc">Rules that act automatically on conversations</div></div><button class="page-btn"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Rule</button></div>
             <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(108,92,231,0.1);color:var(--primary)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Auto-assign new WhatsApp conversations</div><div class="rule-row-desc">When conversation is created → Assign to Tech Support team</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
             <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(245,158,11,0.1);color:var(--warning)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Tag billing keywords</div><div class="rule-row-desc">When message contains "فاتورة" or "دفع" → Add label Billing</div></div></div><div class="rule-row-right"><button class="toggle on" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
-            <div class="rule-row"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="workflow" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">Send CSAT after resolution</div><div class="rule-row-desc">When conversation is resolved → Send satisfaction survey</div></div></div><div class="rule-row-right"><button class="toggle" onclick="this.classList.toggle('on')"></button><button class="st-icon-btn"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
+            <div class="rule-row" id="rule-row-rating"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(16,185,129,0.1);color:var(--success)"><i data-lucide="star" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">تقييم بعد الحل (Post-Resolve Rating)</div><div class="rule-row-desc" id="rule-desc-rating">لما محادثة تتقفل (Resolve) → يتبعت تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري</div></div></div><div class="rule-row-right"><button class="toggle" id="rule-toggle-rating" onclick="toggleAutomationRule('rating', this)"></button><button class="st-icon-btn" onclick="openRuleModal('rating')" title="Edit rule"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
+            <div class="rule-row" id="rule-row-contractExpired"><div class="rule-row-left"><div class="rule-row-icon" style="background:rgba(239,68,68,0.1);color:var(--danger, #ef4444)"><i data-lucide="calendar-x" style="width:18px;height:18px"></i></div><div><div class="rule-row-title">عقد الصيانة منتهي</div><div class="rule-row-desc" id="rule-desc-contractExpired">لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → يتبعتله رسالة أتمتة مرة واحدة</div></div></div><div class="rule-row-right"><button class="toggle" id="rule-toggle-contractExpired" onclick="toggleAutomationRule('contractExpired', this)"></button><button class="st-icon-btn" onclick="openRuleModal('contractExpired')" title="Edit rule"><i data-lucide="pencil" style="width:14px;height:14px"></i></button></div></div>
         </div>
         </div>
 
@@ -1242,6 +1243,171 @@ function navigateSettingsSection(section, el) {
     lucide.createIcons();
 
     if (section === 'teams') loadTeams();
+    if (section === 'automation') loadAutomationSettings();
+}
+
+/* ===== Automation Rules (تقييم بعد الحل / عقد الصيانة منتهي) ===== */
+let automationSettings = null;
+let currentRuleKind = null;
+
+const AUTOMATION_RULE_DEFAULTS = {
+    rating: {
+        issue: 'شكرًا لتواصلك معانا 🙏\nمن فضلك قيّم مدى رضاك عن حل المشكلة من 1 لـ 5 (ابعت رقم من 1 لـ 5):\n1 = غير راضي خالص … 5 = راضي جدًا',
+        agent: 'تمام، شكرًا ليك! دلوقتي قيّم ممثل خدمة العملاء اللي اتعامل معاك من 1 لـ 5 (ابعت رقم من 1 لـ 5)',
+        feedback: 'لو حابب تسيبلنا أي تعليق أو ملاحظة تساعدنا نتحسن، اكتبها دلوقتي. أو ابعت "تخطي" لو مش حابب تضيف تعليق',
+        thanks: 'شكرًا جدًا لوقتك وتقييمك، ده بيساعدنا نقدملك خدمة أحسن 🌟',
+    },
+    contractExpired: {
+        message: 'عزيزي العميل، عقد الصيانة الخاص بيك انتهى. للتجديد وضمان استمرار الخدمة، برجاء التواصل معانا 🙏',
+    },
+};
+
+async function loadAutomationSettings() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/company/automation-settings`);
+        if (!res.ok) throw new Error('Failed to load automation settings');
+        automationSettings = await res.json();
+        renderAutomationRuleRow('rating', automationSettings.rating_enabled, buildRatingRuleDesc());
+        renderAutomationRuleRow('contractExpired', automationSettings.contract_expired_enabled, buildContractExpiredRuleDesc());
+    } catch (err) {
+        console.error('[API] loadAutomationSettings error:', err);
+        showToast('فشل تحميل إعدادات الأتمتة', 'error');
+    }
+}
+
+function buildRatingRuleDesc() {
+    return 'لما محادثة تتقفل (Resolve) → يتبعت تقييم نجوم لحل المشكلة + تقييم نجوم لممثل الدعم + تعليق نصي اختياري';
+}
+
+function buildContractExpiredRuleDesc() {
+    const msg = (automationSettings && automationSettings.contract_expired_message) || AUTOMATION_RULE_DEFAULTS.contractExpired.message;
+    const preview = msg.length > 70 ? msg.slice(0, 70) + '…' : msg;
+    return `لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → «${preview}»`;
+}
+
+function renderAutomationRuleRow(kind, enabled, descText) {
+    const toggle = document.getElementById('rule-toggle-' + kind);
+    const desc = document.getElementById('rule-desc-' + kind);
+    if (toggle) toggle.classList.toggle('on', Boolean(enabled));
+    if (desc) desc.textContent = descText;
+}
+
+// بيبعت PATCH بحقل واحد بس (enable/disable)، وبيرجّع الزرار لحالته القديمة لو فشل
+async function toggleAutomationRule(kind, btn) {
+    if (!automationSettings) return;
+    const enabledKey = kind === 'rating' ? 'rating_enabled' : 'contract_expired_enabled';
+    const willEnable = !btn.classList.contains('on');
+
+    // التفعيل لازم يكون فيه رسالة "عقد الصيانة منتهي" متسجلة الأول (نفس شرط الباك إند)
+    if (kind === 'contractExpired' && willEnable && !automationSettings.contract_expired_message) {
+        showToast('لازم تكتب رسالة "عقد الصيانة منتهي" الأول قبل التفعيل', 'error');
+        openRuleModal('contractExpired');
+        return;
+    }
+
+    btn.classList.toggle('on');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/company/automation-settings`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [enabledKey]: willEnable }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update rule');
+        automationSettings = data;
+        showToast(willEnable ? 'اتفعّلت القاعدة' : 'اتوقفت القاعدة', 'success');
+    } catch (err) {
+        console.error('[API] toggleAutomationRule error:', err);
+        btn.classList.toggle('on'); // رجّع الزرار لحالته القديمة
+        showToast(err.message || 'فشل تحديث القاعدة', 'error');
+    }
+}
+
+function openRuleModal(kind) {
+    if (!automationSettings) return;
+    currentRuleKind = kind;
+    const fieldsBox = document.getElementById('rule-modal-fields');
+    const title = document.getElementById('rule-modal-title');
+
+    if (kind === 'rating') {
+        title.textContent = 'تقييم بعد الحل (Post-Resolve Rating)';
+        fieldsBox.innerHTML = `
+            <div class="team-field">
+                <label>1) رسالة تقييم حل المشكلة (نجوم 1-5)</label>
+                <textarea id="rule-input-rating_issue_message" placeholder="${AUTOMATION_RULE_DEFAULTS.rating.issue}" maxlength="4000">${automationSettings.rating_issue_message || ''}</textarea>
+            </div>
+            <div class="team-field">
+                <label>2) رسالة تقييم ممثل خدمة العملاء (نجوم 1-5)</label>
+                <textarea id="rule-input-rating_agent_message" placeholder="${AUTOMATION_RULE_DEFAULTS.rating.agent}" maxlength="4000">${automationSettings.rating_agent_message || ''}</textarea>
+            </div>
+            <div class="team-field">
+                <label>3) رسالة طلب تعليق نصي (اختياري)</label>
+                <textarea id="rule-input-rating_feedback_message" placeholder="${AUTOMATION_RULE_DEFAULTS.rating.feedback}" maxlength="4000">${automationSettings.rating_feedback_message || ''}</textarea>
+            </div>
+            <div class="team-field">
+                <label>رسالة الشكر بعد التقييم</label>
+                <textarea id="rule-input-rating_thanks_message" placeholder="${AUTOMATION_RULE_DEFAULTS.rating.thanks}" maxlength="4000">${automationSettings.rating_thanks_message || ''}</textarea>
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary)">سيب أي حقل فاضي عشان يتبعت النص الافتراضي الموضّح كـ placeholder.</div>
+        `;
+    } else if (kind === 'contractExpired') {
+        title.textContent = 'عقد الصيانة منتهي';
+        fieldsBox.innerHTML = `
+            <div class="team-field">
+                <label>الرسالة اللي هتتبعت للعميل (مرة واحدة بس لكل عقد)</label>
+                <textarea id="rule-input-contract_expired_message" placeholder="${AUTOMATION_RULE_DEFAULTS.contractExpired.message}" maxlength="4000">${automationSettings.contract_expired_message || ''}</textarea>
+            </div>
+        `;
+    }
+
+    document.getElementById('rule-overlay').classList.add('show');
+    lucide.createIcons();
+}
+
+function closeRuleModal() {
+    document.getElementById('rule-overlay').classList.remove('show');
+    currentRuleKind = null;
+}
+
+function closeRuleModalBg(e) {
+    if (e.target !== document.getElementById('rule-overlay')) return;
+    closeRuleModal();
+}
+
+async function saveRuleModal() {
+    if (!currentRuleKind) return;
+    const payload = {};
+
+    if (currentRuleKind === 'rating') {
+        payload.rating_issue_message = document.getElementById('rule-input-rating_issue_message').value.trim();
+        payload.rating_agent_message = document.getElementById('rule-input-rating_agent_message').value.trim();
+        payload.rating_feedback_message = document.getElementById('rule-input-rating_feedback_message').value.trim();
+        payload.rating_thanks_message = document.getElementById('rule-input-rating_thanks_message').value.trim();
+    } else if (currentRuleKind === 'contractExpired') {
+        payload.contract_expired_message = document.getElementById('rule-input-contract_expired_message').value.trim();
+    }
+
+    const saveBtn = document.getElementById('rule-save-btn');
+    saveBtn.disabled = true;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/company/automation-settings`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save rule');
+        automationSettings = data;
+        renderAutomationRuleRow('rating', automationSettings.rating_enabled, buildRatingRuleDesc());
+        renderAutomationRuleRow('contractExpired', automationSettings.contract_expired_enabled, buildContractExpiredRuleDesc());
+        closeRuleModal();
+        showToast('اتحفظت القاعدة بنجاح', 'success');
+    } catch (err) {
+        console.error('[API] saveRuleModal error:', err);
+        showToast(err.message || 'فشل حفظ القاعدة', 'error');
+    } finally {
+        saveBtn.disabled = false;
+    }
 }
 
 /* ===== تابات لوحة العميل ===== */
@@ -2068,6 +2234,21 @@ function confirmResolve() {
             <button class="team-save-btn" id="team-save-btn" onclick="saveTeam()">
                 <i data-lucide="check" style="width:16px;height:16px"></i>
                 Save Team
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Automation Rule Edit Modal (تقييم بعد الحل / عقد الصيانة منتهي) ===== -->
+<div class="team-overlay" id="rule-overlay" onclick="closeRuleModalBg(event)">
+    <div class="team-modal" id="rule-modal" style="max-width:520px">
+        <div class="team-modal-title" id="rule-modal-title">Edit Rule</div>
+        <div id="rule-modal-fields"></div>
+        <div class="team-modal-actions">
+            <button class="team-cancel-btn" onclick="closeRuleModal()">Cancel</button>
+            <button class="team-save-btn" id="rule-save-btn" onclick="saveRuleModal()">
+                <i data-lucide="check" style="width:16px;height:16px"></i>
+                Save
             </button>
         </div>
     </div>
