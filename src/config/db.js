@@ -175,6 +175,11 @@ async function ensureInboxesHaveExtraColumns() {
     { name: 'api_provider', def: `NVARCHAR(30) NOT NULL DEFAULT 'whatsapp_cloud'` },
     { name: 'phone_number', def: `NVARCHAR(30) NULL` },
     { name: 'business_account_id', def: `NVARCHAR(100) NULL` },
+    // الـ WhatsApp Flow بتاع "تقييم ما بعد الحل" (نجوم الحل + نجوم الإيجنت + تعليق
+    // نصي كلهم في رسالة واحدة) بيتعمله publish مرة واحدة لكل Inbox وبيتخزن الـ id
+    // بتاعه هنا عشان مانعملوش Flow جديد كل مرة — لو فاضي هيتعمل تلقائيًا أول مرة
+    // يحصل فيها Resolve مع تفعيل قاعدة التقييم
+    { name: 'rating_flow_id', def: `NVARCHAR(100) NULL` },
   ];
   for (const col of columns) {
     await pool.request().query(`

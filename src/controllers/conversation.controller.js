@@ -16,13 +16,24 @@ const logger = require('../utils/logger');
 // ===== المحادثات =====
 
 // المحادثة المقفولة (اتعمللها Resolve) مقفولة نهائيًا — أي إجراء عليها (رد/تعيين/
-// ملاحظة/Resolve تاني) ممنوع للأبد بغض النظر عن الـ status الحالي، حتى لو حصل عليها
-// Reopen قبل كده (الـ Reopen شكلي بس، غرضه إظهارها في قسم المفتوحة مش إعادة تفعيلها)
+// ملاحظة) ممنوع للأبد بغض النظر عن الـ status الحالي، حتى لو حصل عليها Reopen
+// قبل كده
 function isConversationLocked(conversation) {
   return Boolean(conversation && conversation.locked_at);
 }
 
+// استثناء واحد بس: لو المحادثة مقفولة بس اتعمللها Reopen (بيرجّع status لـ
+// 'open')، مسموح تتعمللها Resolve تاني — ده الفعل الوحيد المسموح على محادثة
+// مقفولة. أي محادثة مقفولة لسه من غير Reopen (status لسه 'closed') برضه ممنوع
+// تتعمللها Resolve تاني عادي
+function canResolveAgain(conversation) {
+  if (!isConversationLocked(conversation)) return true;
+  return conversation.status === 'open';
+}
+
 const LOCKED_ERROR = 'المحادثة دي مقفولة نهائيًا (اتعمللها Resolve قبل كده) — مينفعش يتعمل عليها أي إجراء تاني';
+const LOCKED_RESOLVE_ERROR =
+  'المحادثة دي مقفولة — لازم تعمل Reopen الأول قبل ما تقدر تعمل Resolve تاني عليها';
 
 async function listConversations(req, res) {
   const conversations = await conversationRepo.listConversations();
@@ -131,9 +142,14 @@ async function resolve(req, res) {
     userRepo.findUserById(req.user.userId),
   ]);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
-  if (isConversationLocked(conversation)) {
-    return res.status(409).json({ error: LOCKED_ERROR });
+  if (!canResolveAgain(conversation)) {
+    return res.status(409).json({ error: LOCKED_RESOLVE_ERROR });
   }
+
+  // لو locked_at كان متسجل خلاص قبل الطلب ده، يبقى ده مش أول Resolve (اتعمله
+  // بعد Reopen) — أتمتة "بعد الحل" (CSAT + فلو التقييم) اتبعتت خلاص أول مرة،
+  // فمينفعش تتبعت تاني هنا
+  const isFirstResolve = !conversation.locked_at;
 
   const actingName = actingUser ? userRepo.resolveDisplayName(actingUser) : 'إيجنت';
 
@@ -162,13 +178,16 @@ async function resolve(req, res) {
     notes: notes || null,
   }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
 
-  // قاعدة أتمتة "تقييم بعد الحل" (Post-Resolve Rating) — لو مفعّلة، بتبدأ فلو
-  // التقييم (نجوم لحل المشكلة -> نجوم لممثل خدمة العملاء -> تعليق نصي اختياري)
-  // فور ما المحادثة تتقفل. بتتنفذ بعد ما رجعنا الرد للإيجنت عشان مبتأخرش قفل
-  // المحادثة في الواجهة
-  ratingFlowService.startRatingFlow(updated, io).catch((err) => {
-    logger.error('❌ فشل بدء فلو تقييم ما بعد الحل:', err.message);
-  });
+  // أتمتة "بعد الحل" (رسالة CSAT ثم فلو التقييم ورا بعض) — بس أول مرة تتقفل
+  // فيها المحادثة فعليًا. لو ده Resolve تاني بعد Reopen، متبعتش تاني خالص.
+  // بتتنفذ بعد ما رجعنا الرد للإيجنت عشان مبتأخرش قفل المحادثة في الواجهة
+  if (isFirstResolve) {
+    ratingFlowService.runPostResolveAutomation(updated, io).catch((err) => {
+      logger.error('❌ فشل تنفيذ أتمتة ما بعد الحل (CSAT/تقييم):', err.message);
+    });
+  } else {
+    logger.info(`ℹ️ محادثة #${updated.id} اتعمللها Resolve تاني بعد Reopen — أتمتة "بعد الحل" متبعتش تاني`);
+  }
 }
 
 // لو حبيت ترجّع محادثة اتقفلت تفتح تاني (مثلاً العميل رجع يكلم)

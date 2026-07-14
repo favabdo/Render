@@ -22,6 +22,17 @@ async function getInboxById(id) {
   return result.recordset[0] || null;
 }
 
+// بتسجل الـ id بتاع WhatsApp Flow "تقييم ما بعد الحل" بعد ما يتعمله publish
+// مرة واحدة لهذا الـ Inbox، عشان مانعملوش Flow جديد كل مرة تتقفل فيها محادثة
+async function setRatingFlowId(inboxId, flowId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, inboxId)
+    .input('flowId', sql.NVarChar(100), flowId)
+    .query(`UPDATE [dbo].[NileChat_Inboxes_byA] SET rating_flow_id = @flowId WHERE id = @id`);
+}
+
 // بيدور على أول Inbox شغال (لسه مستخدم كـ default) — بيفيد وقت الترحيل من نظام قديم كان شغال بمتغيرات .env بس
 async function getDefaultActiveInbox() {
   const pool = await getPool();
@@ -152,6 +163,7 @@ async function setAgentsForInbox(inboxId, userIds) {
 module.exports = {
   listInboxes,
   getInboxById,
+  setRatingFlowId,
   getDefaultActiveInbox,
   findInboxByPhoneNumberId,
   findInboxByPhoneNumberIdExcluding,

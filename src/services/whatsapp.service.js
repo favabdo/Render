@@ -224,6 +224,169 @@ async function sendSkippableTextMessage(toNumber, bodyText, conversationId = nul
   });
 }
 
+// ===== WhatsApp Flow (رسالة تقييم "ما بعد الحل" الموحّدة) =====
+// بدل ما نبعت 3 رسايل متتالية (تقييم الحل -> تقييم الإيجنت -> تعليق نصي)، بنبعت
+// رسالة واحدة من نوع Flow فيها الاتنين + خانة تعليق اختيارية وزرار إرسال واحد —
+// العميل بيملاها كفورم جوه واتساب نفسه وبيرجعلنا كل حاجة سوا في رد واحد.
+// ده محتاج WhatsApp Flow متعمله publish مسبقًا على مستوى الـ WABA بتاعة الـ Inbox
+// (getOrCreateRatingFlowId بتعمل ده تلقائيًا أول مرة وتخزن الـ id في الـ Inbox)
+
+// شاشة الفورم نفسها: عنوانين (تقييم حل المشكلة / تقييم الإيجنت) وتحت كل واحد
+// قايمة اختيار نجوم من 1 لـ 5، وتحتهم خانة تعليق نصي اختيارية، وزرار إرسال
+function buildRatingFlowJson() {
+  const starOptions = [
+    { id: '1', title: '⭐ 1 نجمة' },
+    { id: '2', title: '⭐⭐ 2 نجوم' },
+    { id: '3', title: '⭐⭐⭐ 3 نجوم' },
+    { id: '4', title: '⭐⭐⭐⭐ 4 نجوم' },
+    { id: '5', title: '⭐⭐⭐⭐⭐ 5 نجوم' },
+  ];
+
+  return {
+    version: '6.3',
+    screens: [
+      {
+        id: 'RATING',
+        title: 'تقييم الخدمة',
+        terminal: true,
+        success: true,
+        data: {},
+        layout: {
+          type: 'SingleColumnLayout',
+          children: [
+            {
+              type: 'Form',
+              name: 'rating_form',
+              children: [
+                { type: 'TextHeading', text: 'تقييم حل المشكلة' },
+                {
+                  type: 'RadioButtonsGroup',
+                  name: 'issue_rating',
+                  label: 'قيّم مدى رضاك عن حل المشكلة',
+                  required: true,
+                  'data-source': starOptions,
+                },
+                { type: 'TextHeading', text: 'تقييم الإيجنت' },
+                {
+                  type: 'RadioButtonsGroup',
+                  name: 'agent_rating',
+                  label: 'قيّم ممثل خدمة العملاء اللي اتعامل معاك',
+                  required: true,
+                  'data-source': starOptions,
+                },
+                {
+                  type: 'TextArea',
+                  name: 'feedback_text',
+                  label: 'إرسال تعليق إضافي (اختياري)',
+                  required: false,
+                },
+                {
+                  type: 'Footer',
+                  label: 'إرسال',
+                  'on-click-action': {
+                    name: 'complete',
+                    payload: {
+                      issue_rating: '${form.issue_rating}',
+                      agent_rating: '${form.agent_rating}',
+                      feedback_text: '${form.feedback_text}',
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+// بيانات اعتماد "إدارية" (WABA id + توكن) لازمة لإنشاء/نشر الـ Flow — غير
+// بيانات الإرسال العادية لأنها محتاجة صلاحية whatsapp_business_management على
+// التوكن، مش whatsapp_business_messaging بس
+async function resolveManagementCredentials(inboxId) {
+  if (!inboxId) return { wabaId: null, accessToken: env.WHATSAPP_ACCESS_TOKEN || null };
+  const inbox = await inboxRepo.getInboxById(inboxId);
+  return {
+    wabaId: inbox?.business_account_id || null,
+    accessToken: inbox?.access_token || env.WHATSAPP_ACCESS_TOKEN || null,
+  };
+}
+
+// بتعمل الـ Flow (فاضي) في الـ WABA، بترفعله محتوى الشاشة (flow.json)، وبعدين
+// بتنشره (publish) عشان يبقى صالح للإرسال فعليًا للعملاء — بتترمي error واضح
+// لو التوكن مش عنده صلاحية whatsapp_business_management عشان يبان السبب فورًا
+// في اللوج بدل ما يفشل بصمت
+async function createAndPublishRatingFlow(inboxId) {
+  const { wabaId, accessToken } = await resolveManagementCredentials(inboxId);
+  if (!wabaId || !accessToken) {
+    throw new Error('مفيش Business Account ID أو Access Token متاح لإنشاء WhatsApp Flow لهذا الـ Inbox');
+  }
+
+  const createUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/flows`;
+  const createRes = await axios.post(
+    createUrl,
+    { name: `تقييم ما بعد الحل - Inbox ${inboxId}`, categories: ['CUSTOMER_SUPPORT'] },
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const flowId = createRes.data?.id;
+  if (!flowId) throw new Error('ميتا مرجعتش flow id بعد إنشاء الـ Flow');
+
+  const assetsUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${flowId}/assets`;
+  const form = new FormData();
+  form.append('name', 'flow.json');
+  form.append('asset_type', 'FLOW_JSON');
+  form.append('file', new Blob([JSON.stringify(buildRatingFlowJson())], { type: 'application/json' }), 'flow.json');
+  await axios.post(assetsUrl, form, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+  const publishUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${flowId}/publish`;
+  await axios.post(publishUrl, {}, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+  return flowId;
+}
+
+// بترجع الـ Flow id المتخزن للـ Inbox ده لو موجود، وإلا بتعمله (إنشاء + نشر)
+// أول مرة وتخزنه عشان المرات الجاية تستخدمه على طول من غير ما تعمله تاني
+async function getOrCreateRatingFlowId(inboxId) {
+  if (!inboxId) throw new Error('لازم تحدد Inbox عشان تقدر تبعت WhatsApp Flow');
+  const inbox = await inboxRepo.getInboxById(inboxId);
+  if (inbox?.rating_flow_id) return inbox.rating_flow_id;
+
+  const flowId = await createAndPublishRatingFlow(inboxId);
+  await inboxRepo.setRatingFlowId(inboxId, flowId);
+  return flowId;
+}
+
+function buildRatingFlowInteractive({ flowId, flowToken, bodyText }) {
+  return {
+    type: 'flow',
+    body: { text: bodyText },
+    action: {
+      name: 'flow',
+      parameters: {
+        flow_message_version: '3',
+        flow_token: flowToken,
+        flow_id: flowId,
+        flow_cta: 'قيّم تجربتك',
+        flow_action: 'navigate',
+        flow_action_payload: { screen: 'RATING', data: {} },
+      },
+    },
+  };
+}
+
+// بتبعت رسالة الـ Flow الموحّدة (تقييمين + تعليق + إرسال في فقاعة واحدة).
+// flowToken هو id صف التقييم (NileChat_ConversationRatings_byA) كنص، عشان لما
+// الرد يرجع من واتساب نعرف نربطه بالطلب الصح
+async function sendRatingFlowMessage(toNumber, { flowId, flowToken, bodyText }, conversationId = null, inboxId = null, sender = null) {
+  const saved = await createOutgoingMessage(toNumber, bodyText, conversationId, inboxId, sender);
+  return deliverOutgoingInteractiveMessage(saved, {
+    toNumber,
+    interactive: buildRatingFlowInteractive({ flowId, flowToken, bodyText }),
+    inboxId,
+  });
+}
+
 // ===== وسائط (صور / فيديوهات / صوتيات / مستندات) =====
 
 /**
@@ -435,6 +598,8 @@ module.exports = {
   sendTextMessage,
   sendStarRatingMessage,
   sendSkippableTextMessage,
+  getOrCreateRatingFlowId,
+  sendRatingFlowMessage,
   createOutgoingMessage,
   deliverOutgoingMessage,
   verifyWhatsappCredentials,

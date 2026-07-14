@@ -106,6 +106,28 @@ async function sendMediaReplyLive(conversation, fileInfo, sender, onFinalized) {
   return savedMessage;
 }
 
+const STARS_BY_RATING = { 1: '⭐', 2: '⭐⭐', 3: '⭐⭐⭐', 4: '⭐⭐⭐⭐', 5: '⭐⭐⭐⭐⭐' };
+
+// بتحوّل رد فورم WhatsApp Flow (تقييم بعد الحل) لنص مقروء يتحط في فقاعة الشات
+// بدل الـ JSON الخام اللي واتساب بيرجعه فعليًا
+function buildFlowReplySummaryText(nfmReply) {
+  let payload = {};
+  try {
+    payload = JSON.parse(nfmReply?.response_json || '{}');
+  } catch (err) {
+    return 'تم إرسال تقييم';
+  }
+  const issue = Number(payload.issue_rating) || null;
+  const agent = Number(payload.agent_rating) || null;
+  const lines = ['تقييم الخدمة:'];
+  lines.push(`حل المشكلة: ${issue ? `${STARS_BY_RATING[issue] || ''} (${issue}/5)` : '—'}`);
+  lines.push(`الإيجنت: ${agent ? `${STARS_BY_RATING[agent] || ''} (${agent}/5)` : '—'}`);
+  if (payload.feedback_text) {
+    lines.push(`تعليق: ${payload.feedback_text}`);
+  }
+  return lines.join('\n');
+}
+
 // بيتعامل مع الرسائل الواردة من webhook واتساب (رسائل جديدة من عملاء)
 async function processIncomingMessages(value, io) {
   const contact = value.contacts?.[0];
@@ -147,10 +169,16 @@ async function processIncomingMessages(value, io) {
     } else if (messageType === 'button') {
       messageText = msg.button?.text || null;
     } else if (messageType === 'interactive') {
-      messageText =
-        msg.interactive?.button_reply?.title ||
-        msg.interactive?.list_reply?.title ||
-        null;
+      if (msg.interactive?.type === 'nfm_reply') {
+        // رد فورم WhatsApp Flow (تقييم بعد الحل) — بنبني نص مقروء يتحط في
+        // فقاعة الشات بدل الـ JSON الخام، وده اللي هيتعرض للإيجنت في اللوحة
+        messageText = buildFlowReplySummaryText(msg.interactive.nfm_reply);
+      } else {
+        messageText =
+          msg.interactive?.button_reply?.title ||
+          msg.interactive?.list_reply?.title ||
+          null;
+      }
     }
 
     const contactName = contact?.profile?.name || null;
@@ -177,7 +205,13 @@ async function processIncomingMessages(value, io) {
           io.emit('new_message', { conversationId: pendingRating.conversation_id, message: saved });
         }
         try {
-          await ratingFlowService.handleIncomingRatingReply(pendingRating, messageText, io);
+          if (messageType === 'interactive' && msg.interactive?.type === 'nfm_reply') {
+            // رد الـ Flow الموحّد (تقييمين + تعليق مع بعض) — بيتقفل الطلب مرة واحدة
+            await ratingFlowService.handleFlowSubmit(pendingRating, msg.interactive.nfm_reply, io);
+          } else {
+            // fallback: أسلوب الأسئلة المتدرجة القديم (استُخدم لو الـ Flow فشل إنشاؤه)
+            await ratingFlowService.handleIncomingRatingReply(pendingRating, messageText, io);
+          }
         } catch (err) {
           logger.error('❌ فشل تنفيذ رد فلو تقييم ما بعد الحل:', err.message);
         }
