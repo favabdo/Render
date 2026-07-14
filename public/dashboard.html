@@ -8164,10 +8164,36 @@ function renderInboxesTable(inboxes) {
             <td>WhatsApp${i.phone_number ? ' · ' + i.phone_number : (i.display_phone_number ? ' · ' + i.display_phone_number : '')}</td>
             <td>${i.agents_count}</td>
             <td><button class="toggle ${i.status === 'active' ? 'on' : ''}" onclick="iwToggleInboxStatus(${i.id}, '${i.status}', this)"></button></td>
-            <td><button class="st-icon-btn danger" onclick="iwDeleteInbox(${i.id})"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td>
+            <td>
+                <button class="st-icon-btn" title="${i.business_account_id ? 'WABA ID: ' + i.business_account_id + ' — دوس عشان تعدّله' : 'مفيش WABA ID متسجل — لازم لفلو التقييم الموحّد، دوس عشان تضيفه'}" onclick="iwEditBusinessAccountId(${i.id}, '${(i.business_account_id || '').replace(/'/g, "\\'")}')" style="${i.business_account_id ? '' : 'color:var(--danger)'}">
+                    <i data-lucide="key-round" style="width:14px;height:14px"></i>
+                </button>
+                <button class="st-icon-btn danger" onclick="iwDeleteInbox(${i.id})"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+            </td>
         </tr>
     `).join('');
     lucide.createIcons();
+}
+
+// تعديل يدوي لـ Business Account ID (WABA ID) — بيتحط تلقائي أول مرة يتبعت
+// فيها WhatsApp Flow (اكتشاف من التوكن نفسه)، بس ده احتياطي لو الاكتشاف فشل
+// (توكن قديم من غير granular scopes) — تقدر تجيبه من WhatsApp Manager → API Setup
+async function iwEditBusinessAccountId(id, currentValue) {
+    const value = prompt('Business Account ID (WABA ID)\nمن WhatsApp Manager → API Setup', currentValue || '');
+    if (value === null) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    try {
+        const res = await apiFetch(`/api/inboxes/${id}/business-account`, {
+            method: 'PATCH',
+            body: JSON.stringify({ businessAccountId: trimmed }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'فشل التحديث');
+        showToast('تم تحديث Business Account ID ✅', 'success');
+        loadInboxesFromAPI();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
 }
 
 async function iwToggleInboxStatus(id, currentStatus, el) {

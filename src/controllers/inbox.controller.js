@@ -125,6 +125,23 @@ async function updateInboxStatus(req, res) {
   notificationService.logActivity(req, `غيّر حالة Inbox "${inbox.name || ''}" إلى ${status}`, inbox.id);
 }
 
+// تعديل يدوي لـ Business Account ID (WABA ID) — الاكتشاف التلقائي (شوف
+// resolveManagementCredentials في whatsapp.service.js) بيغطي أغلب الحالات، بس
+// ده Safety net لو التوكن مش System User أو مالوش granular scopes فيتحصلش
+// اكتشاف تلقائي، فتقدر تحطه إنت بنفسك من WhatsApp Manager → API Setup
+async function updateBusinessAccountId(req, res) {
+  const { businessAccountId } = req.body || {};
+  if (!businessAccountId || !String(businessAccountId).trim()) {
+    return res.status(400).json({ error: 'لازم تبعت businessAccountId' });
+  }
+  const inbox = await inboxRepo.getInboxById(req.params.id);
+  if (!inbox) return res.status(404).json({ error: 'الـ Inbox مش موجود' });
+
+  const updated = await inboxRepo.setBusinessAccountId(req.params.id, String(businessAccountId).trim());
+  res.json({ ok: true, inbox: updated });
+  notificationService.logActivity(req, `عدّل Business Account ID بتاع Inbox "${inbox.name || ''}"`, inbox.id);
+}
+
 async function deleteInbox(req, res) {
   const deleted = await inboxRepo.deleteInbox(req.params.id);
   if (!deleted) return res.status(404).json({ error: 'الـ Inbox مش موجود' });
@@ -165,6 +182,7 @@ module.exports = {
   createInbox,
   listInboxes,
   updateInboxStatus,
+  updateBusinessAccountId,
   deleteInbox,
   getInboxAgents,
   setInboxAgents,

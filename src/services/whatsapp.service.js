@@ -301,16 +301,47 @@ function buildRatingFlowJson() {
   };
 }
 
+// لو الـ Inbox متضاف بتوكن قديم من غير Business Account ID متسجل (كان بيحصل
+// دايمًا قبل كده — الحقل ده مكنش بيتاخد وقت إضافة Inbox أصلاً)، بنحاول نكتشفه
+// تلقائيًا من التوكن نفسه عن طريق /debug_token: التوكن (خصوصًا System User
+// Token) بيكون عنده granular_scopes فيها target_ids بتقول هو مربوط بأي WABA.
+// لو لقيناه، بنسجله في الـ Inbox عشان المرة الجاية نستخدمه على طول من غير
+// ما نعمل الاكتشاف ده تاني
+async function discoverBusinessAccountId(accessToken) {
+  if (!accessToken) return null;
+  try {
+    const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/debug_token`;
+    const response = await axios.get(url, {
+      params: { input_token: accessToken, access_token: accessToken },
+    });
+    const scopes = response.data?.data?.granular_scopes || [];
+    const managementScope = scopes.find((s) => s.scope === 'whatsapp_business_management');
+    const messagingScope = scopes.find((s) => s.scope === 'whatsapp_business_messaging');
+    const wabaId = managementScope?.target_ids?.[0] || messagingScope?.target_ids?.[0] || null;
+    return wabaId;
+  } catch (err) {
+    logger.error('⚠️ تعذر اكتشاف Business Account ID تلقائيًا من التوكن:', err.response?.data?.error?.message || err.message);
+    return null;
+  }
+}
+
 // بيانات اعتماد "إدارية" (WABA id + توكن) لازمة لإنشاء/نشر الـ Flow — غير
 // بيانات الإرسال العادية لأنها محتاجة صلاحية whatsapp_business_management على
 // التوكن، مش whatsapp_business_messaging بس
 async function resolveManagementCredentials(inboxId) {
   if (!inboxId) return { wabaId: null, accessToken: env.WHATSAPP_ACCESS_TOKEN || null };
   const inbox = await inboxRepo.getInboxById(inboxId);
-  return {
-    wabaId: inbox?.business_account_id || null,
-    accessToken: inbox?.access_token || env.WHATSAPP_ACCESS_TOKEN || null,
-  };
+  const accessToken = inbox?.access_token || env.WHATSAPP_ACCESS_TOKEN || null;
+
+  let wabaId = inbox?.business_account_id || null;
+  if (!wabaId && accessToken) {
+    wabaId = await discoverBusinessAccountId(accessToken);
+    if (wabaId) {
+      await inboxRepo.setBusinessAccountId(inboxId, wabaId);
+    }
+  }
+
+  return { wabaId, accessToken };
 }
 
 // بتعمل الـ Flow (فاضي) في الـ WABA، بترفعله محتوى الشاشة (flow.json)، وبعدين
@@ -320,7 +351,10 @@ async function resolveManagementCredentials(inboxId) {
 async function createAndPublishRatingFlow(inboxId) {
   const { wabaId, accessToken } = await resolveManagementCredentials(inboxId);
   if (!wabaId || !accessToken) {
-    throw new Error('مفيش Business Account ID أو Access Token متاح لإنشاء WhatsApp Flow لهذا الـ Inbox');
+    throw new Error(
+      'مفيش Business Account ID متاح لهذا الـ Inbox والاكتشاف التلقائي من التوكن فشل — ' +
+        'ضيفه يدويًا من إعدادات الـ Inbox (WhatsApp Manager → API Setup → WhatsApp Business Account ID)'
+    );
   }
 
   const createUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${wabaId}/flows`;

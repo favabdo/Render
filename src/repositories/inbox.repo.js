@@ -22,6 +22,23 @@ async function getInboxById(id) {
   return result.recordset[0] || null;
 }
 
+// بتسجل/تعدّل Business Account ID (WABA ID) بتاع الـ Inbox — سواء من الاكتشاف
+// التلقائي (whatsapp.service.js) أو من تعديل يدوي في الإعدادات
+async function setBusinessAccountId(inboxId, businessAccountId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, inboxId)
+    .input('businessAccountId', sql.NVarChar(100), businessAccountId)
+    .query(`
+      UPDATE [dbo].[NileChat_Inboxes_byA]
+      SET business_account_id = @businessAccountId
+      OUTPUT INSERTED.id, INSERTED.business_account_id
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
 // بتسجل الـ id بتاع WhatsApp Flow "تقييم ما بعد الحل" بعد ما يتعمله publish
 // مرة واحدة لهذا الـ Inbox، عشان مانعملوش Flow جديد كل مرة تتقفل فيها محادثة
 async function setRatingFlowId(inboxId, flowId) {
@@ -163,6 +180,7 @@ async function setAgentsForInbox(inboxId, userIds) {
 module.exports = {
   listInboxes,
   getInboxById,
+  setBusinessAccountId,
   setRatingFlowId,
   getDefaultActiveInbox,
   findInboxByPhoneNumberId,
