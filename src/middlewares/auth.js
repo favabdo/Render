@@ -3,6 +3,36 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const userRepo = require('../repositories/user.repo');
 
+// رول 3 = "CRM Agent": إيجنت بيشوف بس قسم العملاء (Contacts) في الداشبورد،
+// ومش بيقدر يعدّل أو يضيف أي حاجة (لا اسم، لا رقم تليفون، لا زيارة، لا عقد
+// صيانة، ولا يمسح عميل) — قراءة بس. أي راوت تاني في السيرفر (محادثات، إنبوكسز،
+// إعدادات، يوزرز...) ممنوع عليه خالص. القايمة دي هي مصدر الحقيقة الوحيد لصلاحياته
+// (الإخفاء في الفرونت في dashboard.html شكل بس — الحماية الحقيقية من هنا)
+const CRM_AGENT_ROLE = 3;
+const CRM_AGENT_ALLOWED_ROUTES = [
+  { method: null, pattern: /^\/api\/me(\/.*)?$/ }, // إدارة حسابه الشخصي (بروفايل/أفتار/كلمة سر) — مش جزء من "قسم العملاء" لكن أساسي لأي يوزر مسجل دخول
+  { method: 'GET', pattern: /^\/api\/contacts$/ },
+  { method: 'GET', pattern: /^\/api\/contacts-paginated$/ },
+  { method: 'GET', pattern: /^\/api\/contacts\/\d+$/ },
+  { method: 'GET', pattern: /^\/api\/contacts\/\d+\/visits$/ },
+  { method: 'GET', pattern: /^\/api\/contacts\/\d+\/maintenance-contracts$/ },
+];
+
+function isCrmAgentRequestAllowed(req) {
+  return CRM_AGENT_ALLOWED_ROUTES.some(({ method, pattern }) => {
+    if (method && req.method !== method) return false;
+    return pattern.test(req.path);
+  });
+}
+
+function enforceCrmAgentAccess(req, res) {
+  if (req.user?.role === CRM_AGENT_ROLE && !isCrmAgentRequestAllowed(req)) {
+    res.status(403).json({ error: 'حساب CRM Agent يقدر يشوف قسم العملاء بس (بدون تعديل)' });
+    return true; // اتقفلت الاستجابة، الكولر يوقف هنا ومايناديش next()
+  }
+  return false;
+}
+
 // بنعمل كاش صغير جدًا (بضع ثواني) لحالة كل يوزر عشان مانضربش الداتابيز في كل
 // request، لكن برضه نضمن إن أي إيجنت اتعمله deactivate أو حذف يتقفل بسرعة
 // (خلال ثواني قليلة) حتى لو مبعتش أي حدث realtime وصله (شوف socket/socket.js
@@ -49,6 +79,7 @@ function requireAuth(req, res, next) {
           return res.status(401).json({ error: 'التوكن غير صحيح أو الحساب غير مفعّل' });
         }
         req.user = { userId: user.id, email: user.email, role: user.role };
+        if (enforceCrmAgentAccess(req, res)) return;
         next();
       })
       .catch(next);
@@ -61,6 +92,7 @@ function requireAuth(req, res, next) {
         return res.status(401).json({ error: 'الحساب موقوف أو محذوف، سجل دخول تاني' });
       }
       req.user = payload;
+      if (enforceCrmAgentAccess(req, res)) return;
       next();
     })
     .catch(next);

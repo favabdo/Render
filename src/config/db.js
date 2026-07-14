@@ -326,6 +326,7 @@ async function ensureContactsTableExists() {
       CREATE TABLE [dbo].[NileChat_Contacts_byA] (
         id         BIGINT IDENTITY(1,1) PRIMARY KEY,
         name       NVARCHAR(200) NULL,
+        status     TINYINT NOT NULL DEFAULT 1, -- 1 = شغال وظاهر، 0 = متمسوح (مخفي بس البيانات فاضلة)
         created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
       );
     END
@@ -398,6 +399,25 @@ async function ensureContactsHaveCustomerCardColumns() {
     BEGIN
       -- اسم مدير العميل، بيتخزن جمب رقم تليفونه (manager_phone) كمعلومة مستقلة برضه
       ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD manager_name NVARCHAR(200) NULL;
+    END
+  `);
+}
+
+// عمود الحالة: 1 = عميل شغال وظاهر عادي في كل مكان (القايمة، البحث، اختيار
+// "اربط بكونتاكت موجود"...)، 0 = عميل "متمسوح" من وجهة نظر المستخدم. مسح عميل
+// دلوقتي (contact.controller.deleteContact -> contact.repo.softDeleteContact)
+// بقى بيحول الحالة لـ 0 بس، من غير ما يلمس صفه ولا أي حاجة مرتبطة بيه (أرقامه،
+// محادثاته، رسايله...) — كله فاضل زي ما هو في الداتابيز، بس بيتفلتر ويتخفي من
+// القوايم (listContacts / listContactsPage) عشان محدش يشوفه تاني
+async function ensureContactsHaveStatusColumn() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'status'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD status TINYINT NOT NULL DEFAULT 1;
     END
   `);
 }
@@ -1068,6 +1088,7 @@ async function ensureSchema() {
   await ensureConversationsHaveLockColumn();
   await ensureContactsTableExists();
   await ensureContactsHaveCustomerCardColumns();
+  await ensureContactsHaveStatusColumn();
   await ensureContactPhonesTableExists();
   await ensureContactPhonesHaveLabelColumn();
   await ensureContactModulesTableExists();
@@ -1110,6 +1131,7 @@ module.exports = {
   ensureConversationsHaveLockColumn,
   ensureContactsTableExists,
   ensureContactsHaveCustomerCardColumns,
+  ensureContactsHaveStatusColumn,
   ensureContactPhonesTableExists,
   ensureContactPhonesHaveLabelColumn,
   ensureConversationsHaveContactColumn,

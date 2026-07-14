@@ -5,6 +5,7 @@
 const scheduledTaskRepo = require('../repositories/scheduledTask.repo');
 const contactRepo = require('../repositories/contact.repo');
 const userRepo = require('../repositories/user.repo');
+const notificationService = require('../services/notification.service');
 
 async function listTasks(req, res) {
   const contact = await contactRepo.getContactById(req.params.contactId);
@@ -45,6 +46,8 @@ async function addTask(req, res) {
   if (io) io.emit('scheduled_task_added', { contactId: req.params.contactId, task });
 
   res.status(201).json({ ok: true, task });
+
+  notificationService.logActivity(req, `أضاف تاسك جديد للعميل ${contact.name || ''}`, task.id);
 }
 
 async function endTask(req, res) {

@@ -222,11 +222,20 @@ async function listContacts() {
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
+      WHERE c.status = 1
       ORDER BY c.name ASC
     `);
+  const contactIds = contactsResult.recordset.map((r) => r.id);
+  if (!contactIds.length) return [];
+
   const phonesResult = await pool
     .request()
-    .query(`SELECT contact_id, phone_number, label FROM [dbo].[NileChat_ContactPhones_byA] ORDER BY created_at ASC`);
+    .query(`
+      SELECT contact_id, phone_number, label
+      FROM [dbo].[NileChat_ContactPhones_byA]
+      WHERE contact_id IN (${contactIds.join(',')})
+      ORDER BY created_at ASC
+    `);
 
   const phonesByContact = {};
   for (const row of phonesResult.recordset) {
@@ -280,7 +289,8 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
              COUNT(*) OVER() AS total_count
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
-      WHERE (
+      WHERE c.status = 1
+      AND (
          @q IS NULL
          OR c.name LIKE @q
          OR EXISTS (
@@ -332,7 +342,8 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
         -- جاهزة، والـ SUM بيجمعها عادي من غير أي subquery جواه
         SELECT CASE WHEN ${REGISTERED_CONDITION} THEN 1 ELSE 0 END AS is_registered
       ) reg
-      WHERE (
+      WHERE c.status = 1
+      AND (
          @q IS NULL
          OR c.name LIKE @q
          OR EXISTS (
@@ -532,74 +543,42 @@ async function updateCustomerDetails(id, { name, location, signedContractDate, m
   return getContactByIdWithPhones(id);
 }
 
-// مسح عميل نهائيًا بكل تفاصيله: رسايله، محادثاته (وكل حاجة مرتبطة بيها زي
-// الليبلات والتيمز والتقييمات)، أجهزة الدعم الفني بتاعته، التاسكات المجدولة،
-// الزيارات، عقود الصيانة، أرقام تليفوناته، وأخيرًا الكونتاكت نفسه. كل ده جوه
-// transaction واحدة عشان لو أي خطوة فشلت يرجع كل حاجة زي ما كانت (مفيش نص
-// عميل متمسوح). أدمن بس هو اللي يقدر ينادي على الدالة دي (اتأكد منها في
-// requireAdmin على الراوت + كلمة السر في contact.controller.deleteContact)
-async function deleteContactCompletely(contactId) {
+// "مسح" عميل بقى Soft Delete بس: بيحول status بتاعه من 1 لـ 0، من غير ما يمسح
+// ولا يلمس أي صف تاني (أرقامه، محادثاته، رسايله، أجهزته، تاسكاته، زياراته،
+// عقود الصيانة بتاعته...) — كل ده فاضل في الداتابيز زي ما هو بالظبط. العميل
+// بس بيختفي من صفحة Contacts (listContacts / listContactsPage بيفلتروا على
+// status = 1) وبيبقى مش قابل يترشح تاني في قايمة "اربط بكونتاكت موجود". لو
+// العميل ده أصلاً متمسوح (status = 0) بترجع null عشان الكنترولر يرد 404. أدمن
+// بس هو اللي يقدر ينادي على الدالة دي (اتأكد منها في requireAdmin على الراوت
+// + كلمة السر في contact.controller.deleteContact)
+async function softDeleteContact(contactId) {
   const pool = await getPool();
-  const transaction = new sql.Transaction(pool);
-  await transaction.begin();
+  const result = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .query(`
+      UPDATE [dbo].[NileChat_Contacts_byA]
+      SET status = 0
+      OUTPUT DELETED.id, DELETED.name
+      WHERE id = @contactId AND status = 1
+    `);
+  return result.recordset[0] || null;
+}
 
-  try {
-    // هات كل المحادثات بتاعة العميل ده الأول عشان نمسح كل حاجة متعلقة بيها
-    const convosResult = await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`SELECT id FROM [dbo].[NileChat_Conversations_byA] WHERE contact_id = @contactId`);
-    const conversationIds = convosResult.recordset.map((r) => r.id);
-
-    if (conversationIds.length > 0) {
-      const idsCsv = conversationIds.join(',');
-      await new sql.Request(transaction).query(`DELETE FROM [dbo].[${TABLE_NAME}] WHERE conversation_id IN (${idsCsv})`);
-      await new sql.Request(transaction).query(`DELETE FROM [dbo].[NileChat_ConversationLabels_byA] WHERE conversation_id IN (${idsCsv})`);
-      await new sql.Request(transaction).query(`DELETE FROM [dbo].[NileChat_ConversationTeams_byA] WHERE conversation_id IN (${idsCsv})`);
-      await new sql.Request(transaction).query(`DELETE FROM [dbo].[NileChat_ConversationRatings_byA] WHERE conversation_id IN (${idsCsv})`);
-    }
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_Conversations_byA] WHERE contact_id = @contactId`);
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_Devices_byA] WHERE contact_id = @contactId`);
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_ScheduledTasks_byA] WHERE contact_id = @contactId`);
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_Visits_byA] WHERE contact_id = @contactId`);
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_MaintenanceContracts_byA] WHERE contact_id = @contactId`);
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_ContactPhones_byA] WHERE contact_id = @contactId`);
-
-    await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`DELETE FROM [dbo].[NileChat_ContactModules_byA] WHERE contact_id = @contactId`);
-
-    const deletedResult = await new sql.Request(transaction)
-      .input('contactId', sql.BigInt, contactId)
-      .query(`
-        DELETE FROM [dbo].[NileChat_Contacts_byA]
-        OUTPUT DELETED.id, DELETED.name
-        WHERE id = @contactId
-      `);
-
-    await transaction.commit();
-    return deletedResult.recordset[0] || null;
-  } catch (err) {
-    await transaction.rollback().catch(() => {});
-    throw err;
-  }
+// لو حابب ترجع عميل "متمسوح" تاني يظهر عادي (status = 0 -> 1) — مش مستخدمة
+// دلوقتي من أي راوت، لكن موجودة جاهزة لو عايزين نضيف زرار "استرجاع" بعدين
+async function restoreContact(contactId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .query(`
+      UPDATE [dbo].[NileChat_Contacts_byA]
+      SET status = 1
+      OUTPUT INSERTED.*
+      WHERE id = @contactId AND status = 0
+    `);
+  return result.recordset[0] || null;
 }
 
 module.exports = {
@@ -619,7 +598,8 @@ module.exports = {
   linkPhoneToContact,
   unlinkPhoneToNewContact,
   deletePhonelessContact,
-  deleteContactCompletely,
+  softDeleteContact,
+  restoreContact,
   getModulesForContact,
   setContactModules,
 };

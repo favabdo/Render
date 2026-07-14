@@ -1159,7 +1159,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
         <div class="page-header contacts-page-header">
             <h2>Contacts</h2>
             <div class="contacts-header-actions">
-                <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" onclick="openAddVisitModalStandalone()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> إضافة زيارة</button>
+                <button class="page-btn" id="contacts-add-visit-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" onclick="openAddVisitModalStandalone()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> إضافة زيارة</button>
                 <button class="page-btn" id="add-customer-btn" style="display:none" onclick="openAddCustomerModal()"><i data-lucide="plus" style="width:16px;height:16px"></i> Add Contact</button>
             </div>
         </div>
@@ -1717,7 +1717,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
                 <h2 id="customer-details-name" style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw">-</h2>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="page-btn" onclick="openAddVisitModalForCurrentCustomer()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> إضافة زيارة</button>
+                <button class="page-btn" id="customer-details-add-visit-btn" onclick="openAddVisitModalForCurrentCustomer()"><i data-lucide="calendar-plus" style="width:16px;height:16px"></i> إضافة زيارة</button>
                 <button class="page-btn" style="background:var(--surface);color:var(--text);border:1.5px solid var(--border)" id="customer-details-goto-btn" onclick="gotoConversationFromDetails()">
                     <i data-lucide="message-circle" style="width:16px;height:16px"></i> فتح المحادثة
                 </button>
@@ -2020,7 +2020,7 @@ function escapeHtml(str) {
 }
 
 function roleLabel(role) {
-    return role === 0 ? 'Super Admin' : role === 1 ? 'Administrator' : 'Agent';
+    return role === 0 ? 'Super Admin' : role === 1 ? 'Administrator' : role === 3 ? 'CRM Agent' : 'Agent';
 }
 
 function roleBadgeClass(role) {
@@ -2807,6 +2807,14 @@ function isOwner() {
     return AUTH_USER.role === 0;
 }
 
+/* رول 3 = "CRM Agent": بيشوف بس قسم العملاء (Contacts) وبس بالقراءة — مش بيقدر
+   يعدّل اسم/رقم، ولا يضيف زيارة أو عقد صيانة، ولا يمسح عميل. الحماية الحقيقية
+   من السيرفر (شوف middlewares/auth.js -> enforceCrmAgentAccess)، وده بس بيخفي
+   عناصر الواجهة اللي مالهاش لازمة تظهر أصلاً له */
+function isCrmAgentOnly() {
+    return AUTH_USER.role === 3;
+}
+
 /* الـ Settings (Account Settings / Agents / Teams / Inboxes / ... إلخ) خاص بالمنظمة كلها،
    فبيظهر بس لـ Owner (role 0) و Admin (role 1). الإيجنت العادي (role 2) مش بيشوفه خالص من السايدبار،
    وده منفصل تمامًا عن صفحة الـ Profile الشخصية بتاعته (من الأڤاتار تحت). */
@@ -2822,6 +2830,39 @@ function applyRoleVisibility() {
     // لو الإيجنت العادي كان واقف على صفحة settings (رابط قديم/مفتوحة قبل تحديث الرول)، رجّعه للشاتس
     if (!canSeeSettings && currentPage === 'settings') {
         navigateTo('chats');
+    }
+
+    applyCrmAgentVisibility();
+}
+
+/* رول "CRM Agent" (role 3): مش بيشوف في السايدبار غير Contacts + تسجيل الخروج،
+   ومش بيشوف زرار الإشعارات. وجوه صفحة Contacts نفسها بيبقى Read-Only بالكامل:
+   مفيش "إضافة زيارة" (سواء من فوق الصفحة أو من جوه كارت العميل)، ومفيش "فتح
+   المحادثة" (أصلاً معندوش صلاحية يشوف المحادثات). باقي الأزرار (تعديل/حذف
+   عميل/عقود الصيانة/الأرقام) أصلاً متغطية بـ isOwnerOrAdmin() في أماكنها. */
+function applyCrmAgentVisibility() {
+    const crmOnly = isCrmAgentOnly();
+
+    document.querySelectorAll('.sidebar-btn[data-page]').forEach((btn) => {
+        if (btn.dataset.page === 'contacts') return; // ده الوحيد المسموح له
+        if (crmOnly) btn.style.display = 'none';
+    });
+
+    const notifBtn = document.getElementById('notifications-btn');
+    if (notifBtn) notifBtn.style.display = crmOnly ? 'none' : '';
+
+    const contactsAddVisitBtn = document.getElementById('contacts-add-visit-btn');
+    if (contactsAddVisitBtn) contactsAddVisitBtn.style.display = crmOnly ? 'none' : '';
+
+    const detailsAddVisitBtn = document.getElementById('customer-details-add-visit-btn');
+    if (detailsAddVisitBtn) detailsAddVisitBtn.style.display = crmOnly ? 'none' : '';
+
+    const gotoConvoBtn = document.getElementById('customer-details-goto-btn');
+    if (gotoConvoBtn) gotoConvoBtn.style.display = crmOnly ? 'none' : '';
+
+    // لو بأي شكل واقف على صفحة غير Contacts/تفاصيل عميل، رجّعه لـ Contacts على طول
+    if (crmOnly && currentPage !== 'contacts' && currentPage !== 'customer-details') {
+        navigateTo('contacts');
     }
 }
 
@@ -2963,6 +3004,7 @@ function renderAgentsSettings() {
         const roleCell = canEditRoleStatusForAgent
             ? `<select class="iw-input" style="padding:6px 8px;font-size:12px;width:auto" onchange="changeAgentRole(${a.id}, this.value)">
                     <option value="2" ${a.role === 2 ? 'selected' : ''}>Agent</option>
+                    <option value="3" ${a.role === 3 ? 'selected' : ''}>CRM Agent</option>
                     <option value="1" ${a.role === 1 ? 'selected' : ''}>Admin</option>
                     <option value="0" ${a.role === 0 ? 'selected' : ''}>Owner</option>
                 </select>`
@@ -3688,6 +3730,11 @@ let pendingSchedTaskHighlight = null; // {contactId, taskId} — بيتحط قب
 
 /* ===== التنقل ===== */
 function navigateTo(page) {
+    // رول CRM Agent (role 3) مسموحله بس بصفحة Contacts (وتفاصيل عميل جواها) —
+    // أي محاولة تانية (زرار قديم، رابط، كود) بترجّعه لـ Contacts على طول
+    if (isCrmAgentOnly() && page !== 'contacts' && page !== 'customer-details') {
+        page = 'contacts';
+    }
     currentPage = page;
     // إخفاء كل الصفحات بالقوة (inline) عشان نضمن إنها مش هتفضل ظاهرة فوق بعض
     document.querySelectorAll('.page').forEach(p => {
@@ -8167,6 +8214,7 @@ async function iwDeleteInbox(id) {
         <div class="resolve-cats-label">Role</div>
         <select class="iw-input" id="add-agent-role" style="margin-bottom:6px">
             <option value="2" selected>Agent</option>
+            <option value="3">CRM Agent (Contacts بس، Read-Only)</option>
             <option value="1">Admin</option>
             <option value="0">Owner (Super Admin)</option>
         </select>
@@ -8214,7 +8262,7 @@ async function iwDeleteInbox(id) {
             </div>
             <div class="resolve-modal-title">مسح العميل</div>
         </div>
-        <div class="resolve-modal-sub">هتمسح <strong id="delete-contact-name"></strong> نهائيًا بكل تفاصيله (المحادثات، الرسايل، الأجهزة، الزيارات، عقود الصيانة...). الإجراء ده نهائي ومش هينفع تتراجع عنه. اكتب كلمة سرك الشخصية عشان تأكد.</div>
+        <div class="resolve-modal-sub">هتمسح <strong id="delete-contact-name"></strong> من قايمة العملاء، ومش هيظهر بعد كده في Contacts ولا في اختيار "اربط بكونتاكت موجود". بياناته (المحادثات، الرسايل، الأجهزة، الزيارات، عقود الصيانة...) هتفضل محفوظة، بس العميل نفسه هيختفي. اكتب كلمة سرك الشخصية عشان تأكد.</div>
 
         <div class="resolve-cats-label">كلمة سرك الشخصية</div>
         <input type="password" class="iw-input" id="delete-contact-password" placeholder="••••••••" style="margin-bottom:6px">

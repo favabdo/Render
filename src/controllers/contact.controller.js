@@ -70,6 +70,8 @@ async function updateContact(req, res) {
   }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
 
   res.json({ ok: true, contact });
+
+  notificationService.logActivity(req, `غيّر اسم العميل إلى ${contact.name}`, contact.id);
 }
 
 // بيضيف رقم تليفون جديد لعميل موجود بالفعل (زرار "إضافة رقم" في صفحة تفاصيل
@@ -186,6 +188,8 @@ async function createCustomerCard(req, res) {
   }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_created:', err.message));
 
   res.status(201).json({ ok: true, contact });
+
+  notificationService.logActivity(req, `أضاف عميل جديد باسم "${contact.name}"`, contact.id);
 }
 
 // تعديل بيانات كارت عميل الصيانة (زرار Edit في صفحة التفاصيل) — أدمن بس.
@@ -216,6 +220,8 @@ async function updateCustomerCard(req, res) {
   }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
 
   res.json({ ok: true, contact });
+
+  notificationService.logActivity(req, `عدّل معلومات العميل "${contact.name}"`, contact.id);
 }
 
 // بيفصل رقم تليفون من كونتاكت عنده أكتر من رقم، وبينشئ كونتاكت جديد منفصل بيه —
@@ -236,10 +242,12 @@ async function unlinkPhone(req, res) {
   res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
 }
 
-// مسح عميل نهائيًا بكل تفاصيله (محادثاته، رسايله، أجهزته، تاسكاته، زياراته،
-// عقود الصيانة بتاعته...) — أدمن بس (متأكد منها في الراوت بـ requireAdmin)،
-// وكمان لازم يأكد بكلمة سره الشخصية (مش كلمة سر حد تاني) زي بالظبط منطق مسح
-// الإيجنت في auth.controller.deleteUserAccount
+// "مسح" عميل (Soft Delete): بيحول status بتاعه لـ 0 بس، فبيختفي من صفحة
+// Contacts ومن قايمة "اربط بكونتاكت موجود" — لكن بياناته كلها (المحادثات،
+// الرسايل، الأجهزة، التاسكات، الزيارات، عقود الصيانة...) فاضلة زي ما هي في
+// الداتابيز، مش بتتمسح. أدمن بس (متأكد منها في الراوت بـ requireAdmin)، وكمان
+// لازم يأكد بكلمة سره الشخصية (مش كلمة سر حد تاني) زي بالظبط منطق مسح الإيجنت
+// في auth.controller.deleteUserAccount
 async function deleteContact(req, res) {
   const { password } = req.body || {};
 
@@ -260,7 +268,7 @@ async function deleteContact(req, res) {
     return res.status(401).json({ error: 'كلمة السر غلط' });
   }
 
-  const deleted = await contactRepo.deleteContactCompletely(req.params.id);
+  const deleted = await contactRepo.softDeleteContact(req.params.id);
   if (!deleted) {
     return res.status(404).json({ error: 'العميل مش موجود أو تم مسحه بالفعل' });
   }
@@ -275,7 +283,7 @@ async function deleteContact(req, res) {
 
   res.json({ ok: true });
 
-  notificationService.logActivity(req, `مسح العميل ${deleted.name} نهائيًا بكل تفاصيله`, deleted.id);
+  notificationService.logActivity(req, `مسح العميل ${deleted.name} (اتخفى من القايمة، بياناته لسه محفوظة)`, deleted.id);
 }
 
 module.exports = {
