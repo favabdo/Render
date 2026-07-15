@@ -654,12 +654,26 @@ async function ensureMaintenanceContractsTableExists() {
         ON [dbo].[NileChat_MaintenanceContracts_byA](contact_id);
 
       -- ترحيل لمرة واحدة بس: أي عميل كان عنده عقد صيانة متسجل بالطريقة القديمة
-      -- (عمودين contract_date/maintenance_end_date على الكونتاكت) بياخد أول صف
-      -- في سجل العقود الجديد، عشان تاريخه القديم ميتلغيش
-      INSERT INTO [dbo].[NileChat_MaintenanceContracts_byA] (contact_id, start_date, end_date, notes)
-      SELECT id, contract_date, maintenance_end_date, N'تم ترحيله تلقائيًا من بيانات العميل القديمة'
-      FROM [dbo].[NileChat_Contacts_byA]
-      WHERE contract_date IS NOT NULL AND maintenance_end_date IS NOT NULL;
+      -- (عمودين contract_date/maintenance_end_date على الكونتاكت، قبل ما
+      -- الاتنين يتمسحوا و contract_date ترجع بمعنى تاني تمامًا -- تاريخ التعاقد
+      -- العام، مالوش علاقة بالصيانة) بياخد أول صف في سجل العقود الجديد، عشان
+      -- تاريخه القديم ميتلغيش. العمودين القدام دول ممكن يكونوا اتمسحوا فعلاً
+      -- من زمان في قواعد بيانات شغالة (زي عندنا دلوقتي)، فبنبني الـ INSERT كـ
+      -- SQL ديناميكي (sp_executesql) بدل ما نكتبه كنص ثابت في الباتش: SQL Server
+      -- بيتأكد من أسماء الأعمدة وقت الـ compile للباتش كله مرة واحدة حتى لو
+      -- جوه شرط IF مش هيتنفذ، فأي إشارة مباشرة لعمود مش موجود أصلاً كانت هترمي
+      -- "Invalid column name" برغم الـ IF EXISTS، لإن الفحص وقت الـ compile مش
+      -- وقت التنفيذ. بالطريقة دي الاستعلام بيتفحص وبيتنفذ بس لو العمودين موجودين فعلاً
+      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'contract_date')
+         AND EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'maintenance_end_date')
+      BEGIN
+        DECLARE @legacyMigrateSql NVARCHAR(MAX) = N'
+          INSERT INTO [dbo].[NileChat_MaintenanceContracts_byA] (contact_id, start_date, end_date, notes)
+          SELECT id, contract_date, maintenance_end_date, N''تم ترحيله تلقائيًا من بيانات العميل القديمة''
+          FROM [dbo].[NileChat_Contacts_byA]
+          WHERE contract_date IS NOT NULL AND maintenance_end_date IS NOT NULL;';
+        EXEC sp_executesql @legacyMigrateSql;
+      END
     END
   `);
 
@@ -1137,6 +1151,12 @@ async function ensureSchema() {
   await ensureConversationsHaveResolveColumns();
   await ensureConversationsHaveLockColumn();
   await ensureContactsTableExists();
+  // لازم تتنفذ هنا، قبل ensureContactsHaveCustomerCardColumns تحت — لإن الدالة
+  // دي بتترحّل بيانات عقود قديمة من عمودين contract_date/maintenance_end_date
+  // على الكونتاكت، وensureContactsHaveCustomerCardColumns بتمسح العمودين دول.
+  // لو اتنفذت بعدها كانت هتفشل بـ "Invalid column name 'maintenance_end_date'"
+  // لإن العمودين مش هيبقوا موجودين وقت التشغيل
+  await ensureMaintenanceContractsTableExists();
   await ensureContactsHaveCustomerCardColumns();
   await ensureContactsHaveStatusColumn();
   await ensureContactPhonesTableExists();
@@ -1147,7 +1167,6 @@ async function ensureSchema() {
   await ensureDevicesTableExists();
   await ensureScheduledTasksTableExists();
   await ensureVisitsTableExists();
-  await ensureMaintenanceContractsTableExists();
   await ensureCannedResponsesTableExists();
   await ensureResolveCategoriesTableExists();
   await ensureLabelsTableExists();
