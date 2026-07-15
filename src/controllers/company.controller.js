@@ -146,6 +146,7 @@ async function updateAutomationSettings(req, res) {
     keyword_routing_enabled,
     keyword_routing_rules,
     contract_expired_enabled,
+    contract_expired_repeat_enabled,
     contract_expired_message,
     rating_enabled,
     rating_issue_message,
@@ -256,6 +257,9 @@ async function updateAutomationSettings(req, res) {
   if (contract_expired_enabled !== undefined) {
     fields.contractExpiredEnabled = Boolean(contract_expired_enabled);
   }
+  if (contract_expired_repeat_enabled !== undefined) {
+    fields.contractExpiredRepeatEnabled = Boolean(contract_expired_repeat_enabled);
+  }
   if (contract_expired_message !== undefined) {
     const trimmed = String(contract_expired_message || '').trim();
     if (trimmed.length > 4000) {
@@ -318,10 +322,12 @@ async function updateAutomationSettings(req, res) {
     }
   }
 
-  // لو حد فعّل قاعدة "عقد الصيانة منتهي" لازم يكون في نص رسالة متسجل (سواء
-  // دلوقتي أو محفوظ من قبل كده)
+  // لو حد فعّل أي واحدة من قاعدتَي "عقد الصيانة منتهي" (الإشعار مرة واحدة، أو
+  // الرد على كل رسالة — الاتنين مستقلين عن بعض بس بيستخدموا نفس نص الرسالة)
+  // لازم يكون في نص رسالة متسجل (سواء دلوقتي أو محفوظ من قبل كده)
   const willContractExpiredBeEnabled = fields.contractExpiredEnabled !== undefined ? fields.contractExpiredEnabled : undefined;
-  if (willContractExpiredBeEnabled) {
+  const willContractExpiredRepeatBeEnabled = fields.contractExpiredRepeatEnabled !== undefined ? fields.contractExpiredRepeatEnabled : undefined;
+  if (willContractExpiredBeEnabled || willContractExpiredRepeatBeEnabled) {
     const existing = await companyRepo.getAutomationSettings(company.id);
     const finalMessage = fields.contractExpiredMessage !== undefined ? fields.contractExpiredMessage : existing.contract_expired_message;
     if (!finalMessage) {

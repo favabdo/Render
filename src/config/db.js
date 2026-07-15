@@ -1001,6 +1001,11 @@ async function ensureCompaniesHaveAutomationColumns() {
     // الإعدادات (contractExpiry.service.js هو اللي بيفحص وبيبعت)
     { name: 'automation_contract_expired_enabled', def: 'BIT NOT NULL DEFAULT 0' },
     { name: 'automation_contract_expired_message', def: 'NVARCHAR(MAX) NULL' },
+    // نفس الرسالة فوق، بس مفتاح تفعيل مستقل تمامًا: ده بيتحكم في "رد تلقائي
+    // على كل رسالة" (applyContractExpiryReplyForMessage في conversation.service.js)
+    // بدل "إشعار مرة واحدة بس" (contractExpiry.service.js) اللي بيتحكم فيه
+    // automation_contract_expired_enabled فوق — الاتنين مستقلين عن بعض تمامًا
+    { name: 'automation_contract_expired_repeat_enabled', def: 'BIT NOT NULL DEFAULT 0' },
     // "تقييم بعد الحل" (Post-Resolve Rating): بمجرد ما محادثة تتقفل (Resolve)،
     // بيتبعت للعميل بالترتيب: تقييم نجوم (1-5) لحل المشكلة، تقييم نجوم (1-5)
     // لممثل خدمة العملاء، وبعدين تقييم نصي اختياري — كل رسالة من التلاتة ليها

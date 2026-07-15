@@ -9352,6 +9352,19 @@ async function saveTeamMembers() {
             <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:14px" id="automation-message-hint"></div>
         </div>
 
+        <!-- عقد الصيانة منتهي فقط: تحكم منفصل تمامًا عن التوجل الرئيسي فوق —
+             ده بيتحكم في إرسال نفس الرسالة تاني مع كل رسالة يبعتها العميل
+             بعد انتهاء العقد، بينما التوجل الرئيسي بيتحكم في إشعار "مرة واحدة بس" -->
+        <div id="automation-repeat-toggle-field" style="display:none">
+            <div class="setting-row" style="padding:0 0 14px 0;border:none">
+                <div>
+                    <div class="setting-label" id="automation-repeat-toggle-label">الرد بنفس الرسالة على كل رسالة بعد كده</div>
+                    <div class="setting-desc" id="automation-repeat-toggle-desc">لو مفعّل، هيتبعت نفس النص للعميل مع كل رسالة يبعتها بعد انتهاء العقد</div>
+                </div>
+                <button class="toggle" id="automation-repeat-enable-toggle" onclick="this.classList.toggle('on')"></button>
+            </div>
+        </div>
+
         <!-- Welcome فقط: جدول أوقات عمل يحدد أي رسالة تتبعت حسب اليوم/الساعة -->
         <div id="automation-schedule-toggle-field" style="display:none">
             <div class="setting-row" style="padding:0 0 14px 0;border:none">
@@ -9456,11 +9469,13 @@ const AUTOMATION_RULE_META = {
     contract_expired: {
         title: 'عقد الصيانة منتهي',
         icon: 'calendar-x',
-        enableDesc: 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد، ابعتله الرسالة دي أوتوماتيك (مرة واحدة بس لكل عقد)',
+        enableDesc: 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد، ابعتله الرسالة دي أوتوماتيك مرة واحدة بس لكل عقد (تفعيل/إيقاف الرد على كل رسالة تاني متاح تحت كخيار منفصل)',
         offDesc: 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → يتبعتله رسالة أتمتة مرة واحدة',
         messageLabel: 'الرسالة اللي هتتبعت للعميل',
-        messageHint: 'بتتبعت مرة واحدة بس لكل عقد، أول ما تاريخ نهايته يعدّي من غير تجديد.',
+        messageHint: 'نفس النص ده بيتبعت مرة واحدة بس لكل عقد (الخيار فوق)، وكمان مع كل رسالة يبعتها العميل بعد كده لو فعّلت خيار "الرد على كل رسالة" تحت.',
         placeholder: 'عزيزي العميل، عقد الصيانة الخاص بيك انتهى. للتجديد وضمان استمرار الخدمة، برجاء التواصل معانا 🙏',
+        repeatToggleLabel: 'الرد بنفس الرسالة على كل رسالة بعد كده',
+        repeatToggleDesc: 'لو مفعّل، هيتبعت نفس النص للعميل مع كل رسالة يبعتها بعد انتهاء العقد (مش مرة واحدة بس) — لحد ما العقد يتجدد أو توقف الخيار ده',
     },
     rating: {
         title: 'تقييم بعد الحل (Post-Resolve Rating)',
@@ -9771,9 +9786,13 @@ function renderAutomationSettings() {
 
     const contractExpiredDesc = document.getElementById('contract_expired-desc');
     if (contractExpiredDesc) {
+        const repeatSuffix = s.contract_expired_repeat_enabled ? ' + رد على كل رسالة بعد كده' : '';
         if (s.contract_expired_enabled && s.contract_expired_message) {
             const preview = s.contract_expired_message.length > 70 ? s.contract_expired_message.slice(0, 70) + '…' : s.contract_expired_message;
-            contractExpiredDesc.textContent = `لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → «${preview}»`;
+            contractExpiredDesc.textContent = `لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → «${preview}»${repeatSuffix}`;
+        } else if (s.contract_expired_repeat_enabled && s.contract_expired_message) {
+            const preview = s.contract_expired_message.length > 70 ? s.contract_expired_message.slice(0, 70) + '…' : s.contract_expired_message;
+            contractExpiredDesc.textContent = `إشعار "مرة واحدة" متوقف، لكن الرد على كل رسالة مفعّل → «${preview}»`;
         } else {
             contractExpiredDesc.textContent = 'لما عقد صيانة عميل يعدّي تاريخ نهايته من غير تجديد → يتبعتله رسالة أتمتة مرة واحدة (متوقفة)';
         }
@@ -9878,6 +9897,7 @@ async function openAutomationModal(type) {
     scheduleToggleField.style.display = 'none';
     scheduleField.style.display = 'none';
     ratingField.style.display = 'none';
+    document.getElementById('automation-repeat-toggle-field').style.display = 'none';
 
     if (type === 'auto_assign') {
         enableToggle.classList.toggle('on', Boolean(s.auto_assign_enabled));
@@ -9914,6 +9934,15 @@ async function openAutomationModal(type) {
         } else {
             document.getElementById('automation-message-label').textContent = meta.messageLabel;
             document.getElementById('automation-message-hint').textContent = meta.messageHint;
+        }
+
+        if (type === 'contract_expired') {
+            // خيار منفصل تمامًا عن التوجل الرئيسي فوق (اللي بيتحكم في إشعار
+            // "مرة واحدة بس") — ده بيتحكم في الرد على كل رسالة جديدة من العميل
+            document.getElementById('automation-repeat-toggle-field').style.display = '';
+            document.getElementById('automation-repeat-toggle-label').textContent = meta.repeatToggleLabel;
+            document.getElementById('automation-repeat-toggle-desc').textContent = meta.repeatToggleDesc;
+            document.getElementById('automation-repeat-enable-toggle').classList.toggle('on', Boolean(s.contract_expired_repeat_enabled));
         }
     }
 
@@ -10160,7 +10189,9 @@ async function saveAutomationModal() {
         body.rating_thanks_message = document.getElementById('automation-rating-thanks-input').value.trim();
     } else {
         const text = document.getElementById('automation-message-input').value.trim();
-        if (enabled && !text) {
+        const repeatWillBeEnabled = automationModalType === 'contract_expired'
+            && document.getElementById('automation-repeat-enable-toggle').classList.contains('on');
+        if ((enabled || repeatWillBeEnabled) && !text) {
             errorBox.textContent = 'لازم تكتب نص الرسالة الأول';
             return;
         }
@@ -10188,6 +10219,7 @@ async function saveAutomationModal() {
         } else if (automationModalType === 'contract_expired') {
             body.contract_expired_enabled = enabled;
             body.contract_expired_message = text;
+            body.contract_expired_repeat_enabled = document.getElementById('automation-repeat-enable-toggle').classList.contains('on');
         } else {
             body.csat_enabled = enabled;
             body.csat_message = text;

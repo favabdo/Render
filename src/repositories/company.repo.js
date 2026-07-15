@@ -118,6 +118,7 @@ function mapAutomationSettings(company) {
     keyword_routing_enabled: Boolean(company.automation_keyword_routing_enabled),
     keyword_routing_rules: parseKeywordRoutingRules(company.automation_keyword_routing_rules),
     contract_expired_enabled: Boolean(company.automation_contract_expired_enabled),
+    contract_expired_repeat_enabled: Boolean(company.automation_contract_expired_repeat_enabled),
     contract_expired_message: company.automation_contract_expired_message || '',
     rating_enabled: Boolean(company.automation_rating_enabled),
     rating_issue_message: company.automation_rating_issue_message || '',
@@ -184,6 +185,10 @@ async function updateAutomationSettings(companyId, fields = {}) {
   if (fields.contractExpiredEnabled !== undefined) {
     req.input('contractExpiredEnabled', sql.Bit, fields.contractExpiredEnabled ? 1 : 0);
     sets.push('automation_contract_expired_enabled = @contractExpiredEnabled');
+  }
+  if (fields.contractExpiredRepeatEnabled !== undefined) {
+    req.input('contractExpiredRepeatEnabled', sql.Bit, fields.contractExpiredRepeatEnabled ? 1 : 0);
+    sets.push('automation_contract_expired_repeat_enabled = @contractExpiredRepeatEnabled');
   }
   if (fields.contractExpiredMessage !== undefined) {
     req.input('contractExpiredMessage', sql.NVarChar(sql.MAX), fields.contractExpiredMessage);

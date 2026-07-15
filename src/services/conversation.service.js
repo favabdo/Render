@@ -306,7 +306,10 @@ async function processIncomingMessages(value, io, wabaId = null) {
     // أتمتة "عقد الصيانة منتهي — رد على كل رسالة": بتتفحص مع كل رسالة جاية من
     // العميل (مش أول رسالة بس زي رسالة الترحيب تحت) — لو عقده الحالي منتهي
     // فعليًا، بيتبعتله نفس رسالة "العقد منتهي" تاني، أيًا كان عدد المرات اللي
-    // هو بيبعت فيها، لحد ما حد من الإدارة يجدد له العقد أو يوقف الأتمتة دي
+    // هو بيبعت فيها، لحد ما حد من الإدارة يجدد له العقد أو يوقف الأتمتة دي.
+    // مفتاح تفعيلها (contract_expired_repeat_enabled) منفصل تمامًا عن مفتاح
+    // إشعار "مرة واحدة بس" (contract_expired_enabled) اللي بيتفحص في
+    // contractExpiry.service.js — كل واحد يتفتح/يتقفل لوحده من الإعدادات
     applyContractExpiryReplyForMessage(
       conversationId,
       matchedContact?.id || null,
@@ -509,13 +512,15 @@ async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
 // ومحدش أوقفه يدويًا)، بنبعتله نفس نص "العقد منتهي" (من إعدادات Automation)
 // تاني مع كل رسالة يبعتها — عكس contractExpiry.service.js اللي بيبعت الإشعار
 // مرة واحدة بس أول ما العقد يعدّي تاريخ نهايته من غير أي رسالة من العميل.
-// الاتنين مستقلين عن بعض: ممكن العميل ياخد إشعار السويب مرة واحدة، وبعد كده
-// كل رسالة جديدة منه (لحد ما الإدارة تجدد له أو توقف الأتمتة) تاخد نفس الرد ده.
+// القاعدتين ليهم مفتاح تفعيل منفصل تمامًا (contract_expired_enabled للإشعار
+// مرة واحدة، contract_expired_repeat_enabled للرد على كل رسالة) — تقدر تفعّل
+// أو تقفل أي واحدة فيهم لوحدها من صفحة الإعدادات (Settings -> Automation)،
+// وبيشاركوا نفس نص الرسالة (contract_expired_message).
 async function applyContractExpiryReplyForMessage(conversationId, contactId, contactNumber, inboxId, io) {
   if (!contactId) return;
 
   const settings = await companyRepo.getAutomationSettings();
-  if (!settings || !settings.contract_expired_enabled || !settings.contract_expired_message) return;
+  if (!settings || !settings.contract_expired_repeat_enabled || !settings.contract_expired_message) return;
 
   const isExpired = await maintenanceContractRepo.isCurrentContractExpired(contactId);
   if (!isExpired) return;
