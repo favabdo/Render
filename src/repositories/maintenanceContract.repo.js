@@ -165,6 +165,32 @@ async function findExpiredContractsPendingNotice() {
   return result.recordset;
 }
 
+// هل "العقد الحالي" (آخر عقد اتضاف) لعميل معين منتهي فعليًا دلوقتي؟ (تاريخ
+// نهايته فات، ومحدش أوقفه يدويًا) — بتتنادى مع كل رسالة جديدة جاية من العميل
+// عشان رد تلقائي "عقد الصيانة منتهي" يتبعت تاني كل مرة (عكس
+// findExpiredContractsPendingNotice اللي بيبعت مرة واحدة بس ويعلّم العقد)
+async function isCurrentContractExpired(contactId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .query(`
+      SELECT TOP 1 m.id
+      FROM [dbo].[NileChat_MaintenanceContracts_byA] m
+      WHERE m.contact_id = @contactId
+        AND m.stopped_at IS NULL
+        AND m.end_date < CAST(SYSUTCDATETIME() AS DATE)
+        -- لازم يكون ده آخر عقد اتضاف للعميل ده (مش عقد قديم اتغطى بعقد جديد)
+        AND m.id = (
+          SELECT TOP 1 m2.id
+          FROM [dbo].[NileChat_MaintenanceContracts_byA] m2
+          WHERE m2.contact_id = m.contact_id
+          ORDER BY m2.created_at DESC, m2.id DESC
+        )
+    `);
+  return !!result.recordset[0];
+}
+
 // بيسجل إن إشعار انتهاء العقد ده اتبعت، عشان القاعدة متبعتوش تاني لنفس العقد
 async function markExpiryNoticeSent(contractId) {
   const pool = await getPool();
@@ -188,4 +214,5 @@ module.exports = {
   deleteContract,
   findExpiredContractsPendingNotice,
   markExpiryNoticeSent,
+  isCurrentContractExpired,
 };

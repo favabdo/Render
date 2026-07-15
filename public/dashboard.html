@@ -534,6 +534,12 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .contacts-tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
 .contacts-tab-count{background:rgba(0,0,0,0.08);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700}
 .contacts-tab.active .contacts-tab-count{background:rgba(255,255,255,0.25)}
+.contacts-subtabs{padding-right:4px;border-right:2.5px solid var(--border)}
+.contacts-subtab{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.contacts-subtab:hover{border-color:var(--primary-light);color:var(--text)}
+.contacts-subtab.active{background:rgba(108,92,231,0.1);border-color:var(--primary);color:var(--primary)}
+.contacts-subtab .contacts-tab-count{background:rgba(0,0,0,0.06)}
+.contacts-subtab.active .contacts-tab-count{background:rgba(108,92,231,0.18);color:var(--primary)}
 .contacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .contact-modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 10px;max-height:220px;overflow-y:auto;padding:10px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px}
 .contact-modules-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text);cursor:pointer}
@@ -1185,10 +1191,28 @@ input[type="date"].iw-input,input[type="time"].iw-input{min-width:0;max-width:10
                 عملاء مسجلين
                 <span class="contacts-tab-count" id="contacts-tab-count-registered">0</span>
             </button>
+            <button class="contacts-tab" data-tab="no_contract" onclick="switchContactsTab('no_contract')">
+                <i data-lucide="package" style="width:14px;height:14px"></i>
+                عملاء بدون عقد صيانة
+                <span class="contacts-tab-count" id="contacts-tab-count-no_contract">0</span>
+            </button>
             <button class="contacts-tab" data-tab="unregistered" onclick="switchContactsTab('unregistered')">
                 <i data-lucide="message-circle" style="width:14px;height:14px"></i>
                 ارقام غير مسجله
                 <span class="contacts-tab-count" id="contacts-tab-count-unregistered">0</span>
+            </button>
+        </div>
+        <!-- سيكشنات فرعية تحت تاب "عملاء مسجلين" بس: عقد صيانة ساري / عقد صيانة منتهي -->
+        <div class="contacts-subtabs" id="contacts-subtabs" style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="contacts-subtab active" data-subtab="active_contract" onclick="switchContactsRegisteredSubTab('active_contract')">
+                <i data-lucide="shield-check" style="width:13px;height:13px"></i>
+                عقد صيانة ساري
+                <span class="contacts-tab-count" id="contacts-subtab-count-active_contract">0</span>
+            </button>
+            <button class="contacts-subtab" data-subtab="expired_contract" onclick="switchContactsRegisteredSubTab('expired_contract')">
+                <i data-lucide="alert-triangle" style="width:13px;height:13px"></i>
+                عقد صيانة منتهي
+                <span class="contacts-tab-count" id="contacts-subtab-count-expired_contract">0</span>
             </button>
         </div>
         <div style="max-width:500px;margin-bottom:24px">
@@ -6277,10 +6301,20 @@ let contactsCurrentPage = 1;
 let contactsTotalPages = 1;
 let contactsSearchQuery = '';
 let contactsSearchDebounceTimer = null;
-// تاب صفحة الـ Contacts: 'registered' = عملاء عندهم كارت عميل أو عقد صيانة،
-// 'unregistered' = لسه بس بعتوا واتساب ومتسجلوش. بيتبعت للسيرفر كـ @registered
-// عشان الفلترة تبقى على مستوى الداتابيز مش بعد التحميل (متسقة مع الـ pagination)
+// تابات صفحة الـ Contacts بقت 3: 'registered' (عملاء بعقد صيانة، وجواها
+// سيكشنين فرعيين: عقد ساري / عقد منتهي)، 'no_contract' (عملاء مسجلين بس من
+// غير أي عقد صيانة — عندهم موديولات مختارة)، و'unregistered' (لسه بس بعتوا
+// واتساب ومتسجلوش). بيتبعتوا للسيرفر كـ @category عشان الفلترة تبقى على مستوى
+// الداتابيز مش بعد التحميل (متسقة مع الـ pagination)
 let contactsActiveTab = 'registered';
+// السيكشن الفرعي النشط تحت تاب "عملاء مسجلين" بس (مش ليه معنى في التابين التانيين)
+let contactsRegisteredSubTab = 'active_contract';
+
+// بيحسب قيمة الـ category اللي هتتبعت فعليًا للسيرفر حسب التاب/السيكشن الحالي
+function resolveContactsCategory() {
+    if (contactsActiveTab === 'registered') return contactsRegisteredSubTab;
+    return contactsActiveTab; // 'no_contract' | 'unregistered'
+}
 
 // بيجيب صفحة واحدة بس (أقصى حاجة 20 عميل) من /api/contacts-paginated، مش كل
 // العملاء دفعة واحدة — لو فيه بحث بيتبعت للسيرفر نفسه (@q) عشان النتيجة تشمل
@@ -6294,7 +6328,7 @@ async function loadContactsPage(page = 1) {
         const params = new URLSearchParams({
             page: String(page),
             pageSize: String(CONTACTS_PAGE_SIZE),
-            registered: contactsActiveTab === 'registered' ? 'yes' : 'no',
+            category: resolveContactsCategory(),
         });
         if (contactsSearchQuery) params.set('q', contactsSearchQuery);
         const res = await apiFetch(`/api/contacts-paginated?${params.toString()}`);
@@ -6312,23 +6346,44 @@ async function loadContactsPage(page = 1) {
     }
 }
 
-// بيبدّل التاب (عملاء مسجلين / لسه بس واتساب)، بيرجع لأول صفحة، ويحمّل تاني
+// بيبدّل التاب الرئيسي (عملاء مسجلين / عملاء بدون عقد صيانة / أرقام غير
+// مسجلة)، بيظهر/بيخفي السيكشنات الفرعية حسب التاب، بيرجع لأول صفحة، ويحمّل تاني
 function switchContactsTab(tab) {
     if (tab === contactsActiveTab) return;
     contactsActiveTab = tab;
     document.querySelectorAll('#contacts-tabs .contacts-tab').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.tab === tab);
     });
+    const subtabs = document.getElementById('contacts-subtabs');
+    if (subtabs) subtabs.style.display = tab === 'registered' ? 'flex' : 'none';
     loadContactsPage(1);
 }
 
-// بيحدّث الأرقام فوق التابين (بتتغير حسب نتيجة البحث كمان لو فيه بحث شغال)
+// بيبدّل السيكشن الفرعي تحت "عملاء مسجلين" (عقد ساري / عقد منتهي) بس
+function switchContactsRegisteredSubTab(subtab) {
+    if (subtab === contactsRegisteredSubTab) return;
+    contactsRegisteredSubTab = subtab;
+    document.querySelectorAll('#contacts-subtabs .contacts-subtab').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.subtab === subtab);
+    });
+    loadContactsPage(1);
+}
+
+// بيحدّث الأرقام فوق التابات الرئيسية والسيكشنات الفرعية (بتتغير حسب نتيجة
+// البحث كمان لو فيه بحث شغال)
 function renderContactsTabs(counts) {
     if (!counts) return;
-    const regEl = document.getElementById('contacts-tab-count-registered');
-    const unregEl = document.getElementById('contacts-tab-count-unregistered');
-    if (regEl) regEl.textContent = counts.registered || 0;
-    if (unregEl) unregEl.textContent = counts.unregistered || 0;
+    const active = counts.activeContract || 0;
+    const expired = counts.expiredContract || 0;
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    setText('contacts-tab-count-registered', active + expired);
+    setText('contacts-tab-count-no_contract', counts.noContract || 0);
+    setText('contacts-tab-count-unregistered', counts.unregistered || 0);
+    setText('contacts-subtab-count-active_contract', active);
+    setText('contacts-subtab-count-expired_contract', expired);
 }
 
 // البحث بقى من السيرفر مش فلترة محلية على صفحة واحدة بس — عشان لو النتيجة في
@@ -6342,9 +6397,15 @@ function onContactsSearchInput(value) {
 function renderContacts() {
     const grid = document.getElementById('contacts-grid');
     if (contactsData.length === 0) {
+        const emptyMessages = {
+            active_contract: 'لا يوجد عملاء بعقد صيانة ساري لعرضهم',
+            expired_contract: 'لا يوجد عملاء بعقد صيانة منتهي لعرضهم',
+            no_contract: 'لا يوجد عملاء بدون عقد صيانة لعرضهم',
+            unregistered: 'لا يوجد ارقام غير مسجله لعرضها',
+        };
         const emptyMsg = contactsSearchQuery
             ? 'لا توجد نتائج مطابقة'
-            : (contactsActiveTab === 'registered' ? 'لا يوجد عملاء مسجلين لعرضهم' : 'لا يوجد ارقام غير مسجله لعرضها');
+            : (emptyMessages[resolveContactsCategory()] || 'لا يوجد عملاء لعرضهم');
         grid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:13px;grid-column:1/-1">${emptyMsg}</div>`;
         return;
     }
@@ -6354,13 +6415,22 @@ function renderContacts() {
         // صفحة التفاصيل تقدر تفتح المحادثة بتاعته، أو (لو أدمن) تضيف/تعدّل بيانات
         // عقد الصيانة حتى لو العميل ده مالوش بيانات عقد مسجلة أصلًا لسه
         const hasMaintenanceInfo = !!c.maintenance_end_date;
-        const isExpired = hasMaintenanceInfo && new Date(c.maintenance_end_date) < new Date(new Date().toDateString());
+        // منتهي لو تاريخ نهايته فات، أو لو الأدمن أوقفه يدويًا قبل ما ينتهي —
+        // نفس منطق EXPIRED_CONTRACT_CONDITION في الباك إند بالظبط
+        const isExpired = hasMaintenanceInfo && (
+            !!c.maintenance_stopped_at || new Date(c.maintenance_end_date) < new Date(new Date().toDateString())
+        );
         const badge = hasMaintenanceInfo
             ? `<div class="contact-card-info" style="margin-top:4px;font-weight:700;color:${isExpired ? 'var(--danger)' : 'var(--success)'}">
                    <i data-lucide="${isExpired ? 'alert-triangle' : 'shield-check'}" style="width:12px;height:12px;vertical-align:-2px"></i>
                    ${isExpired ? 'عقد الصيانة منتهي' : 'عميل صيانة'}
                </div>`
-            : '';
+            : (resolveContactsCategory() === 'no_contract'
+                ? `<div class="contact-card-info" style="margin-top:4px;font-weight:700;color:var(--text-secondary)">
+                       <i data-lucide="package" style="width:12px;height:12px;vertical-align:-2px"></i>
+                       بدون عقد صيانة
+                   </div>`
+                : '');
         return `
         <div class="contact-card" style="position:relative" onclick="openCustomerDetails(${c.id})">
             ${isOwnerOrAdmin() ? `<button class="st-icon-btn" style="position:absolute;top:10px;left:10px;color:var(--danger)" title="حذف العميل" onclick="event.stopPropagation(); openDeleteContactModal(${c.id}, '${escapeHtml(c.name || 'العميل').replace(/'/g, "\\'")}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>` : ''}

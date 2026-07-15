@@ -304,9 +304,10 @@ async function listContacts() {
 const MAX_CONTACTS_PAGE_SIZE = 20;
 
 // عميل بيتحسب "مسجل بالفعل" لو عنده كارت عميل متضاف (location/contract_date/
-// manager_phone من زرار Add Contact) أو عنده عقد صيانة (حالي أو سابق) في سجل
-// العقود. أي كونتاكت تاني (جاي أوتوماتيك من واتساب وملوش أي حاجة من دول) بيبقى
-// "لسه بس بعت واتساب ومتسجلش" — ده هو الفرق بين التابين في صفحة Contacts
+// manager_phone من زرار Add Contact)، أو عنده عقد صيانة (حالي أو سابق) في سجل
+// العقود، أو متحطلّه موديولات مختارة (حتى لو الأدمن ضافه من غير مكان/تاريخ
+// تعاقد). أي كونتاكت تاني (جاي أوتوماتيك من واتساب وملوش أي حاجة من دول) بيبقى
+// "لسه بس بعت واتساب ومتسجلش" — ده هو الفرق بين "عملاء مسجلين" و"أرقام غير مسجلة"
 const REGISTERED_CONDITION = `(
   c.location IS NOT NULL
   OR c.contract_date IS NOT NULL
@@ -315,18 +316,70 @@ const REGISTERED_CONDITION = `(
        SELECT 1 FROM [dbo].[NileChat_MaintenanceContracts_byA] mc2
        WHERE mc2.contact_id = c.id
      )
+  OR EXISTS (
+       SELECT 1 FROM [dbo].[NileChat_ContactModules_byA] cm2
+       WHERE cm2.contact_id = c.id
+     )
 )`;
 
-async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '', registered = 'all' } = {}) {
+// "عنده عقد صيانة" (أيًا كانت حالته): يعني عمود mc.end_date مش فاضي — ده بيبقى
+// صح بس لو الـ OUTER APPLY (CURRENT_CONTRACT_APPLY) لقى عقد فعلاً لآخر عقد
+// اتضاف للعميل ده. لو العميل ملوش أي عقد أبدًا، mc.end_date بيرجع NULL
+const HAS_CONTRACT_CONDITION = `mc.end_date IS NOT NULL`;
+// عكسها بالظبط: مفيش أي عقد صيانة خالص لآخر عقد متوقع للعميل ده
+const NO_CONTRACT_COLUMN_CONDITION = `mc.end_date IS NULL`;
+
+// "العقد الحالي ساري": عنده عقد أصلًا، ومحدش أوقفه يدويًا، وتاريخ نهايته لسه
+// ما جاش (زي بالظبط منطق hasActiveUnstoppedContract في maintenanceContract.repo)
+const ACTIVE_CONTRACT_CONDITION = `(
+  ${HAS_CONTRACT_CONDITION}
+  AND mc.stopped_at IS NULL
+  AND mc.end_date >= CAST(SYSUTCDATETIME() AS DATE)
+)`;
+
+// "العقد الحالي منتهي": عنده عقد أصلًا، لكن مش ساري دلوقتي (يا إما تاريخ نهايته
+// فات، يا إما الأدمن أوقفه يدويًا قبل ما ينتهي)
+const EXPIRED_CONTRACT_CONDITION = `(
+  ${HAS_CONTRACT_CONDITION}
+  AND NOT ${ACTIVE_CONTRACT_CONDITION}
+)`;
+
+// عميل "مسجل" بس من غير أي عقد صيانة خالص (مثلاً اتضاف بموديولات مختارة بس)
+const NO_CONTRACT_CONDITION = `(
+  ${REGISTERED_CONDITION}
+  AND NOT ${HAS_CONTRACT_CONDITION}
+)`;
+
+// بيحوّل قيمة تاب/سيكشن صفحة الـ Contacts لشرط SQL مناسب — القيم المدعومة:
+// 'active_contract' (عملاء مسجلين -> عقد صيانة ساري)، 'expired_contract'
+// (عملاء مسجلين -> عقد صيانة منتهي)، 'no_contract' (عملاء بدون عقد صيانة)،
+// 'unregistered' (أرقام غير مسجلة). أي قيمة تانية أو مفيش قيمة = من غير فلترة
+function resolveContactsCategoryClause(category) {
+  switch (category) {
+    case 'active_contract':
+      return `AND ${ACTIVE_CONTRACT_CONDITION}`;
+    case 'expired_contract':
+      return `AND ${EXPIRED_CONTRACT_CONDITION}`;
+    case 'no_contract':
+      return `AND ${NO_CONTRACT_CONDITION}`;
+    case 'unregistered':
+      return `AND NOT ${REGISTERED_CONDITION}`;
+    // دعم القيمة القديمة registered=yes/no لحد ما الفرونت يتحدّث بالكامل
+    case 'registered':
+      return `AND ${REGISTERED_CONDITION}`;
+    default:
+      return '';
+  }
+}
+
+async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '', category = 'all' } = {}) {
   const pool = await getPool();
   const safePage = Math.max(1, parseInt(page, 10) || 1);
   const safePageSize = Math.min(MAX_CONTACTS_PAGE_SIZE, Math.max(1, parseInt(pageSize, 10) || MAX_CONTACTS_PAGE_SIZE));
   const offset = (safePage - 1) * safePageSize;
   const q = (search || '').trim();
 
-  let registeredClause = '';
-  if (registered === 'yes') registeredClause = `AND ${REGISTERED_CONDITION}`;
-  else if (registered === 'no') registeredClause = `AND NOT ${REGISTERED_CONDITION}`;
+  const categoryClause = resolveContactsCategoryClause(category);
 
   const contactsResult = await pool
     .request()
@@ -349,7 +402,7 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
               WHERE p.contact_id = c.id AND p.phone_number LIKE @q
             )
       )
-      ${registeredClause}
+      ${categoryClause}
       ORDER BY c.name ASC
       OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
     `);
@@ -375,22 +428,24 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     }
   }
 
-  // عدد التابين (مسجلين / لسه بس واتساب) على نفس شرط البحث @q، عشان الأرقام
-  // فوق التابات تفضل مظبوطة حتى لو المستخدم بيدور بكلمة معينة
+  // عدد كل سيكشن (عقد ساري / عقد منتهي / بدون عقد / غير مسجلين) على نفس شرط
+  // البحث @q، عشان الأرقام فوق التابات والسيكشنات الفرعية تفضل مظبوطة حتى لو
+  // المستخدم بيدور بكلمة معينة. بنجيب حالة "مسجل؟" لكل عميل مرة واحدة عن طريق
+  // CROSS APPLY (زي بالظبط الحل المستخدم قبل كده) بدل ما نحط REGISTERED_CONDITION
+  // (فيها EXISTS subqueries) جوه SUM/CASE مباشرة — SQL Server بيرفض subquery
+  // جوه argument بتاع aggregate function حتى لو ملفوفة في CASE (Error 130)
   const countsResult = await pool
     .request()
     .input('q', sql.NVarChar(200), q ? `%${q}%` : null)
     .query(`
       SELECT
-        SUM(reg.is_registered) AS registered_count,
+        SUM(CASE WHEN ${ACTIVE_CONTRACT_CONDITION} THEN 1 ELSE 0 END) AS active_contract_count,
+        SUM(CASE WHEN ${EXPIRED_CONTRACT_CONDITION} THEN 1 ELSE 0 END) AS expired_contract_count,
+        SUM(CASE WHEN ${NO_CONTRACT_COLUMN_CONDITION} AND reg.is_registered = 1 THEN 1 ELSE 0 END) AS no_contract_count,
         SUM(1 - reg.is_registered) AS unregistered_count
       FROM [dbo].[NileChat_Contacts_byA] c
+      ${CURRENT_CONTRACT_APPLY}
       CROSS APPLY (
-        -- بننقل شرط EXISTS برّه الـ SUM هنا (مش جواه مباشرة) لأن SQL Server مش بيسمح
-        -- بـ subquery جوه argument بتاع aggregate function زي SUM (بيدي Error 130:
-        -- "Cannot perform an aggregate function on an expression containing an
-        -- aggregate or a subquery"). هنا بقى reg.is_registered عمود عادي بقيمة 0/1
-        -- جاهزة، والـ SUM بيجمعها عادي من غير أي subquery جواه
         SELECT CASE WHEN ${REGISTERED_CONDITION} THEN 1 ELSE 0 END AS is_registered
       ) reg
       WHERE c.status = 1
@@ -412,7 +467,9 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     total,
     totalPages: Math.max(1, Math.ceil(total / safePageSize)),
     counts: {
-      registered: countsRow.registered_count || 0,
+      activeContract: countsRow.active_contract_count || 0,
+      expiredContract: countsRow.expired_contract_count || 0,
+      noContract: countsRow.no_contract_count || 0,
       unregistered: countsRow.unregistered_count || 0,
     },
   };

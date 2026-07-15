@@ -32,7 +32,11 @@ async function listContactsPaginated(req, res) {
     page: req.query.page,
     pageSize: req.query.pageSize,
     search: req.query.q,
-    registered: req.query.registered, // 'yes' | 'no' | 'all' (تاب "عملاء مسجلين" / "لسه بس واتساب")
+    // 'active_contract' | 'expired_contract' (تحت تاب "عملاء مسجلين") |
+    // 'no_contract' (تاب "عملاء بدون عقد صيانة") | 'unregistered' (تاب "أرقام
+    // غير مسجلة") — القيمة القديمة registered=yes/no لسه مدعومة لحد ما أي حد
+    // بيستخدم الـ API مباشرة يتحدّث
+    category: req.query.category || (req.query.registered === 'yes' ? 'registered' : req.query.registered === 'no' ? 'unregistered' : 'all'),
   });
   res.json(result);
 }

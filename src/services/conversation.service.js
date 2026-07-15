@@ -6,6 +6,7 @@ const inboxRepo = require('../repositories/inbox.repo');
 const companyRepo = require('../repositories/company.repo');
 const userRepo = require('../repositories/user.repo');
 const teamRepo = require('../repositories/team.repo');
+const maintenanceContractRepo = require('../repositories/maintenanceContract.repo');
 const webhookDispatchService = require('./webhookDispatch.service');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
@@ -302,6 +303,20 @@ async function processIncomingMessages(value, io, wabaId = null) {
       });
     }
 
+    // أتمتة "عقد الصيانة منتهي — رد على كل رسالة": بتتفحص مع كل رسالة جاية من
+    // العميل (مش أول رسالة بس زي رسالة الترحيب تحت) — لو عقده الحالي منتهي
+    // فعليًا، بيتبعتله نفس رسالة "العقد منتهي" تاني، أيًا كان عدد المرات اللي
+    // هو بيبعت فيها، لحد ما حد من الإدارة يجدد له العقد أو يوقف الأتمتة دي
+    applyContractExpiryReplyForMessage(
+      conversationId,
+      matchedContact?.id || null,
+      msg.from,
+      matchedInbox?.id || null,
+      io
+    ).catch((err) => {
+      logger.error('❌ فشل تنفيذ رد تلقائي "عقد الصيانة منتهي":', err.message);
+    });
+
     // قواعد الأتمتة (Automation) اللي بتتفعّل أول ما محادثة جديدة تتفتح فعليًا —
     // بتتنفذ مرة واحدة بس (أول رسالة فعلاً بتنشئ المحادثة)، مش مع كل رسالة جاية
     // بعد كده على نفس المحادثة المفتوحة
@@ -486,6 +501,35 @@ async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
     }
   } catch (err) {
     logger.error('❌ فشل تنفيذ قاعدة الـ Keyword Routing على المحادثة:', err.message);
+  }
+}
+
+// أتمتة "عقد الصيانة منتهي — رد تلقائي على كل رسالة جديدة": لو العميل ده عنده
+// كونتاكت متسجل وعقده الحالي (آخر عقد اتضاف) منتهي فعليًا (تاريخ نهايته فات
+// ومحدش أوقفه يدويًا)، بنبعتله نفس نص "العقد منتهي" (من إعدادات Automation)
+// تاني مع كل رسالة يبعتها — عكس contractExpiry.service.js اللي بيبعت الإشعار
+// مرة واحدة بس أول ما العقد يعدّي تاريخ نهايته من غير أي رسالة من العميل.
+// الاتنين مستقلين عن بعض: ممكن العميل ياخد إشعار السويب مرة واحدة، وبعد كده
+// كل رسالة جديدة منه (لحد ما الإدارة تجدد له أو توقف الأتمتة) تاخد نفس الرد ده.
+async function applyContractExpiryReplyForMessage(conversationId, contactId, contactNumber, inboxId, io) {
+  if (!contactId) return;
+
+  const settings = await companyRepo.getAutomationSettings();
+  if (!settings || !settings.contract_expired_enabled || !settings.contract_expired_message) return;
+
+  const isExpired = await maintenanceContractRepo.isCurrentContractExpired(contactId);
+  if (!isExpired) return;
+
+  const message = await whatsappService.sendTextMessage(
+    contactNumber,
+    settings.contract_expired_message,
+    conversationId,
+    inboxId,
+    { id: null, name: 'Automation' }
+  );
+  await conversationRepo.touchConversation(conversationId);
+  if (io && message) {
+    io.emit('new_message', { conversationId, message });
   }
 }
 
