@@ -573,7 +573,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .setting-row:last-child{border-bottom:none}
 .setting-label{font-size:14px;font-weight:500}
 .setting-desc{font-size:12px;color:var(--text-secondary);margin-top:2px}
-.toggle{width:44px;height:24px;border-radius:12px;background:var(--border);cursor:pointer;position:relative;transition:background .2s;border:none}
+.toggle{width:44px;min-width:44px;height:24px;border-radius:12px;background:var(--border);cursor:pointer;position:relative;transition:background .2s;border:none;flex-shrink:0}
 .toggle.on{background:var(--primary)}
 .toggle::after{content:'';width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
 .toggle.on::after{transform:translateX(20px)}
