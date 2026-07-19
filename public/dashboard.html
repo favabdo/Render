@@ -6495,20 +6495,56 @@ function openConversationForContact(contactId) {
 let customerCardMode = 'add'; // 'add' | 'edit'
 let customerCardEditingId = null;
 
-// نفس صيغة رقم تليفون العميل بتاعة كارت الصيانة: كود الدولة 20 وبعده رقم
-// الموبايل المصري من غير الصفر اللي في الأول (يعني 12 رقم بالظبط، بيبدأ بـ 2010/2011/2012/2015)
-// وبرضه بيقبل نفس الصيغة للأرقام السعودية: كود الدولة 966 وبعده رقم الموبايل
-// السعودي من غير الصفر اللي في الأول (12 رقم بالظبط، بيبدأ بـ 9665)
-const CUSTOMER_PHONE_REGEX = /^(201[0125]\d{8}|9665\d{8})$/;
+// صيغة رقم تليفون العميل: كود الدولة وبعده رقم الموبايل من غير الصفر اللي في الأول
+// مصر: 20 + 1[0125] + 8 أرقام (12 رقم، بيبدأ بـ 2010/2011/2012/2015)
+// السعودية: 966 + 5 + 8 أرقام (12 رقم، بيبدأ بـ 9665)
+// الكويت: 965 + [569] + 7 أرقام (11 رقم)
+// عُمان: 968 + [79] + 7 أرقام (11 رقم)
+const CUSTOMER_PHONE_REGEX = /^(201[0125]\d{8}|9665\d{8}|965[569]\d{7}|968[79]\d{7})$/;
+
+// إعدادات كل مفتاح دولة: كود الدولة، الصيغة المحلية اللي الأدمن بيكتبها (من غير الصفر
+// أو بيه، بنشيله إحنا)، والـ placeholder/hint اللي بيتغير مع الاختيار
+const PHONE_COUNTRIES = {
+    eg: { label: 'مصر (+20)', dial: '20', localRegex: /^1[0125]\d{8}$/, placeholder: 'مثال: 01061163091', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 01061163091' },
+    sa: { label: 'السعودية (+966)', dial: '966', localRegex: /^5\d{8}$/, placeholder: 'مثال: 0501234567', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 0501234567' },
+    kw: { label: 'الكويت (+965)', dial: '965', localRegex: /^[569]\d{7}$/, placeholder: 'مثال: 51234567', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 51234567' },
+    om: { label: 'عُمان (+968)', dial: '968', localRegex: /^[79]\d{7}$/, placeholder: 'مثال: 91234567', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 91234567' },
+};
+
+// بتاخد رقم زي ما الأدمن كاتبه محليًا (ممكن يبدأ بصفر أو لأ) وترجّعه بالصيغة
+// الكاملة اللي بتتخزن (كود الدولة + الرقم من غير الصفر)، مثال: مصر + "01061163091" => "201061163091"
+function normalizePhoneForCountry(countryKey, rawValue) {
+    const country = PHONE_COUNTRIES[countryKey] || PHONE_COUNTRIES.eg;
+    let digits = (rawValue || '').replace(/\D/g, '');
+    if (!digits) return '';
+    // لو الأدمن كتب/لصق الرقم بالصيغة الدولية الكاملة (بكود الدولة) نسيبه زي ما هو
+    if (digits.startsWith(country.dial) && CUSTOMER_PHONE_REGEX.test(digits)) return digits;
+    // غير كده، نشيل أي صفر في الأول (زي ما بيتكتب محليًا: 010...) ونحط كود الدولة قبله
+    digits = digits.replace(/^0+/, '');
+    return country.dial + digits;
+}
 
 function validateCustomerCardPhone() {
     const input = document.getElementById('customer-card-phone');
     const hint = document.getElementById('customer-card-phone-hint');
     if (input.disabled) return true; // في وضع التعديل الرقم مقفول، مفيش داعي نتحقق منه
+    const countryKey = document.getElementById('customer-card-phone-country')?.value || 'eg';
     const value = input.value.trim();
-    const valid = !value || CUSTOMER_PHONE_REGEX.test(value);
+    const normalized = normalizePhoneForCountry(countryKey, value);
+    const valid = !value || CUSTOMER_PHONE_REGEX.test(normalized);
     if (hint) hint.style.color = valid ? '' : 'var(--danger)';
     return valid;
+}
+
+// لما الأدمن يغيّر مفتاح الدولة، نغيّر الـ placeholder والـ hint المناسبين
+function onCustomerCardPhoneCountryChange() {
+    const countryKey = document.getElementById('customer-card-phone-country')?.value || 'eg';
+    const country = PHONE_COUNTRIES[countryKey] || PHONE_COUNTRIES.eg;
+    const input = document.getElementById('customer-card-phone');
+    const hint = document.getElementById('customer-card-phone-hint');
+    if (input) input.placeholder = country.placeholder;
+    if (hint) hint.innerHTML = country.hint;
+    validateCustomerCardPhone();
 }
 
 // نفس قايمة الموديولات الجاهزة اللي في الباك إند (src/utils/contactModules.js) —
@@ -6609,6 +6645,9 @@ function openAddCustomerModal() {
     renderCustomerCardBranches([]);
     document.getElementById('customer-card-phone').value = '';
     document.getElementById('customer-card-phone').disabled = false;
+    const phoneCountrySel = document.getElementById('customer-card-phone-country');
+    if (phoneCountrySel) { phoneCountrySel.value = 'eg'; phoneCountrySel.disabled = false; }
+    onCustomerCardPhoneCountryChange();
     document.getElementById('customer-card-signed-contract-date').value = '';
     document.getElementById('customer-card-manager-name').value = '';
     document.getElementById('customer-card-manager-phone').value = '';
@@ -6633,15 +6672,17 @@ function closeCustomerCardModal(event) {
 async function submitCustomerCard() {
     const name = document.getElementById('customer-card-name').value.trim();
     const branches = getCustomerCardBranches();
-    const phone = document.getElementById('customer-card-phone').value.trim();
+    const phoneRaw = document.getElementById('customer-card-phone').value.trim();
+    const phoneCountry = document.getElementById('customer-card-phone-country')?.value || 'eg';
+    const phone = customerCardMode === 'add' ? normalizePhoneForCountry(phoneCountry, phoneRaw) : phoneRaw;
     const errorEl = document.getElementById('customer-card-error');
     errorEl.textContent = '';
 
     if (!name) return (errorEl.textContent = 'لازم تكتب اسم الشركة');
-    if (customerCardMode === 'add' && !phone) return (errorEl.textContent = 'لازم تكتب رقم تليفون العميل');
+    if (customerCardMode === 'add' && !phoneRaw) return (errorEl.textContent = 'لازم تكتب رقم تليفون العميل');
     if (customerCardMode === 'add' && !CUSTOMER_PHONE_REGEX.test(phone)) {
         validateCustomerCardPhone();
-        return (errorEl.textContent = 'مثال: 201035292196');
+        return (errorEl.textContent = 'رقم التليفون غير صحيح، تأكد من مفتاح الدولة والرقم المكتوب');
     }
 
     const signedContractDate = document.getElementById('customer-card-signed-contract-date').value;
@@ -7014,6 +7055,8 @@ function editCurrentCustomerCard() {
     renderCustomerCardBranches(c.branches && c.branches.length ? c.branches : (c.location ? [{ name: '', location: c.location }] : []));
     document.getElementById('customer-card-phone').value = (c.phones || []).map(p => p.phone_number).join(', ');
     document.getElementById('customer-card-phone').disabled = true; // الرقم مش بيتعدل من هنا
+    const phoneCountrySelEdit = document.getElementById('customer-card-phone-country');
+    if (phoneCountrySelEdit) phoneCountrySelEdit.disabled = true;
     document.getElementById('customer-card-phone-hint').style.color = '';
     document.getElementById('customer-card-signed-contract-date').value = c.contract_date ? c.contract_date.substring(0, 10) : '';
     document.getElementById('customer-card-manager-name').value = c.manager_name || '';
@@ -8615,8 +8658,16 @@ async function iwDeleteInbox(id) {
         </button>
 
         <div class="resolve-cats-label">رقم التليفون</div>
-        <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 201001234567" maxlength="12" oninput="validateCustomerCardPhone()">
-        <div class="iw-form-hint" id="customer-card-phone-hint" style="margin-bottom:12px">مثال: <b dir="ltr">201001234567</b></div>
+        <div style="display:flex;gap:8px">
+            <select class="iw-input" id="customer-card-phone-country" style="width:auto;flex:0 0 150px" onchange="onCustomerCardPhoneCountryChange()">
+                <option value="eg">مصر (+20)</option>
+                <option value="sa">السعودية (+966)</option>
+                <option value="kw">الكويت (+965)</option>
+                <option value="om">عُمان (+968)</option>
+            </select>
+            <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 01061163091" oninput="validateCustomerCardPhone()" style="flex:1">
+        </div>
+        <div class="iw-form-hint" id="customer-card-phone-hint" style="margin-bottom:12px">اكتب الرقم زي ما هو من غير كود الدولة، مثال: <b dir="ltr">01061163091</b></div>
 
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
