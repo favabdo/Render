@@ -6505,14 +6505,14 @@ const CUSTOMER_PHONE_REGEX = /^(201[0125]\d{8}|9665\d{8}|965[569]\d{7}|968[79]\d
 // إعدادات كل مفتاح دولة: كود الدولة، الصيغة المحلية اللي الأدمن بيكتبها (من غير الصفر
 // أو بيه، بنشيله إحنا)، والـ placeholder/hint اللي بيتغير مع الاختيار
 const PHONE_COUNTRIES = {
-    eg: { label: 'مصر (+20)', dial: '20', localRegex: /^1[0125]\d{8}$/, placeholder: 'مثال: 01061163091', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 01061163091' },
+    eg: { label: 'مصر (+20)', dial: '20', localRegex: /^1[0125]\d{8}$/, placeholder: 'مثال: 01054853221', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 01054853221' },
     sa: { label: 'السعودية (+966)', dial: '966', localRegex: /^5\d{8}$/, placeholder: 'مثال: 0501234567', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 0501234567' },
     kw: { label: 'الكويت (+965)', dial: '965', localRegex: /^[569]\d{7}$/, placeholder: 'مثال: 51234567', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 51234567' },
     om: { label: 'عُمان (+968)', dial: '968', localRegex: /^[79]\d{7}$/, placeholder: 'مثال: 91234567', hint: 'اكتب الرقم زي ما هو من غير كود الدولة، مثال: 91234567' },
 };
 
 // بتاخد رقم زي ما الأدمن كاتبه محليًا (ممكن يبدأ بصفر أو لأ) وترجّعه بالصيغة
-// الكاملة اللي بتتخزن (كود الدولة + الرقم من غير الصفر)، مثال: مصر + "01061163091" => "201061163091"
+// الكاملة اللي بتتخزن (كود الدولة + الرقم من غير الصفر)، مثال: مصر + "01054853221" => "01054853221"
 function normalizePhoneForCountry(countryKey, rawValue) {
     const country = PHONE_COUNTRIES[countryKey] || PHONE_COUNTRIES.eg;
     let digits = (rawValue || '').replace(/\D/g, '');
@@ -8665,9 +8665,9 @@ async function iwDeleteInbox(id) {
                 <option value="kw">الكويت (+965)</option>
                 <option value="om">عُمان (+968)</option>
             </select>
-            <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 01061163091" oninput="validateCustomerCardPhone()" style="flex:1">
+            <input type="text" class="iw-input" id="customer-card-phone" placeholder="مثال: 01054853221" oninput="validateCustomerCardPhone()" style="flex:1">
         </div>
-        <div class="iw-form-hint" id="customer-card-phone-hint" style="margin-bottom:12px">اكتب الرقم زي ما هو من غير كود الدولة، مثال: <b dir="ltr">01061163091</b></div>
+        <div class="iw-form-hint" id="customer-card-phone-hint" style="margin-bottom:12px">اكتب الرقم زي ما هو من غير كود الدولة، مثال: <b dir="ltr">01054853221</b></div>
 
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
