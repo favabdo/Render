@@ -746,6 +746,11 @@ input[type="date"].iw-input,input[type="time"].iw-input{min-width:0;max-width:10
     input[type="date"].iw-input,input[type="time"].iw-input{padding:11px 13px;font-size:13.5px}
 }
 .iw-input:focus{outline:none;border-color:var(--primary);background:var(--surface)}
+.mc-duration-toggle{display:flex;gap:6px;margin-bottom:8px}
+.mc-duration-btn{flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--bg);font-family:inherit;font-size:12.5px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:all .15s}
+.mc-duration-btn.active{border-color:var(--primary);background:rgba(108,92,231,0.12);color:var(--primary)}
+.mc-duration-unit-wrap{display:flex;gap:8px}
+.mc-duration-unit-wrap .iw-input{width:auto;flex:1}
 .iw-input.readonly{background:var(--bg);color:var(--text-secondary);cursor:default}
 .iw-verify-row{display:flex;gap:10px;align-items:center}
 .iw-verify-status{font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;padding:9px 4px}
@@ -6609,6 +6614,7 @@ function openAddCustomerModal() {
     document.getElementById('customer-card-manager-phone').value = '';
     document.getElementById('customer-card-contract-start').value = '';
     document.getElementById('customer-card-contract-end').value = '';
+    resetContractDuration('customer-card');
     document.getElementById('customer-card-contract-row').style.display = '';
     document.getElementById('customer-card-contract-hint').style.display = '';
     document.getElementById('customer-card-phone-hint').style.color = '';
@@ -7363,6 +7369,87 @@ async function deleteMaintenanceContract(contractId) {
 }
 
 /* فتح مودال إضافة عقد صيانة جديد للعميل الحالي (أدمن/أونر بس) */
+// عناصر مدة عقد الصيانة (تاريخ البدء/الانتهاء) لكل فورم بيستخدم الـ toggle ده
+const CONTRACT_DURATION_FIELDS = {
+    'maintenance-contract': { startId: 'maintenance-contract-start-date', endId: 'maintenance-contract-end-date' },
+    'customer-card': { startId: 'customer-card-contract-start', endId: 'customer-card-contract-end' },
+};
+
+// بتبدّل بين وضع "عدد أيام" ووضع "شهر / سنة" وتعيد حساب تاريخ الانتهاء
+function setContractDurationMode(ns, mode) {
+    const toggle = document.getElementById(`${ns}-duration-toggle`);
+    if (toggle) {
+        toggle.querySelectorAll('.mc-duration-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    }
+    const daysWrap = document.getElementById(`${ns}-duration-days-wrap`);
+    const unitWrap = document.getElementById(`${ns}-duration-unit-wrap`);
+    if (daysWrap) daysWrap.style.display = mode === 'days' ? '' : 'none';
+    if (unitWrap) unitWrap.style.display = mode === 'unit' ? '' : 'none';
+    recalcContractEndDate(ns);
+}
+
+// بترجّع كل عناصر التحكم في المدة لوضعها الافتراضي (بيتنادى عليها لما الفورم يفتح)
+function resetContractDuration(ns) {
+    const daysInput = document.getElementById(`${ns}-duration-days`);
+    const valueInput = document.getElementById(`${ns}-duration-value`);
+    const unitSelect = document.getElementById(`${ns}-duration-unit`);
+    if (daysInput) daysInput.value = '';
+    if (valueInput) valueInput.value = '';
+    if (unitSelect) unitSelect.value = 'month';
+    setContractDurationMode(ns, 'days');
+}
+
+// بتضيف شهور على تاريخ (بتاخد بالها من عدد أيام الشهر، زي 31 يناير + شهر = 28/29 فبراير)
+function addMonthsToDateStr(startStr, monthsToAdd) {
+    const [y, m, d] = startStr.split('-').map(Number);
+    const base = new Date(y, m - 1, 1);
+    base.setMonth(base.getMonth() + monthsToAdd);
+    const daysInTargetMonth = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+    base.setDate(Math.min(d, daysInTargetMonth));
+    return base;
+}
+
+// بتضيف عدد أيام على تاريخ
+function addDaysToDateStr(startStr, daysToAdd) {
+    const [y, m, d] = startStr.split('-').map(Number);
+    const base = new Date(y, m - 1, d);
+    base.setDate(base.getDate() + daysToAdd);
+    return base;
+}
+
+function dateObjToInputValue(dateObj) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// المحرك المشترك: بياخد تاريخ البدء + المدة المختارة (أيام أو شهر/سنة) ويحسب تاريخ الانتهاء ويحطه في الفورم
+function recalcContractEndDate(ns) {
+    const cfg = CONTRACT_DURATION_FIELDS[ns];
+    if (!cfg) return;
+    const startEl = document.getElementById(cfg.startId);
+    const endEl = document.getElementById(cfg.endId);
+    if (!startEl || !endEl || !startEl.value) return;
+
+    const activeBtn = document.querySelector(`#${ns}-duration-toggle .mc-duration-btn.active`);
+    const mode = activeBtn ? activeBtn.dataset.mode : 'days';
+
+    let endDateObj = null;
+    if (mode === 'days') {
+        const days = parseInt(document.getElementById(`${ns}-duration-days`)?.value, 10);
+        if (!days || days <= 0) return;
+        endDateObj = addDaysToDateStr(startEl.value, days);
+    } else {
+        const value = parseInt(document.getElementById(`${ns}-duration-value`)?.value, 10);
+        const unit = document.getElementById(`${ns}-duration-unit`)?.value || 'month';
+        if (!value || value <= 0) return;
+        const months = unit === 'year' ? value * 12 : value;
+        endDateObj = addMonthsToDateStr(startEl.value, months);
+    }
+    if (endDateObj) endEl.value = dateObjToInputValue(endDateObj);
+}
+
 function openAddMaintenanceContractModal() {
     if (!customerDetailsCache) return;
     const addBtn = document.getElementById('customer-details-add-contract-btn');
@@ -7374,6 +7461,7 @@ function openAddMaintenanceContractModal() {
     document.getElementById('maintenance-contract-end-date').value = '';
     document.getElementById('maintenance-contract-notes').value = '';
     document.getElementById('maintenance-contract-modal-error').textContent = '';
+    resetContractDuration('maintenance-contract');
     document.getElementById('maintenance-contract-modal-overlay').classList.add('show');
     lucide.createIcons();
 }
@@ -8546,14 +8634,31 @@ async function iwDeleteInbox(id) {
         <div class="st-modal-readonly-row" id="customer-card-contract-row">
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
                 <div class="resolve-cats-label">تاريخ بدء عقد الصيانة (اختياري)</div>
-                <input type="date" class="iw-input" id="customer-card-contract-start">
+                <input type="date" class="iw-input" id="customer-card-contract-start" onchange="recalcContractEndDate('customer-card')">
             </div>
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
                 <div class="resolve-cats-label">تاريخ انتهاء عقد الصيانة (اختياري)</div>
                 <input type="date" class="iw-input" id="customer-card-contract-end">
             </div>
         </div>
-        <div class="iw-form-hint" id="customer-card-contract-hint" style="margin-top:-8px;margin-bottom:12px">هيتسجل كأول عقد صيانة للعميل فورًا.</div>
+
+        <div class="resolve-cats-label" style="margin-top:4px">مدة عقد الصيانة (اختياري)</div>
+        <div class="mc-duration-toggle" id="customer-card-duration-toggle">
+            <button type="button" class="mc-duration-btn active" data-mode="days" onclick="setContractDurationMode('customer-card','days')">عدد أيام</button>
+            <button type="button" class="mc-duration-btn" data-mode="unit" onclick="setContractDurationMode('customer-card','unit')">شهر / سنة</button>
+        </div>
+        <div id="customer-card-duration-days-wrap">
+            <input type="number" min="1" class="iw-input" id="customer-card-duration-days" placeholder="عدد الأيام" oninput="recalcContractEndDate('customer-card')" style="margin-bottom:8px">
+        </div>
+        <div id="customer-card-duration-unit-wrap" class="mc-duration-unit-wrap" style="display:none;margin-bottom:8px">
+            <input type="number" min="1" class="iw-input" id="customer-card-duration-value" placeholder="العدد" oninput="recalcContractEndDate('customer-card')">
+            <select class="iw-input" id="customer-card-duration-unit" onchange="recalcContractEndDate('customer-card')">
+                <option value="month">شهر</option>
+                <option value="year">سنة</option>
+            </select>
+        </div>
+
+        <div class="iw-form-hint" id="customer-card-contract-hint" style="margin-top:-8px;margin-bottom:12px">هيتسجل كأول عقد صيانة للعميل فورًا. حدد المدة وهيتحسب تاريخ الانتهاء تلقائي.</div>
 
         <div class="resolve-cats-label">الموديولات اللي العميل مشترك فيها</div>
         <div class="contact-modules-grid" id="customer-card-modules-grid"></div>
@@ -8665,13 +8770,30 @@ async function iwDeleteInbox(id) {
         <div class="st-modal-readonly-row">
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
                 <div class="resolve-cats-label">تاريخ بدء العقد</div>
-                <input type="date" class="iw-input" id="maintenance-contract-start-date">
+                <input type="date" class="iw-input" id="maintenance-contract-start-date" onchange="recalcContractEndDate('maintenance-contract')">
             </div>
             <div class="st-modal-readonly" style="background:transparent;border:none;padding:0">
                 <div class="resolve-cats-label">تاريخ انتهاء العقد</div>
                 <input type="date" class="iw-input" id="maintenance-contract-end-date">
             </div>
         </div>
+
+        <div class="resolve-cats-label" style="margin-top:4px">مدة عقد الصيانة (اختياري)</div>
+        <div class="mc-duration-toggle" id="maintenance-contract-duration-toggle">
+            <button type="button" class="mc-duration-btn active" data-mode="days" onclick="setContractDurationMode('maintenance-contract','days')">عدد أيام</button>
+            <button type="button" class="mc-duration-btn" data-mode="unit" onclick="setContractDurationMode('maintenance-contract','unit')">شهر / سنة</button>
+        </div>
+        <div id="maintenance-contract-duration-days-wrap">
+            <input type="number" min="1" class="iw-input" id="maintenance-contract-duration-days" placeholder="عدد الأيام" oninput="recalcContractEndDate('maintenance-contract')" style="margin-bottom:12px">
+        </div>
+        <div id="maintenance-contract-duration-unit-wrap" class="mc-duration-unit-wrap" style="display:none;margin-bottom:12px">
+            <input type="number" min="1" class="iw-input" id="maintenance-contract-duration-value" placeholder="العدد" oninput="recalcContractEndDate('maintenance-contract')">
+            <select class="iw-input" id="maintenance-contract-duration-unit" onchange="recalcContractEndDate('maintenance-contract')">
+                <option value="month">شهر</option>
+                <option value="year">سنة</option>
+            </select>
+        </div>
+        <div class="iw-form-hint" style="margin-top:-8px;margin-bottom:12px">حدد المدة وهيتحسب تاريخ الانتهاء تلقائي (تقدر تعدله يدوي بعد كده لو حابب).</div>
 
         <div class="resolve-cats-label" style="margin-top:12px">ملاحظات (اختياري)</div>
         <textarea class="resolve-notes" id="maintenance-contract-notes" placeholder="مثلاً: تجديد سنوي، باقة موسّعة..." style="height:60px;margin-bottom:6px"></textarea>
