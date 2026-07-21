@@ -379,14 +379,6 @@ async function ensureContactsHaveCustomerCardColumns() {
   await pool.request().query(`
     IF EXISTS (
       SELECT * FROM sys.columns
-      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'contract_date'
-    )
-    BEGIN
-      ALTER TABLE [dbo].[NileChat_Contacts_byA] DROP COLUMN contract_date;
-    END
-
-    IF EXISTS (
-      SELECT * FROM sys.columns
       WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'maintenance_end_date'
     )
     BEGIN
