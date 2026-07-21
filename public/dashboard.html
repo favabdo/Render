@@ -1811,6 +1811,7 @@ input[type="date"].iw-input,input[type="time"].iw-input{min-width:0;max-width:10
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">تاريخ التعاقد</div>
                 <div class="st-modal-readonly-value" id="customer-details-signed-contract-date">-</div>
+                <div class="st-modal-readonly-value" id="customer-details-created-by" style="opacity:.65;font-size:12px;margin-top:2px"></div>
             </div>
             <div class="st-modal-readonly">
                 <div class="st-modal-readonly-label">اسم ورقم صاحب المؤسسة</div>
@@ -6840,6 +6841,8 @@ function renderCustomerDetailsBranches(c) {
 
 function renderCustomerDetailsStats(c) {
     document.getElementById('customer-details-signed-contract-date').textContent = formatSchedDate(c.contract_date);
+    const createdByEl = document.getElementById('customer-details-created-by');
+    if (createdByEl) createdByEl.textContent = c.created_by ? (c.created_by_name || `Agent ID: ${c.created_by}`) : '';
     document.getElementById('customer-details-manager-name').textContent = c.manager_name || '-';
     document.getElementById('customer-details-manager-phone').textContent = c.manager_phone || '-';
     renderCustomerDetailsModules(c.modules);

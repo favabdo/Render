@@ -408,6 +408,15 @@ async function ensureContactsHaveCustomerCardColumns() {
 
     IF NOT EXISTS (
       SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'created_by'
+    )
+    BEGIN
+      -- الإيجنت (من جدول NileChat_Users_byA) اللي أنشأ كارت العميل ده
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD created_by BIGINT NULL;
+    END
+
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
       WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'manager_name'
     )
     BEGIN

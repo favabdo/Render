@@ -17,6 +17,14 @@ const CURRENT_CONTRACT_APPLY = `
   ) mc
 `;
 
+// بيجيب اسم الإيجنت اللي أضاف العميل (created_by) من جدول اليوزرز، عشان
+// الداشبورد يعرض الاسم مش رقم الآيدي — الآيدي نفسه (c.created_by) فاضل مخزن
+// زي ما هو في NileChat_Contacts_byA، الجوين ده بس للعرض
+const CREATED_BY_AGENT_JOIN = `
+  LEFT JOIN [dbo].[NileChat_Users_byA] cb ON cb.id = c.created_by
+`;
+const CREATED_BY_AGENT_NAME_SELECT = `COALESCE(NULLIF(LTRIM(RTRIM(cb.display_name)), ''), NULLIF(LTRIM(RTRIM(cb.full_name)), ''), cb.email) AS created_by_name`;
+
 // بيدور على الكونتاكت اللي رقم التليفون ده مرتبط بيه (لو موجود)
 async function findContactByPhone(phoneNumber) {
   const pool = await getPool();
@@ -78,10 +86,12 @@ async function getContactByIdWithCurrentContract(id) {
     .input('id', sql.BigInt, id)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
+             c.created_by, ${CREATED_BY_AGENT_NAME_SELECT},
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
+      ${CREATED_BY_AGENT_JOIN}
       WHERE c.id = @id
     `);
   return result.recordset[0] || null;
@@ -269,10 +279,12 @@ async function listContacts() {
     .request()
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
+             c.created_by, ${CREATED_BY_AGENT_NAME_SELECT},
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
+      ${CREATED_BY_AGENT_JOIN}
       WHERE c.status = 1
       ORDER BY c.name ASC
     `);
@@ -388,11 +400,13 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     .input('pageSize', sql.Int, safePageSize)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
+             c.created_by, ${CREATED_BY_AGENT_NAME_SELECT},
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at,
              COUNT(*) OVER() AS total_count
       FROM [dbo].[NileChat_Contacts_byA] c
       ${CURRENT_CONTRACT_APPLY}
+      ${CREATED_BY_AGENT_JOIN}
       WHERE c.status = 1
       AND (
          @q IS NULL
@@ -589,10 +603,11 @@ async function createCustomerContact({
     .input('contractDate', sql.Date, signedContractDate || null)
     .input('managerName', sql.NVarChar(200), managerName || null)
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
+    .input('createdBy', sql.BigInt, createdBy || null)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone, created_by)
       OUTPUT INSERTED.*
-      VALUES (@name, @location, @contractDate, @managerName, @managerPhone)
+      VALUES (@name, @location, @contractDate, @managerName, @managerPhone, @createdBy)
     `);
   const contact = result.recordset[0];
 
