@@ -662,7 +662,12 @@ async function updateCustomerDetails(id, { name, location, branches, signedContr
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
     .query(`
       UPDATE [dbo].[NileChat_Contacts_byA]
-      SET name = @name, location = @location, contract_date = @contractDate, manager_name = @managerName, manager_phone = @managerPhone
+      SET name = @name, location = @location,
+          -- contract_date: بيتحدّث بس لو فعلاً جاله تاريخ جديد (@contractDate مش NULL).
+          -- لو الفورم اللي بعتت التعديل مبعتتش الفيلد ده أصلاً (NULL)، بنسيب القيمة
+          -- الموجودة زي ما هي وميتمسحش، بالظبط زي أي عمود تاني مش بيتلمس من هنا
+          contract_date = COALESCE(@contractDate, contract_date),
+          manager_name = @managerName, manager_phone = @managerPhone
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
