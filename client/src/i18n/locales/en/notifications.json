@@ -1,0 +1,15 @@
+{
+  "title": "Notifications",
+  "markAllRead": "Mark all as read",
+  "empty": "No notifications yet",
+  "timeAgo": {
+    "now": "Just now",
+    "minutes": "{{count}}m ago",
+    "hours": "{{count}}h ago",
+    "days": "{{count}}d ago"
+  },
+  "updateFailed": "Failed to update the notification",
+  "markAllSuccess": "All notifications marked as read",
+  "markAllFailed": "Failed to mark all as read",
+  "newNotificationFallback": "New notification"
+}

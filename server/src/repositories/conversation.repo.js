@@ -1,0 +1,640 @@
+const { getPool, sql, TABLE_NAME } = require('../database/connection');
+
+// بيدور على محادثة مفتوحة لنفس الرقم، ولو مش لاقي بينشئ واحدة جديدة
+// inboxId: لو الرسالة جاية من Inbox معروف (رقم واتساب متضاف من صفحة الإعدادات) بنربط المحادثة بيه
+// عشان لو حصل رد نبعته من نفس الرقم اللي العميل كلمنا منه بالظبط
+// contactId: الكونتاكت الحقيقي اللي الرقم ده مرتبط بيه دلوقتي (ممكن يتغيّر لو حصل دمج بعدين،
+// فبنعيد مزامنته في كل رسالة جديدة عشان يفضل متسق مع جدول ContactPhones)
+async function findOrCreateConversation(contactNumber, contactName, inboxId = null, contactId = null) {
+  const pool = await getPool();
+
+  const existing = await pool
+    .request()
+    .input('contactNumber', sql.NVarChar(30), contactNumber)
+    .query(`
+      SELECT TOP 1 * FROM [dbo].[NileChat_Conversations_byA]
+      WHERE contact_number = @contactNumber AND status != 'closed'
+      ORDER BY created_at DESC
+    `);
+
+  if (existing.recordset.length > 0) {
+    const convo = existing.recordset[0];
+    // حدّث اسم العميل لو اتغيّر أو كان فاضي
+    if (contactName && contactName !== convo.contact_name) {
+      await pool
+        .request()
+        .input('id', sql.BigInt, convo.id)
+        .input('contactName', sql.NVarChar(200), contactName)
+        .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_name = @contactName WHERE id = @id`);
+    }
+    // لو المحادثة كانت من غير Inbox معروف وجالها inboxId دلوقتي، اربطها بيه
+    if (inboxId && !convo.inbox_id) {
+      await pool
+        .request()
+        .input('id', sql.BigInt, convo.id)
+        .input('inboxId', sql.BigInt, inboxId)
+        .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET inbox_id = @inboxId WHERE id = @id`);
+    }
+    // زامن contact_id مع الكونتاكت الحالي بتاع الرقم (لو حصل دمج قبل كده، الرقم بقى ملك كونتاكت تاني)
+    if (contactId && String(convo.contact_id || '') !== String(contactId)) {
+      await pool
+        .request()
+        .input('id', sql.BigInt, convo.id)
+        .input('contactId', sql.BigInt, contactId)
+        .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_id = @contactId WHERE id = @id`);
+    }
+    return { id: convo.id, isNew: false };
+  }
+
+  const inserted = await pool
+    .request()
+    .input('contactNumber', sql.NVarChar(30), contactNumber)
+    .input('contactName', sql.NVarChar(200), contactName)
+    .input('inboxId', sql.BigInt, inboxId)
+    .input('contactId', sql.BigInt, contactId)
+    .query(`
+      INSERT INTO [dbo].[NileChat_Conversations_byA] (contact_number, contact_name, status, last_message_at, inbox_id, contact_id)
+      OUTPUT INSERTED.id
+      VALUES (@contactNumber, @contactName, 'open', SYSUTCDATETIME(), @inboxId, @contactId)
+    `);
+
+  return { id: inserted.recordset[0].id, isNew: true };
+}
+
+// بتحدّث الكونتاكت المرتبط بمحادثة معينة (تُستخدم لما الإيجنت يدمج رقم مع كونتاكت تاني)
+async function setConversationContact(conversationId, contactId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, conversationId)
+    .input('contactId', sql.BigInt, contactId)
+    .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_id = @contactId WHERE id = @id`);
+}
+
+// بتنقل كل المحادثات المرتبطة برقم تليفون معين لكونتاكت تاني — تُستخدم لما الإيجنت
+// يفصل رقم من كونتاكت عنده أكتر من رقم (unlinkPhoneToNewContact)، عشان المحادثات
+// القديمة بتاعة الرقم ده تتبع الكونتاكت الجديد المنفصل مش القديم
+async function reassignConversationsContactByNumber(phoneNumber, contactId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('phone', sql.NVarChar(30), phoneNumber)
+    .input('contactId', sql.BigInt, contactId)
+    .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_id = @contactId WHERE contact_number = @phone`);
+}
+
+async function touchConversation(conversationId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, conversationId)
+    .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET last_message_at = SYSUTCDATETIME() WHERE id = @id`);
+}
+
+async function listConversations(hideRatingMessages = false) {
+  const pool = await getPool();
+  // الإيجنت (role > 1) مش المفروض يشوف رسايل أتمتة "ما بعد الحل" (CSAT/تقييم)
+  // حتى في معاينة آخر رسالة في قايمة المحادثات — فبنستثنيها من الـ subqueries
+  // دي لو hideRatingMessages=true (شوف conversation.controller.js)
+  const postResolveFilter = hideRatingMessages ? 'AND m.is_post_resolve = 0' : '';
+  const result = await pool.request().query(`
+    SELECT c.*,
+      COALESCE(u.display_name, u.email) AS assigned_agent_name,
+      COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
+      i.name AS inbox_name,
+      ct.name AS contact_display_name,
+      COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
+      ct.location AS contact_location,
+      ct.is_vip AS contact_is_vip,
+      mc.start_date AS contact_contract_date,
+      mc.end_date AS contact_maintenance_end_date,
+      (
+        SELECT TOP 1 m.message_text
+        FROM [dbo].[${TABLE_NAME}] m
+        WHERE m.conversation_id = c.id AND m.direction != 'note' ${postResolveFilter}
+        ORDER BY m.created_at DESC
+      ) AS last_message_text,
+      (
+        -- نوع آخر رسالة (text/image/video/audio/document...) عشان لو رسالة وسائط
+        -- من غير كابشن، الفرونت إند يعرض "📷 Photo" بدل معاينة فاضية
+        SELECT TOP 1 m.message_type
+        FROM [dbo].[${TABLE_NAME}] m
+        WHERE m.conversation_id = c.id AND m.direction != 'note' ${postResolveFilter}
+        ORDER BY m.created_at DESC
+      ) AS last_message_type,
+      (
+        -- بنجيب اتجاه آخر رسالة (in/out) عشان الفرونت إند يعرف يفرق بين
+        -- رسالة جديدة جاية من العميل (لازم تتحسب unread) ورد بعته الإيجنت نفسه
+        SELECT TOP 1 m.direction
+        FROM [dbo].[${TABLE_NAME}] m
+        WHERE m.conversation_id = c.id AND m.direction != 'note' ${postResolveFilter}
+        ORDER BY m.created_at DESC
+      ) AS last_message_direction,
+      (
+        -- إجمالي عدد الرسائل في المحادثة (مفيد لحساب/عرض العداد بدقة)
+        SELECT COUNT(*)
+        FROM [dbo].[${TABLE_NAME}] m
+        WHERE m.conversation_id = c.id
+      ) AS message_count
+    FROM [dbo].[NileChat_Conversations_byA] c
+    LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
+    LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
+    LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
+    LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
+    OUTER APPLY (
+      -- "العقد الحالي" لكونتاكت المحادثة دي: الساري لو موجود، وإلا آخر عقد انتهى
+      -- (نفس منطق CURRENT_CONTRACT_APPLY في contact.repo.js) — بيتعرض كبادچ "عميل
+      -- صيانة"/"منتهي" في بانل تفاصيل العميل جمب المحادثة
+      SELECT TOP 1 m.start_date, m.end_date
+      FROM [dbo].[NileChat_MaintenanceContracts_byA] m
+      WHERE m.contact_id = ct.id
+      ORDER BY
+        CASE WHEN CAST(SYSUTCDATETIME() AS DATE) BETWEEN m.start_date AND m.end_date THEN 0 ELSE 1 END,
+        m.end_date DESC
+    ) mc
+    ORDER BY c.last_message_at DESC
+  `);
+  const conversations = result.recordset;
+
+  // بنجيب كل الليبلز المحطوطة على أي محادثة في استعلام واحد منفصل (مش FOR JSON PATH
+  // عشان بعض نسخ SQL Server -زي الـ instance اللي شغالة عليه دلوقتي- مش بتدعمها)
+  // وبعدين بنجمعهم في JS حسب conversation_id ونحطهم كـ labels_json نص جاهز للفرونت إند
+  const labelsResult = await pool.request().query(`
+    SELECT cl.conversation_id, l.id, l.name, l.color, l.description
+    FROM [dbo].[NileChat_ConversationLabels_byA] cl
+    JOIN [dbo].[NileChat_Labels_byA] l ON l.id = cl.label_id
+    ORDER BY cl.conversation_id, cl.created_at ASC
+  `);
+  const labelsByConversation = new Map();
+  for (const row of labelsResult.recordset) {
+    const key = String(row.conversation_id);
+    if (!labelsByConversation.has(key)) labelsByConversation.set(key, []);
+    labelsByConversation.get(key).push({ id: row.id, name: row.name, color: row.color, description: row.description });
+  }
+  for (const c of conversations) {
+    c.labels_json = JSON.stringify(labelsByConversation.get(String(c.id)) || []);
+  }
+
+  // نفس فكرة الليبلز بالظبط بس للتيمز — استعلام منفصل وتجميع في JS
+  // عشان نحط teams_json جاهز للفرونت إند (يستخدم نفس parseLabelsJson هناك)
+  const teamsResult = await pool.request().query(`
+    SELECT ct.conversation_id, t.id, t.name, t.icon, t.color
+    FROM [dbo].[NileChat_ConversationTeams_byA] ct
+    JOIN [dbo].[NileChat_Teams_byA] t ON t.id = ct.team_id
+    ORDER BY ct.conversation_id, ct.created_at ASC
+  `);
+  const teamsByConversation = new Map();
+  for (const row of teamsResult.recordset) {
+    const key = String(row.conversation_id);
+    if (!teamsByConversation.has(key)) teamsByConversation.set(key, []);
+    teamsByConversation.get(key).push({ id: row.id, name: row.name, icon: row.icon, color: row.color });
+  }
+  for (const c of conversations) {
+    c.teams_json = JSON.stringify(teamsByConversation.get(String(c.id)) || []);
+  }
+
+  // نفس فكرة الليبلز والتيمز بالظبط بس للفروع — الفرق إن الفرع مرتبط بالكونتاكت
+  // (contact_id) مش بالمحادثة نفسها، فبنجيب كل الفروع مرة واحدة ونربطها بكل
+  // محادثة حسب contact_id بتاعها، عشان بانل العميل جنب الشات يعرف يعرض اسم/مكان
+  // الفرع تحت اسم العميل حتى لو كونتاكتات قديمة معندهاش فروع متعددة (هترجع مصفوفة فاضية
+  // والفرونت إند وقتها بيرجع لعمود location القديم بتاع الكونتاكت كـ fallback)
+  const branchesResult = await pool.request().query(`
+    SELECT contact_id, name, location FROM [dbo].[NileChat_ContactBranches_byA]
+    ORDER BY contact_id, created_at ASC, id ASC
+  `);
+  const branchesByContact = new Map();
+  for (const row of branchesResult.recordset) {
+    const key = String(row.contact_id);
+    if (!branchesByContact.has(key)) branchesByContact.set(key, []);
+    branchesByContact.get(key).push({ name: row.name || null, location: row.location || null });
+  }
+  for (const c of conversations) {
+    c.branches_json = JSON.stringify(c.contact_id ? branchesByContact.get(String(c.contact_id)) || [] : []);
+  }
+
+  return conversations;
+}
+
+
+// نسخة خفيفة من getConversationById لمسار "بعت رد" (reply/reply-media) بس —
+// المسار ده مش محتاج غير 5 أعمدة (id, contact_number, contact_name, inbox_id,
+// locked_at)، ومش بيستخدم أسماء الإيجنت المعين/اللي عمل resolve، اسم الـ Inbox،
+// بيانات الكونتاكت (location/VIP/فروع)، ولا تواريخ عقد الصيانة — كل دي بس لازمة
+// لشاشة تفاصيل المحادثة الكاملة (getConversationById الأصلية). استعلام واحد،
+// من غير أي LEFT JOIN ولا OUTER APPLY ولا رحلة تانية للداتابيز لجلب الفروع —
+// نفس النتيجة بالظبط للحقول اللي reply() فعليًا بيستخدمها، بس أسرع بكتير.
+async function getConversationForReply(id) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .query(`
+      SELECT id, contact_number, contact_name, inbox_id, locked_at
+      FROM [dbo].[NileChat_Conversations_byA]
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+async function getConversationById(id) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .query(`
+      SELECT c.*,
+        COALESCE(u.display_name, u.email) AS assigned_agent_name,
+        COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
+        i.name AS inbox_name,
+        ct.name AS contact_display_name,
+        COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
+        ct.location AS contact_location,
+        ct.is_vip AS contact_is_vip,
+        mc.start_date AS contact_contract_date,
+        mc.end_date AS contact_maintenance_end_date
+      FROM [dbo].[NileChat_Conversations_byA] c
+      LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
+      LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
+      LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
+      LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
+      OUTER APPLY (
+        SELECT TOP 1 m.start_date, m.end_date
+        FROM [dbo].[NileChat_MaintenanceContracts_byA] m
+        WHERE m.contact_id = ct.id
+        ORDER BY
+          CASE WHEN CAST(SYSUTCDATETIME() AS DATE) BETWEEN m.start_date AND m.end_date THEN 0 ELSE 1 END,
+          m.end_date DESC
+      ) mc
+      WHERE c.id = @id
+    `);
+  const conversation = result.recordset[0] || null;
+  if (conversation && conversation.contact_id) {
+    const branchesResult = await pool
+      .request()
+      .input('contactId', sql.BigInt, conversation.contact_id)
+      .query(`
+        SELECT name, location FROM [dbo].[NileChat_ContactBranches_byA]
+        WHERE contact_id = @contactId
+        ORDER BY created_at ASC, id ASC
+      `);
+    conversation.branches_json = JSON.stringify(
+      branchesResult.recordset.map((r) => ({ name: r.name || null, location: r.location || null }))
+    );
+  } else if (conversation) {
+    conversation.branches_json = '[]';
+  }
+  return conversation;
+}
+
+async function assignConversation(conversationId, agentId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, conversationId)
+    .input('agentId', sql.BigInt, agentId)
+    .query(`
+      UPDATE [dbo].[NileChat_Conversations_byA]
+      SET assigned_agent_id = @agentId, status = 'assigned'
+      WHERE id = @id
+    `);
+}
+
+// بتقفل المحادثة فعليًا في الداتابيز (مش شكليًا في الواجهة بس) وبتسجل مين حلها وإمتى وتحت أي تصنيف
+// وكمان بتسجل locked_at — ده اللي بيقفل المحادثة نهائيًا (مش status بس)، فحتى لو حصل
+// Reopen بعد كده مفيش أي إجراء (رد/تعيين/ملاحظة/Resolve تاني) هيتقبل عليها تاني أبدًا
+async function resolveConversation(conversationId, { category = null, notes = null, resolvedBy = null } = {}) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, conversationId)
+    .input('category', sql.NVarChar(150), category)
+    .input('notes', sql.NVarChar(sql.MAX), notes)
+    .input('resolvedBy', sql.BigInt, resolvedBy)
+    .query(`
+      UPDATE [dbo].[NileChat_Conversations_byA]
+      SET status = 'closed',
+          resolve_category = @category,
+          resolve_notes = @notes,
+          resolved_by = @resolvedBy,
+          resolved_at = SYSUTCDATETIME(),
+          locked_at = COALESCE(locked_at, SYSUTCDATETIME())
+      WHERE id = @id
+    `);
+}
+
+// مهم: الـ Reopen ده شكلي بس — غرضه الوحيد إن المحادثة تظهر تاني في قسم "المفتوحة"
+// في لوحة التحكم. هو بيغيّر status بس ومبيلمسش locked_at خالص، فالمحادثة تفضل مقفولة
+// نهائيًا وأي محاولة رد/تعيين/ملاحظة/Resolve عليها هتترفض طول ما locked_at مش NULL،
+// مهما اتعمل عليها Reopen كام مرة. لو حبيت تفتح محادثة فعليًا تاني لازم تبقى محادثة
+// جديدة (بتتعمل تلقائيًا لما العميل يبعت رسالة تانية، مش عن طريق الزرار ده)
+async function reopenConversation(conversationId) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, conversationId)
+    .query(`
+      UPDATE [dbo].[NileChat_Conversations_byA]
+      SET status = 'open'
+      WHERE id = @id
+    `);
+}
+
+// كل المحادثات السابقة (المفتوحة والمقفولة) الخاصة بنفس الكونتاكت، حتى لو كانت
+// جاية من أرقام مختلفة مرتبطة بيه — عشان الإيجنت يقدر يشوف تاريخ العميل كله
+// من غير ما يفوّت أي محادثة قديمة اتقفلت أو جاية من رقم تاني للعميل نفسه
+async function getConversationsForContact(contactId, excludeConversationId = null) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('contactId', sql.BigInt, contactId)
+    .input('excludeId', sql.BigInt, excludeConversationId)
+    .query(`
+      SELECT c.*,
+        COALESCE(u.display_name, u.email) AS assigned_agent_name,
+        COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
+        (
+          SELECT TOP 1 m.message_text
+          FROM [dbo].[${TABLE_NAME}] m
+          WHERE m.conversation_id = c.id AND m.direction != 'note'
+          ORDER BY m.created_at DESC
+        ) AS last_message_text,
+        (
+          SELECT COUNT(*)
+          FROM [dbo].[${TABLE_NAME}] m
+          WHERE m.conversation_id = c.id
+        ) AS message_count
+      FROM [dbo].[NileChat_Conversations_byA] c
+      LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
+      LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
+      WHERE c.contact_id = @contactId
+        AND (@excludeId IS NULL OR c.id != @excludeId)
+      ORDER BY c.last_message_at DESC
+    `);
+  return result.recordset;
+}
+
+// بيرجع المحادثات المفتوحة (مش مقفولة نهائيًا) اللي معداش عليها نشاط (last_message_at)
+// من عدد الأيام ده — مرشحة إنها تتعمللها Resolve تلقائي بسبب عدم التفاعل
+async function findConversationsInactiveSince(days) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('days', sql.Int, days)
+    .query(`
+      SELECT id FROM [dbo].[NileChat_Conversations_byA]
+      WHERE locked_at IS NULL
+        AND status != 'closed'
+        AND last_message_at IS NOT NULL
+        AND last_message_at <= DATEADD(DAY, -@days, SYSUTCDATETIME())
+    `);
+  return result.recordset;
+}
+
+async function getMessagesForConversation(conversationId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .query(`
+      SELECT * FROM [dbo].[${TABLE_NAME}]
+      WHERE conversation_id = @conversationId
+      ORDER BY created_at ASC
+    `);
+  return result.recordset;
+}
+
+/**
+ * بيحفظ رسالة واحدة (وارد أو صادر) في الجدول
+ */
+async function saveMessage({
+  waMessageId = null,
+  conversationId = null,
+  direction,
+  fromNumber = null,
+  toNumber = null,
+  contactName = null,
+  messageType = null,
+  messageText = null,
+  mediaUrl = null,
+  mediaMime = null,
+  mediaFileName = null,
+  status = null,
+  rawPayload = null,
+  sentByUserId = null,
+  sentByName = null,
+  // true لأي رسالة جزء من أتمتة "ما بعد الحل" (CSAT + فلو التقييم + ردود العميل
+  // عليها) — بتتفلتر بره اللي بيرجع للإيجنت (admin/owner بس اللي يشوفوها)
+  isPostResolve = false,
+}) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('waMessageId', sql.NVarChar(100), waMessageId)
+    .input('conversationId', sql.BigInt, conversationId)
+    .input('direction', sql.NVarChar(10), direction)
+    .input('fromNumber', sql.NVarChar(30), fromNumber)
+    .input('toNumber', sql.NVarChar(30), toNumber)
+    .input('contactName', sql.NVarChar(200), contactName)
+    .input('messageType', sql.NVarChar(30), messageType)
+    .input('messageText', sql.NVarChar(sql.MAX), messageText)
+    .input('mediaUrl', sql.NVarChar(500), mediaUrl)
+    .input('mediaMime', sql.NVarChar(150), mediaMime)
+    .input('mediaFileName', sql.NVarChar(300), mediaFileName)
+    .input('status', sql.NVarChar(30), status)
+    .input('rawPayload', sql.NVarChar(sql.MAX), rawPayload)
+    .input('sentByUserId', sql.BigInt, sentByUserId)
+    .input('sentByName', sql.NVarChar(200), sentByName)
+    .input('isPostResolve', sql.Bit, Boolean(isPostResolve))
+    .query(`
+      INSERT INTO [dbo].[${TABLE_NAME}]
+        (wa_message_id, conversation_id, direction, from_number, to_number, contact_name,
+         message_type, message_text, media_url, media_mime, media_filename, status, raw_payload,
+         sent_by_user_id, sent_by_name, is_post_resolve)
+      OUTPUT INSERTED.*
+      VALUES
+        (@waMessageId, @conversationId, @direction, @fromNumber, @toNumber, @contactName,
+         @messageType, @messageText, @mediaUrl, @mediaMime, @mediaFileName, @status, @rawPayload,
+         @sentByUserId, @sentByName, @isPostResolve)
+    `);
+  return result.recordset[0];
+}
+
+/**
+ * بيحدّث حالة رسالة موجودة (sent/delivered/read/failed) لو وصل webhook status
+ * هنا بنضيف سطر جديد بالحالة عشان نحتفظ بتاريخ كامل لكل التحديثات (audit trail)
+ */
+async function saveStatusUpdate({ waMessageId, status, rawPayload, conversationId = null }) {
+  return saveMessage({
+    waMessageId,
+    conversationId,
+    direction: 'status',
+    status,
+    rawPayload,
+  });
+}
+
+/**
+ * ملاحظة خاصة بين الإيجنتس على محادثة معينة — بتتخزن في نفس جدول الرسائل
+ * (direction='note') بس متضمنش أي إرسال لواتساب، وبتتفلتر بره في كل الأماكن
+ * اللي بتتعامل مع رسايل العميل (in/out) عشان العميل ميشوفهاش أبدًا.
+ */
+async function addPrivateNote(conversationId, { text, senderId, senderName }) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .input('messageText', sql.NVarChar(sql.MAX), text)
+    .input('sentByUserId', sql.BigInt, senderId)
+    .input('sentByName', sql.NVarChar(200), senderName)
+    .query(`
+      INSERT INTO [dbo].[${TABLE_NAME}] (conversation_id, direction, message_text, sent_by_user_id, sent_by_name)
+      OUTPUT INSERTED.*
+      VALUES (@conversationId, 'note', @messageText, @sentByUserId, @sentByName)
+    `);
+  return result.recordset[0];
+}
+
+/**
+ * رسايل نظام (system messages) — بتتسجل في نفس جدول الرسائل (direction='system')
+ * عشان تظهر جوه تايم لاين الشات بالظبط زي أي رسالة تانية، لكنها مش رسايل حقيقية
+ * (مش بتتبعت لواتساب ومحدش بيشوفها غير الإيجنتس). النص بيتسجل جاهز (snapshot)
+ * وقت حصول الحدث (زي "فلان عين المحادثة لنفسه") عشان لو الاسم اتغيّر بعدين
+ * الرسالة القديمة تفضل زي ما هي.
+ */
+async function addSystemMessage(conversationId, text) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .input('messageText', sql.NVarChar(sql.MAX), text)
+    .query(`
+      INSERT INTO [dbo].[${TABLE_NAME}] (conversation_id, direction, message_text)
+      OUTPUT INSERTED.*
+      VALUES (@conversationId, 'system', @messageText)
+    `);
+  return result.recordset[0];
+}
+
+/**
+ * بتحدّث حالة رسالة صادرة (out) موجودة فعلاً — بندور عليها بالـ wa_message_id
+ * (اللي رجعلنا من ميتا وقت الإرسال) وبنحدّث عمود status بتاعها فعليًا،
+ * بدل ما نضيف سطر جديد منفصل (زي ما كان بيحصل قبل كده)، عشان الفرونت إند
+ * يقدر يعرض تيك واحد (sent) / تيكين (delivered) / تيكين ملوّنين (read) على
+ * نفس فقاعة الرسالة مباشرة.
+ * بنحمي من إن تحديث متأخر/مكرر يرجّع الحالة للورا (مثلاً delivered بعد read)
+ * عن طريق مقارنة "رتبة" الحالة الجديدة بالحالة الحالية قبل ما نحدّث.
+ */
+async function updateMessageStatusByWaId(waMessageId, status) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('waMessageId', sql.NVarChar(100), waMessageId)
+    .input('status', sql.NVarChar(30), status)
+    .query(`
+      UPDATE [dbo].[${TABLE_NAME}]
+      SET status = @status
+      OUTPUT INSERTED.*
+      WHERE wa_message_id = @waMessageId
+        AND direction = 'out'
+        AND (
+          status IS NULL
+          OR (
+            CASE status
+              WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 0
+            END
+            <
+            CASE @status
+              WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 0
+            END
+          )
+        )
+    `);
+  return result.recordset[0] || null;
+}
+
+/**
+ * بتقفل دورة حياة رسالة صادرة اتسجلت الأول بحالة 'sending' (قبل ما نستنى رد ميتا).
+ * لما ميتا ترد بنجاح: بنسجل الـ wa_message_id الحقيقي ونحوّل الحالة لـ 'sent'.
+ * لما ميتا ترفض/الاتصال يفشل: بنحوّل الحالة لـ 'failed' من غير wa_message_id.
+ * (بنسجلها في الداتابيز بس للأرشفة — مفيش تيك في الواجهة يستخدمها).
+ */
+async function finalizeOutgoingMessage(id, { waMessageId = null, status }) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('waMessageId', sql.NVarChar(100), waMessageId)
+    .input('status', sql.NVarChar(30), status)
+    .query(`
+      UPDATE [dbo].[${TABLE_NAME}]
+      SET status = @status,
+          wa_message_id = COALESCE(@waMessageId, wa_message_id)
+      OUTPUT INSERTED.*
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+/**
+ * بتحدّث رابط/نوع الوسائط لرسالة واردة موجودة بالفعل — مستخدمة لما التنزيل من
+ * ميتا بيحصل في الخلفية بعد ما الرسالة اتسجلت وظهرت للإيجنت على طول (mediaUrl=null
+ * مؤقتًا)، عشان تظهر الصورة فعليًا أول ما التنزيل يخلص من غير ما نستنى قبل كده
+ */
+async function updateMessageMedia(id, { mediaUrl, mediaMime }) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('mediaUrl', sql.NVarChar(500), mediaUrl)
+    .input('mediaMime', sql.NVarChar(150), mediaMime)
+    .query(`
+      UPDATE [dbo].[${TABLE_NAME}]
+      SET media_url = @mediaUrl,
+          media_mime = COALESCE(@mediaMime, media_mime)
+      OUTPUT INSERTED.*
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+// بيرجع الـ ids بتاعة الإيجنتس اللي ردوا/كتبوا نوت قبل كده في المحادثة دي (المشاركين
+// فيها) — مستخدمة عشان نبعت إشعار "رسالة جديدة في محادثة أنت مشارك فيها" لأي حد
+// شارك فيها قبل كده غير الإيجنت المعين عليها (ده بياخد إشعار تاني منفصل)
+async function getParticipantAgentIds(conversationId, excludeIds = []) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('conversationId', sql.BigInt, conversationId)
+    .query(`
+      SELECT DISTINCT sent_by_user_id
+      FROM [dbo].[${TABLE_NAME}]
+      WHERE conversation_id = @conversationId AND sent_by_user_id IS NOT NULL
+    `);
+  const excludeSet = new Set((excludeIds || []).map((id) => String(id)));
+  return result.recordset
+    .map((r) => r.sent_by_user_id)
+    .filter((id) => id !== null && !excludeSet.has(String(id)));
+}
+
+module.exports = {
+  findOrCreateConversation,
+  setConversationContact,
+  reassignConversationsContactByNumber,
+  touchConversation,
+  listConversations,
+  getConversationById,
+  getConversationForReply,
+  assignConversation,
+  resolveConversation,
+  reopenConversation,
+  getMessagesForConversation,
+  findConversationsInactiveSince,
+  getConversationsForContact,
+  saveMessage,
+  saveStatusUpdate,
+  addPrivateNote,
+  addSystemMessage,
+  updateMessageStatusByWaId,
+  updateMessageMedia,
+  finalizeOutgoingMessage,
+};

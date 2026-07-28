@@ -1,0 +1,103 @@
+{
+  "pageTitle": "Profile Settings",
+  "pageSubtitle": "Your personal account details",
+  "notSupported": "Not supported",
+  "enabled": "Enabled ✓",
+  "blockedByBrowser": "Blocked by browser",
+  "enable": "Enable",
+  "errors": {
+    "nameTooShort": "The name is too short",
+    "emailRequired": "Please enter a valid email",
+    "invalidImage": "Please choose a valid image",
+    "imageTooLarge": "Image is larger than 5MB",
+    "noAvatarYet": "There's no profile picture to remove",
+    "fillAllPasswordFields": "Please fill in all password fields",
+    "passwordTooShort": "The new password must be at least 6 characters",
+    "passwordMismatch": "The new password and confirmation don't match",
+    "notificationsNotSupported": "This browser doesn't support notifications",
+    "notificationsBlocked": "Notifications not allowed — you can enable them from your browser settings",
+    "regenerateFirst": "Click Regenerate first to generate a token",
+    "copyFailed": "Copy failed"
+  },
+  "success": {
+    "updated": "Updated successfully",
+    "avatarUpdated": "Profile picture updated successfully",
+    "avatarRemoved": "Profile picture removed",
+    "passwordUpdated": "Password updated successfully",
+    "pushEnabled": "Browser notifications enabled",
+    "pushNotifBody": "You'll receive notifications here as soon as a new message arrives 🎉",
+    "tokenGenerated": "New token generated",
+    "tokenCopied": "Token copied"
+  },
+  "failures": {
+    "updateFailed": "Update failed",
+    "avatarUploadFailed": "Failed to upload the image",
+    "avatarRemoveFailed": "Failed to remove the image",
+    "passwordUpdateFailed": "Failed to update the password",
+    "notifPrefsSaveFailed": "Failed to save notification preferences",
+    "tokenGenerateFailed": "Failed to generate the token"
+  },
+  "confirmRegenerateToken": "Your current token will be revoked immediately and will stop working — are you sure?",
+  "profilePicture": {
+    "title": "Profile Picture",
+    "changeTitle": "Change profile picture",
+    "uploadPhoto": "Upload photo",
+    "removePhoto": "Remove photo",
+    "remove": "Remove",
+    "formatsHint": "JPG, PNG, GIF or WEBP. Max 5MB."
+  },
+  "personalInfo": {
+    "title": "Personal Information",
+    "fullName": "Full Name",
+    "fullNameDesc": "Your legal / full name",
+    "fullNamePlaceholder": "Add your full name",
+    "displayName": "Display Name",
+    "displayNameDesc": "Visible to customers instead of your email",
+    "email": "Email Address",
+    "emailDesc": "Used to sign in to your account",
+    "role": "Role",
+    "roleDesc": "Your permission level"
+  },
+  "password": {
+    "title": "Password",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "update": "Update Password"
+  },
+  "notifications": {
+    "title": "Notification Preferences",
+    "enablePush": "Enable Browser Push Notifications",
+    "enablePushDesc": "Allow this browser to show desktop notifications",
+    "type": "Notification type",
+    "email": "Email",
+    "push": "Push",
+    "labels": {
+      "login": "A new login to your account",
+      "conversation_created": "A new conversation is created",
+      "conversation_assigned": "A conversation is assigned to you",
+      "conversation_mention": "You are mentioned in a conversation",
+      "assigned_conversation_message": "A new message is created in an assigned conversation",
+      "participating_conversation_message": "A new message is created in a participating conversation",
+      "contact_created": "A new contact/customer is created",
+      "contact_updated": "A contact/customer is updated",
+      "scheduled_task_created": "A new scheduled task is created",
+      "settings_updated": "Settings are changed",
+      "team_updated": "A team is created/updated/deleted",
+      "inbox_updated": "An inbox is created/updated/deleted",
+      "label_updated": "A label is created/updated/deleted",
+      "canned_response_updated": "A canned response is created/updated/deleted",
+      "resolve_category_updated": "A resolve category is created/updated/deleted",
+      "webhook_updated": "A webhook is created/updated/deleted",
+      "conversation_reply_activity": "Any reply is sent on a conversation (general activity)"
+    }
+  },
+  "accessToken": {
+    "title": "Access Token",
+    "desc": "This token can be used if you are building an API based integration",
+    "noTokenYet": "No token generated yet — click Regenerate",
+    "showHide": "Show/Hide",
+    "copy": "Copy",
+    "regenerate": "Regenerate"
+  }
+}

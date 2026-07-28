@@ -1,0 +1,216 @@
+{
+  "loadingConversations": "جارٍ تحميل المحادثات...",
+  "toasts": {
+    "connectionError": "تعذّر الاتصال بالخادم — تأكد من أن الخادم الخلفي يعمل",
+    "newMessageFromCustomer": "رسالة جديدة من عميل",
+    "sendFailed": "فشل إرسال الرسالة، يُرجى المحاولة مرة أخرى",
+    "noteSaveFailed": "فشل حفظ الملاحظة، يُرجى المحاولة مرة أخرى",
+    "accountDisabled": "تم إيقاف حسابك أو حذفه، سيتم تسجيل خروجك الآن"
+  },
+  "list": {
+    "searchPlaceholder": "ابحث في المحادثات...",
+    "filters": {
+      "all": "الكل",
+      "me": "لي",
+      "open": "مفتوحة",
+      "resolved": "محلولة"
+    },
+    "empty": "لا توجد محادثات",
+    "unassigned": "غير مُسندة",
+    "vipCustomer": "عميل مميز"
+  },
+  "header": {
+    "typingOne": "{{name}} يكتب الآن...",
+    "typingMany": "{{names}} يكتبون الآن...",
+    "online": "متصل",
+    "pending": "قيد الانتظار",
+    "resolved": "محلولة",
+    "backToAll": "الرجوع إلى كل المحادثات",
+    "searchInChat": "بحث داخل المحادثة",
+    "reopenConversation": "إعادة فتح المحادثة",
+    "resolveConversation": "إنهاء المحادثة",
+    "reopen": "إعادة فتح",
+    "resolve": "إنهاء",
+    "customerInfo": "بيانات العميل",
+    "searchMessagesPlaceholder": "ابحث في الرسائل...",
+    "prev": "السابق",
+    "next": "التالي",
+    "close": "إغلاق",
+    "maintenanceExpired": "عقد الصيانة الخاص بهذا العميل منتهي منذ {{days}} يوم (بتاريخ {{date}}) — يُرجى مراجعة الإدارة قبل الاستمرار في التعامل معه"
+  },
+  "assign": {
+    "title": "إسناد إلى موظف",
+    "assignedToMe": "مُسندة إليّ",
+    "assignToMe": "إسناد إليّ",
+    "unassigned": "غير مُسندة",
+    "searchPlaceholder": "اكتب اسم الموظف...",
+    "noMatches": "لا يوجد موظفون مطابقون",
+    "assignedToMeToast": "تم الإسناد إليك",
+    "assignToMeFailed": "فشل استلام المحادثة",
+    "assignedToAgentToast": "تم إسناد المحادثة إلى {{name}}",
+    "assignFailed": "فشل إسناد الموظف"
+  },
+  "labels": {
+    "title": "التصنيف",
+    "empty": "لا توجد تصنيفات بعد",
+    "emptyPopover": "لا توجد تصنيفات بعد — أنشئ واحدًا أدناه",
+    "remove": "إزالة",
+    "add": "إضافة",
+    "newLabel": "تصنيف جديد",
+    "labelNamePlaceholder": "اسم التصنيف",
+    "cancel": "إلغاء",
+    "genericError": "حدث خطأ ما",
+    "createSuccess": "تم إنشاء التصنيف",
+    "createFailed": "فشل إنشاء التصنيف"
+  },
+  "teams": {
+    "title": "الفِرق",
+    "empty": "لا توجد فرق بعد",
+    "emptyPopover": "لا توجد فرق بعد — أنشئ واحدًا من الإعدادات",
+    "genericError": "حدث خطأ ما"
+  },
+  "devices": {
+    "namePlaceholder": "اسم الجهاز",
+    "anydeskPlaceholder": "رقم AnyDesk",
+    "passwordPlaceholder": "كلمة المرور",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "linkCustomerFirst": "اربط المحادثة بعميل أولًا لتتمكن من إضافة أجهزة",
+    "loading": "جارٍ التحميل...",
+    "empty": "لا توجد أجهزة",
+    "anydeskLabel": "AnyDesk",
+    "passwordLabel": "كلمة المرور",
+    "addDevice": "إضافة جهاز",
+    "fillAllFields": "يُرجى كتابة كل بيانات الجهاز",
+    "updateSuccess": "تم تعديل بيانات الجهاز",
+    "updateFailed": "فشل تعديل الجهاز",
+    "removedToast": "تم حذف الجهاز",
+    "removeFailed": "فشل حذف الجهاز",
+    "addSuccess": "تمت إضافة الجهاز بنجاح",
+    "addFailed": "فشلت إضافة الجهاز"
+  },
+  "tagPopover": {
+    "add": "إضافة",
+    "addNew": "إضافة",
+    "cancel": "إلغاء"
+  },
+  "resolve": {
+    "title": "إنهاء المحادثة",
+    "subtitle": "اختر تصنيف المحادثة قبل إنهائها",
+    "categoryLabel": "تصنيف المشكلة",
+    "notesLabel": "ملاحظة (اختياري)",
+    "notesPlaceholder": "اكتب ملخصًا للمشكلة التي تم حلها...",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ...",
+    "confirm": "تأكيد الإنهاء",
+    "successToast": "✅ تم حفظ الحل: {{category}}",
+    "failedToast": "فشل حفظ الحل — يُرجى المحاولة مرة أخرى"
+  },
+  "addPhone": {
+    "linkCustomerFirst": "اربط المحادثة بعميل أولًا",
+    "phoneRequired": "رقم الهاتف مطلوب",
+    "phoneInvalid": "رقم الهاتف يجب أن يكون بالصيغة الدولية بدون + وبدون مسافات، مثال: 201010293696",
+    "addButton": "إضافة رقم هاتف",
+    "placeholder": "201010293696",
+    "hint": "بالصيغة الدولية بدون + وبدون مسافات (مثال: 201010293696)",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "addSuccess": "تمت إضافة الرقم بنجاح",
+    "addFailed": "فشلت إضافة الرقم"
+  },
+  "mediaBubble": {
+    "loadingMedia": "جارٍ تحميل الوسائط…",
+    "unavailable": "الوسائط غير متاحة",
+    "failed": "فشل",
+    "sending": "جارٍ الإرسال…",
+    "tapToOpen": "اضغط للفتح"
+  },
+  "messageBubble": {
+    "privateNote": "ملاحظة خاصة",
+    "failedToSend": "فشل الإرسال",
+    "retry": "إعادة المحاولة",
+    "cancel": "إلغاء",
+    "sending": "جاري الإرسال…"
+  },
+  "prevConversation": {
+    "messages": "رسالة"
+  },
+  "mainPanel": {
+    "emptyTitle": "NileChat",
+    "emptySubtitle": "اختر محادثة لبدء المراسلة",
+    "addNoteFailed": "فشل إضافة الملاحظة",
+    "conversationClosed": "هذه المحادثة مغلقة (محلولة) — أعد فتحها أولًا حتى تتمكن من إرسال رسالة",
+    "sendFailed": "فشل إرسال الرسالة — تأكد من اتصال الخادم الخلفي",
+    "uploadFailed": "فشل رفع الملف — تأكد من اتصال الخادم الخلفي",
+    "reopenedSuccess": "تم إعادة فتح المحادثة",
+    "reopenFailed": "فشل إعادة فتح المحادثة"
+  },
+  "customerPanel": {
+    "title": "بيانات العميل",
+    "editName": "تعديل الاسم",
+    "cardTab": "البطاقة",
+    "infoTab": "المعلومات",
+    "scheduledTasksTitle": "المهام المجدولة",
+    "linkCustomerFirst": "اربط المحادثة بعميل أولًا",
+    "addingScheduledTask": "إضافة مهمة مجدولة",
+    "previousConversationsTitle": "المحادثات السابقة",
+    "noPreviousConversations": "لا توجد محادثات سابقة",
+    "phoneNumbersTitle": "أرقام الهاتف",
+    "editSecondaryLabel": "إضافة/تعديل اسم ثانوي",
+    "devicesTitle": "الأجهزة",
+    "promptSecondaryLabel": "اكتب اسمًا ثانويًا لهذا الرقم (مثلاً: الشغل، الرقم الشخصي) — اتركه فارغًا لحذف الاسم الثانوي",
+    "linkPhoneFirst": "اربط الرقم بعميل أولًا",
+    "labelSavedSuccess": "تم حفظ الاسم الثانوي بنجاح",
+    "labelSaveFailed": "فشل حفظ الاسم الثانوي",
+    "conversationNotFound": "تعذّر إيجاد هذه المحادثة في القائمة الحالية",
+    "mergeButton": "دمج مع كونتاكت موجود",
+    "mergeSearchPlaceholder": "ابحث بالاسم أو رقم التليفون...",
+    "mergeLoading": "جارٍ التحميل...",
+    "mergeNoResults": "مفيش نتايج",
+    "mergeNoName": "بدون اسم",
+    "mergeCancel": "إلغاء",
+    "mergeSuccess": "تم دمج الرقم مع الكونتاكت بنجاح",
+    "mergeFailed": "فشل الدمج"
+  },
+  "messageInput": {
+    "fileTooLarge": "هذا الملف أكبر من 30 ميجابايت — اختر ملفًا أصغر",
+    "imageTooLarge": "هذه الصورة أكبر من 30 ميجابايت — اختر صورة أصغر",
+    "aiGenerateFailed": "تعذّر توليد رد مقترح في الوقت الحالي",
+    "recordingNotSupported": "هذا المتصفح لا يدعم تسجيل الصوت",
+    "openConversationFirst": "افتح محادثة أولًا حتى تتمكن من إرسال رسالة صوتية",
+    "micAccessFailed": "تعذّر الوصول إلى الميكروفون — تأكد من أنك سمحت للمتصفح بالوصول إليه",
+    "resolvedBanner": "هذه المحادثة مغلقة (محلولة) — لن تتمكن من إرسال رسالة أخرى",
+    "quickReplies": "الردود السريعة:",
+    "privateNoteTitle": "ملاحظة خاصة (للموظفين فقط، لا تُرسل للعميل)",
+    "privateNote": "ملاحظة خاصة",
+    "aiSuggestTitle": "اقترح ردًا بالذكاء الاصطناعي بناءً على المحادثة",
+    "generateReply": "توليد رد",
+    "emoji": "الرموز التعبيرية",
+    "attach": "إرفاق",
+    "closedPlaceholder": "المحادثة مغلقة — أعد فتحها لإرسال رسالة",
+    "typeMessage": "اكتب رسالة...",
+    "recordingHint": "جارٍ تسجيل رسالة صوتية…",
+    "cancel": "إلغاء",
+    "stopAndSend": "إيقاف وإرسال",
+    "voiceNote": "رسالة صوتية",
+    "send": "إرسال"
+  },
+  "mediaKind": {
+    "photo": "📷 صورة",
+    "video": "🎥 فيديو",
+    "voice": "🎤 رسالة صوتية",
+    "document": "📎 مستند"
+  },
+  "docKind": {
+    "file": "ملف"
+  },
+  "dayDivider": {
+    "today": "اليوم",
+    "yesterday": "أمس"
+  },
+  "mapper": {
+    "noMessages": "(بدون رسائل)"
+  }
+}

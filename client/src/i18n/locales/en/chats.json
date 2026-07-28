@@ -1,0 +1,216 @@
+{
+  "loadingConversations": "Loading conversations...",
+  "toasts": {
+    "connectionError": "Couldn't connect to the server — check that the backend is running",
+    "newMessageFromCustomer": "New message from customer",
+    "sendFailed": "Failed to send the message, please try again",
+    "noteSaveFailed": "Failed to save the note, please try again",
+    "accountDisabled": "Your account has been disabled or removed, you will be logged out now"
+  },
+  "list": {
+    "searchPlaceholder": "Search conversations...",
+    "filters": {
+      "all": "All",
+      "me": "Me",
+      "open": "Open",
+      "resolved": "Resolved"
+    },
+    "empty": "No conversations found",
+    "unassigned": "Unassigned",
+    "vipCustomer": "VIP Customer"
+  },
+  "header": {
+    "typingOne": "{{name}} is typing...",
+    "typingMany": "{{names}} are typing...",
+    "online": "Online",
+    "pending": "Pending",
+    "resolved": "Resolved",
+    "backToAll": "Back to all conversations",
+    "searchInChat": "Search in chat",
+    "reopenConversation": "Reopen Conversation",
+    "resolveConversation": "Resolve Conversation",
+    "reopen": "Reopen",
+    "resolve": "Resolve",
+    "customerInfo": "Customer Info",
+    "searchMessagesPlaceholder": "Search in messages...",
+    "prev": "Previous",
+    "next": "Next",
+    "close": "Close",
+    "maintenanceExpired": "This customer's maintenance contract expired {{days}} days ago (on {{date}}) — please check with management before continuing to assist them"
+  },
+  "assign": {
+    "title": "Assign to Agent",
+    "assignedToMe": "Assigned to Me",
+    "assignToMe": "Assign to Me",
+    "unassigned": "Unassigned",
+    "searchPlaceholder": "Type agent name...",
+    "noMatches": "No matching agents",
+    "assignedToMeToast": "Assigned to me",
+    "assignToMeFailed": "Failed to claim the conversation",
+    "assignedToAgentToast": "Conversation assigned to {{name}}",
+    "assignFailed": "Failed to assign the agent"
+  },
+  "labels": {
+    "title": "Label",
+    "empty": "No labels yet",
+    "emptyPopover": "No labels yet — create one below",
+    "remove": "Remove",
+    "add": "Add",
+    "newLabel": "New Label",
+    "labelNamePlaceholder": "Label name",
+    "cancel": "Cancel",
+    "genericError": "Something went wrong",
+    "createSuccess": "Label created",
+    "createFailed": "Failed to create label"
+  },
+  "teams": {
+    "title": "Teams",
+    "empty": "No teams yet",
+    "emptyPopover": "No teams yet — create one from Settings",
+    "genericError": "Something went wrong"
+  },
+  "devices": {
+    "namePlaceholder": "Device name",
+    "anydeskPlaceholder": "AnyDesk number",
+    "passwordPlaceholder": "Password",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "linkCustomerFirst": "Link the conversation to a customer first to add devices",
+    "loading": "Loading...",
+    "empty": "No devices",
+    "anydeskLabel": "AnyDesk",
+    "passwordLabel": "Password",
+    "addDevice": "Add Device",
+    "fillAllFields": "Please fill in all device fields",
+    "updateSuccess": "Device details updated",
+    "updateFailed": "Failed to update device",
+    "removedToast": "Device removed",
+    "removeFailed": "Failed to remove device",
+    "addSuccess": "Device added successfully",
+    "addFailed": "Failed to add device"
+  },
+  "tagPopover": {
+    "add": "Add",
+    "addNew": "Add",
+    "cancel": "Cancel"
+  },
+  "resolve": {
+    "title": "Resolve Conversation",
+    "subtitle": "Choose a category for the conversation before marking it as resolved",
+    "categoryLabel": "Issue Category",
+    "notesLabel": "Note (optional)",
+    "notesPlaceholder": "Write a summary of the resolved issue...",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "confirm": "Confirm Resolve",
+    "successToast": "✅ Resolution saved: {{category}}",
+    "failedToast": "Failed to save the resolution — please try again"
+  },
+  "addPhone": {
+    "linkCustomerFirst": "Link the conversation to a customer first",
+    "phoneRequired": "Phone number is required",
+    "phoneInvalid": "Phone number must be in international format without + and without spaces, e.g.: 201010293696",
+    "addButton": "Add Phone Number",
+    "placeholder": "201010293696",
+    "hint": "International format, no + and no spaces (e.g.: 201010293696)",
+    "save": "Save",
+    "cancel": "Cancel",
+    "addSuccess": "Number added successfully",
+    "addFailed": "Failed to add the number"
+  },
+  "mediaBubble": {
+    "loadingMedia": "Downloading media…",
+    "unavailable": "Media unavailable",
+    "failed": "Failed",
+    "sending": "Sending…",
+    "tapToOpen": "tap to open"
+  },
+  "messageBubble": {
+    "privateNote": "Private note",
+    "failedToSend": "Failed to send",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "sending": "Sending…"
+  },
+  "prevConversation": {
+    "messages": "messages"
+  },
+  "mainPanel": {
+    "emptyTitle": "NileChat",
+    "emptySubtitle": "Select a conversation to start messaging",
+    "addNoteFailed": "Failed to add the note",
+    "conversationClosed": "This conversation is closed (Resolved) — reopen it first to send a message",
+    "sendFailed": "Failed to send the message — check the backend connection",
+    "uploadFailed": "Failed to upload the file — check the backend connection",
+    "reopenedSuccess": "Conversation reopened",
+    "reopenFailed": "Failed to reopen the conversation"
+  },
+  "customerPanel": {
+    "title": "Customer Details",
+    "editName": "Edit name",
+    "cardTab": "Card",
+    "infoTab": "Info",
+    "scheduledTasksTitle": "Scheduled Tasks",
+    "linkCustomerFirst": "Link the conversation to a customer first",
+    "addingScheduledTask": "Add scheduled task",
+    "previousConversationsTitle": "Previous Conversations",
+    "noPreviousConversations": "No previous conversations",
+    "phoneNumbersTitle": "Phone Numbers",
+    "editSecondaryLabel": "Add/edit secondary name",
+    "devicesTitle": "Devices",
+    "promptSecondaryLabel": "Enter a secondary name for this number (e.g.: Work, Personal) — leave empty to remove the secondary name",
+    "linkPhoneFirst": "Link the number to a customer first",
+    "labelSavedSuccess": "Secondary name saved successfully",
+    "labelSaveFailed": "Failed to save the secondary name",
+    "conversationNotFound": "Couldn't find this conversation in the current list",
+    "mergeButton": "Merge with Existing Contact",
+    "mergeSearchPlaceholder": "Search by name or phone...",
+    "mergeLoading": "Loading...",
+    "mergeNoResults": "No results",
+    "mergeNoName": "No name",
+    "mergeCancel": "Cancel",
+    "mergeSuccess": "Number merged with the contact successfully",
+    "mergeFailed": "Failed to merge"
+  },
+  "messageInput": {
+    "fileTooLarge": "This file is larger than 30MB — choose a smaller file",
+    "imageTooLarge": "This image is larger than 30MB — choose a smaller image",
+    "aiGenerateFailed": "Couldn't generate a suggested reply right now",
+    "recordingNotSupported": "This browser doesn't support voice recording",
+    "openConversationFirst": "Open a conversation first to send a voice note",
+    "micAccessFailed": "Couldn't access the microphone — make sure you allowed browser access",
+    "resolvedBanner": "This conversation is closed (Resolved) — you can't send another message",
+    "quickReplies": "Quick Replies:",
+    "privateNoteTitle": "Private note (agents only, not sent to customer)",
+    "privateNote": "Private Note",
+    "aiSuggestTitle": "Suggest an AI-generated reply based on the conversation",
+    "generateReply": "Generate Reply",
+    "emoji": "Emoji",
+    "attach": "Attach",
+    "closedPlaceholder": "Conversation closed — reopen it to send a message",
+    "typeMessage": "Type a message...",
+    "recordingHint": "Recording voice note…",
+    "cancel": "Cancel",
+    "stopAndSend": "Stop & send",
+    "voiceNote": "Voice note",
+    "send": "Send"
+  },
+  "mediaKind": {
+    "photo": "📷 Photo",
+    "video": "🎥 Video",
+    "voice": "🎤 Voice message",
+    "document": "📎 Document"
+  },
+  "docKind": {
+    "file": "File"
+  },
+  "dayDivider": {
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "mapper": {
+    "noMessages": "(No messages)"
+  }
+}

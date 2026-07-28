@@ -1,0 +1,15 @@
+{
+  "title": "الإشعارات",
+  "markAllRead": "تعليم الكل كمقروء",
+  "empty": "لا توجد إشعارات بعد",
+  "timeAgo": {
+    "now": "الآن",
+    "minutes": "منذ {{count}} دقيقة",
+    "hours": "منذ {{count}} ساعة",
+    "days": "منذ {{count}} يوم"
+  },
+  "updateFailed": "فشل تحديث الإشعار",
+  "markAllSuccess": "تم تعليم كل الإشعارات كمقروءة",
+  "markAllFailed": "فشل تعليم الكل كمقروء",
+  "newNotificationFallback": "إشعار جديد"
+}

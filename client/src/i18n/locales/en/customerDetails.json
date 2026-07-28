@@ -1,0 +1,120 @@
+{
+  "loading": "Loading...",
+  "loadFailed": "Failed to load customer data",
+  "back": "Back",
+  "noName": "No name",
+  "inactive": "Inactive",
+  "edit": "Edit",
+  "openConversation": "Open Conversation",
+  "noConversationYet": "No conversations recorded for this contact yet",
+  "customerInfo": {
+    "title": "Customer Information",
+    "manager": "Account Manager",
+    "contractDate": "Contract Date",
+    "addedBy": "Added by",
+    "agentId": "#{{id}}",
+    "currentMaintenanceContract": "Current Maintenance Contract",
+    "branches": "Branches",
+    "mainBranch": "Main branch",
+    "subBranch": "Sub-branch",
+    "subBranchNumbered": "Sub-branch {{num}}",
+    "subscribedModules": "Subscribed Modules"
+  },
+  "phoneNumbers": {
+    "title": "Phone Numbers",
+    "editLabel": "Add/edit secondary name",
+    "secondaryName": "Secondary name",
+    "unlink": "Unlink",
+    "promptLabel": "Enter a secondary name for this number (e.g.: Work, Personal) — leave empty to remove the secondary name",
+    "labelSaved": "Secondary name saved successfully",
+    "labelSaveFailed": "Failed to save the secondary name"
+  },
+  "tabs": {
+    "visits": "Visits",
+    "maintenanceHistory": "Maintenance History"
+  },
+  "visits": {
+    "add": "Add Visit",
+    "loading": "Loading...",
+    "empty": "No visits recorded",
+    "addedSuccess": "Visit added successfully",
+    "addFailed": "Failed to add visit"
+  },
+  "contracts": {
+    "add": "Add Maintenance Contract",
+    "loading": "Loading...",
+    "empty": "No maintenance contracts recorded",
+    "addedSuccess": "Maintenance contract added successfully",
+    "addFailed": "Failed to add maintenance contract"
+  },
+  "customerUpdatedSuccess": "Customer data updated successfully",
+  "customerUpdateFailed": "Failed to update customer data",
+  "phoneUnlinkedSuccess": "Number unlinked into a new separate customer",
+  "visitCard": {
+    "arrival": "Arrival: {{time}}",
+    "departure": "Departure: {{time}}",
+    "unknownAgent": "Unknown"
+  },
+  "contractStatus": {
+    "stopped": "Stopped",
+    "upcoming": "Upcoming",
+    "expired": "Expired",
+    "active": "Active"
+  },
+  "contractCard": {
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "confirmStop": "Are you sure you want to stop this maintenance contract?",
+    "confirmDelete": "Are you sure you want to delete this maintenance contract? This action is permanent.",
+    "stopSuccess": "Maintenance contract stopped",
+    "stopFailed": "Failed to stop the maintenance contract",
+    "deleteSuccess": "Maintenance contract deleted",
+    "deleteFailed": "Failed to delete the maintenance contract",
+    "stopContract": "Stop Contract",
+    "delete": "Delete"
+  },
+  "addVisitModal": {
+    "title": "Add Visit",
+    "customer": "Customer",
+    "visitDate": "Visit Date",
+    "workDone": "Work Done During the Visit",
+    "arrivalOptional": "Arrival Time (optional)",
+    "departureOptional": "Departure Time (optional)",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "save": "Save Visit",
+    "errors": {
+      "dateRequired": "Visit date is required",
+      "workRequired": "Please describe the work done during the visit",
+      "genericError": "Failed to add the visit"
+    }
+  },
+  "addContractModal": {
+    "title": "Add Maintenance Contract",
+    "customer": "Customer",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "durationOptional": "Maintenance Contract Duration (optional)",
+    "durationHint": "Pick a duration and the end date will be calculated automatically (you can edit it manually afterwards if you'd like).",
+    "notesOptional": "Notes (optional)",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "save": "Save Contract",
+    "errors": {
+      "startRequired": "Contract start date is required",
+      "endRequired": "Contract end date is required",
+      "endBeforeStart": "The contract end date must be after the start date",
+      "genericError": "Failed to add the maintenance contract"
+    }
+  },
+  "unlinkModal": {
+    "title": "Unlink Phone Number",
+    "subtitle": "The number {{phone}} will be unlinked from the current customer and moved to a new, separate customer card",
+    "newCustomerName": "New Customer Name",
+    "newCustomerNamePlaceholder": "New customer name",
+    "cancel": "Cancel",
+    "unlinking": "Unlinking...",
+    "confirm": "Confirm Unlink",
+    "genericError": "Failed to unlink the number"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "chats": "Chats",
+    "aiAssistant": "AI Assistant",
+    "contacts": "Contacts",
+    "templates": "Templates",
+    "analytics": "Analytics",
+    "scheduledTasks": "Scheduled Tasks",
+    "settings": "Settings"
+  },
+  "logout": "Log out",
+  "notifications": "Notifications",
+  "myProfile": "My Profile"
+}

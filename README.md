@@ -1,101 +1,86 @@
-# NileChat – WhatsApp Cloud API → SQL Server
+# NileChat — Enterprise Monorepo
 
-المشروع ده بيستقبل رسائل WhatsApp Cloud API عن طريق webhook، ويحفظها (وارد وصادر وحالات التسليم) في قاعدة بيانات **SQL Server** داخل جدول اسمه **NileChat_byA** (بيتنشئ تلقائيًا أول مرة لو مش موجود، ولو موجود بيستخدمه عادي من غير ما يلمس بياناته).
+WhatsApp Cloud API customer-support dashboard. Node.js/Express + SQL Server backend,
+React + Vite frontend.
 
-## 1) تثبيت المكتبات
+## Structure
+
+```
+project/
+  client/    React + Vite frontend (feature-based architecture)
+  server/    Express API (layered: controllers → services → repositories → database)
+  docs/      Misc reference docs (legacy Vercel entry point, kept for history)
+  shared/    Reserved for future cross-package types/constants
+```
+
+## Quick start
 
 ```bash
+# 1. Backend
+cd server
 npm install
+cp .env.example .env      # fill in DB_*, JWT_SECRET, WHATSAPP_*, RESEND_API_KEY...
+npm start                 # http://localhost:3000
+
+# 2. Frontend (separate terminal)
+cd client
+npm install
+npm run dev                # http://localhost:5173, proxies /api /auth /webhook to :3000
 ```
 
-## 2) الإعدادات
+## Client scripts
 
-اعمل نسخة من `.env.example` باسم `.env` واملأ القيم:
-
-```
-WHATSAPP_PHONE_NUMBER_ID=
-WHATSAPP_ACCESS_TOKEN=
-WHATSAPP_VERIFY_TOKEN=
-
-DB_NAME=ChatwootReports
-DB_PASSWORD=passwordniletechno
-DB_PORT=1433
-DB_SERVER=162.55.67.11
-DB_TDS_VERSION=4.2
-DB_USER=elharaman
-
-DB_TABLE_NAME=NileChat_byA
-
-DASHBOARD_ORIGIN=https://support.niletechno.com
-PORT=3000
-```
-
-> ملحوظة: لو السيرفر عنده بورت بديل (DB_PORT2=1434) واتقفل الأول، غيّر قيمة DB_PORT بس.
-
-## 3) تشغيل المشروع
-
-```bash
-npm start
-```
-
-أول ما السيرفر يشتغل هيعمل اتصال بقاعدة البيانات ويتأكد إن جدول `NileChat_byA` موجود، ولو مش موجود هينشئه تلقائيًا بالأعمدة دي:
-
-| العمود | الوصف |
+| Script | Does |
 |---|---|
-| id | رقم تسلسلي (Primary Key) |
-| wa_message_id | معرّف الرسالة من واتساب |
-| direction | in (وارد) / out (صادر) / status (تحديث حالة) |
-| from_number / to_number | أرقام المرسل والمستقبل |
-| contact_name | اسم العميل (لو متاح) |
-| message_type | text / image / audio / document / ... |
-| message_text | نص الرسالة |
-| media_url | معرّف/رابط الميديا لو الرسالة وسائط |
-| status | sent / delivered / read / failed |
-| raw_payload | الـ JSON الخام بالكامل (للمراجعة لاحقًا) |
-| created_at | تاريخ ووقت الحفظ |
+| `npm run dev` | Vite dev server with hot reload + API proxy |
+| `npm run build` | Production build → `client/dist` |
+| `npm run lint` | oxlint — fast static analysis |
+| `npm run format` | Prettier — auto-formats `src/**/*.{js,jsx,css}` |
+| `npm run test` | Vitest — unit/component tests (`src/**/__tests__`) |
+| `npm run preview` | Serve the production build locally |
 
-## 4) ربط الـ Webhook مع Meta
+## Client architecture
 
-في إعدادات WhatsApp في Meta App، حط رابط الـ webhook بتاعك:
-```
-https://your-domain.com/webhook
-```
-واستخدم نفس القيمة اللي حطيتها في `WHATSAPP_VERIFY_TOKEN`.
+- **`features/<name>/`** — one folder per business area (auth, chats, contacts, templates,
+  scheduled-tasks, settings, profile, ai, analytics). Each contains its own `pages/`,
+  `components/`, `services/` (API calls), and occasionally `store/`, `utils/`.
+- **`components/ui`** — small reusable primitives shared across features (`Avatar`, `Modal`).
+- **`components/layout`** — app chrome (`Sidebar`, `DashboardLayout`).
+- **`components/shared`** — cross-cutting UI (`ToastContainer`, `ErrorBoundary`, `RouteLoader`,
+  `AnimatedBackground`).
+- **`store/`** — app-wide Zustand stores (`authStore`, `toastStore`). Feature-local stores
+  (e.g. `chatsStore`, `scheduledTasksStore`) live inside their feature folder.
+- **`hooks/`** — cross-feature hooks (`useSocket`, `useSocketContext`, `useDragReorder`).
+- **`routes/AppRouter.jsx`** — all dashboard pages are `React.lazy()`-loaded and wrapped in a
+  single `<Suspense>` with `RouteLoader` as fallback, so the initial bundle only ships what the
+  login screen needs.
+- **`components/shared/ErrorBoundary.jsx`** wraps the whole app in `App.jsx` — a render error
+  in one page shows a recovery screen instead of a blank white page.
 
-## 5) لوحة التحكم (الدردشة اللايف زي Chatwoot)
+No component calls `fetch`/`axios` directly — every network call goes through a `services/*.js`
+file, which is what the tests and any future API changes target.
 
-المشروع فيه لوحة تحكم مدمجة (`/`) بتتيح لأي عدد موظفين إنهم:
-- يشوفوا كل المحادثات لحظة بلحظة (Socket.IO) من غير ما يعملوا refresh
-- يستلموا (Assign) أي محادثة لنفسهم
-- يردّوا على العميل من جوه الموقع مباشرة
-
-### إضافة أول موظف (Agent)
-
-السيرفر بينشئ جدول `NileChat_Agents` تلقائيًا، لكن لازم تضيف الموظفين بنفسك بالأمر ده (مرة واحدة لكل موظف):
-
-```bash
-node scripts/seedAgent.js "اسم الموظف" "email@example.com" "password123"
-```
-
-لو شغال على Fly.io، نفّذه جوه الماكينة:
-```bash
-fly ssh console -C "node scripts/seedAgent.js 'اسم الموظف' 'email@example.com' 'password123'"
-```
-
-بعدها افتح رابط الموقع بتاعك في المتصفح (`https://your-app.fly.dev`) وسجّل دخول بنفس الإيميل وكلمة المرور.
-
-### إزاي شغالة
-
-- أي رسالة واتساب جديدة بتوصل على الـ webhook → بتتربط بمحادثة (Conversation) حسب رقم العميل → بتتسجل في `NileChat_byA` → بتتبعت فورًا realtime لكل الموظفين المتصلين بالموقع.
-- لما موظف يدوس "استلام المحادثة"، بتتسجل عنده وتتحدث حالتها لـ assigned.
-- الرد من الموقع بيعدي على نفس WhatsApp Cloud API وبيتسجل تلقائيًا كـ "out" بنفس المحادثة.
-
-## 6) إرسال رسالة من API مباشرة (اختياري، من غير الموقع)
-
+## Testing
 
 ```bash
-curl -X POST http://localhost:3000/send \
-  -H "Content-Type: application/json" \
-  -d '{"to": "201xxxxxxxxx", "text": "أهلاً بيك!"}'
+cd client && npm run test
 ```
 
+Currently covers the pure, high-value logic that's cheapest to keep correct over time: date
+formatting, avatar initials/color hashing, the auth store's login/logout persistence, the chats
+feature's API-response mappers, and the `Avatar` component's render branches. This is a
+starting point, not exhaustive coverage — Chats/Settings/Contacts page-level integration tests
+and Playwright e2e flows are natural next additions once there's a real (non-mocked) backend
+environment available to test against.
+
+## Environment variables (server/.env)
+
+See `server/.env.example` for the full list — the essentials are: `DB_SERVER`, `DB_NAME`,
+`DB_USER`, `DB_PASSWORD` (SQL Server), `JWT_SECRET`, `WHATSAPP_VERIFY_TOKEN` (webhook
+verification), and `RESEND_API_KEY` (agent invite emails). Never commit a filled-in `.env`.
+
+## Known scope boundaries
+
+A few original features intentionally weren't ported because the backend has no endpoint for
+them yet: device management, contact merging, and "previous conversations" in the chat customer
+panel. They're not stubbed with fake data — the UI simply omits them until the API exists.

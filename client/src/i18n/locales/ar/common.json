@@ -1,0 +1,71 @@
+{
+  "actions": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "close": "إغلاق",
+    "confirm": "تأكيد",
+    "back": "رجوع",
+    "next": "التالي",
+    "submit": "إرسال",
+    "search": "بحث",
+    "loading": "جارٍ التحميل...",
+    "saving": "جارٍ الحفظ...",
+    "sending": "جارٍ الإرسال...",
+    "yes": "نعم",
+    "no": "لا",
+    "ok": "حسنًا",
+    "retry": "إعادة المحاولة",
+    "viewAll": "عرض الكل",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "upload": "رفع",
+    "download": "تنزيل",
+    "remove": "إزالة",
+    "create": "إنشاء",
+    "update": "تحديث"
+  },
+  "status": {
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "open": "مفتوح",
+    "closed": "مغلق",
+    "pending": "قيد الانتظار",
+    "completed": "مكتمل",
+    "error": "خطأ",
+    "success": "تم بنجاح"
+  },
+  "language": {
+    "switchTo": "English",
+    "toggleLabel": "تبديل اللغة"
+  },
+  "misc": {
+    "noResults": "لا توجد نتائج",
+    "somethingWentWrong": "حدث خطأ ما",
+    "requiredField": "هذا الحقل مطلوب",
+    "unknown": "غير معروف"
+  },
+  "roles": {
+    "superAdmin": "مدير عام",
+    "administrator": "مسؤول",
+    "agent": "موظف",
+    "crmAgent": "موظف CRM"
+  },
+  "durationPicker": {
+    "numberOfDays": "عدد الأيام",
+    "monthYear": "شهر / سنة",
+    "daysPlaceholder": "عدد الأيام",
+    "countPlaceholder": "العدد",
+    "month": "شهر",
+    "year": "سنة",
+    "daysMonthsLabel": "{{days}} يوم (~{{months}} شهر)"
+  },
+  "listSeparator": "، ",
+  "theme": {
+    "switchToLight": "التبديل للوضع الفاتح",
+    "switchToDark": "التبديل للوضع الغامق"
+  },
+  "footer": "جميع الحقوق محفوظة © Nile Techno عبدالله الصاوي 2026"
+}

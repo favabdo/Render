@@ -1,0 +1,103 @@
+{
+  "pageTitle": "إعدادات الملف الشخصي",
+  "pageSubtitle": "بيانات حسابك الشخصي",
+  "notSupported": "غير مدعوم",
+  "enabled": "مفعّل ✓",
+  "blockedByBrowser": "محظور من المتصفح",
+  "enable": "تفعيل",
+  "errors": {
+    "nameTooShort": "الاسم قصير جدًا",
+    "emailRequired": "يُرجى كتابة بريد إلكتروني صحيح",
+    "invalidImage": "يُرجى اختيار صورة صحيحة",
+    "imageTooLarge": "حجم الصورة أكبر من 5 ميجابايت",
+    "noAvatarYet": "لا توجد صورة شخصية لحذفها",
+    "fillAllPasswordFields": "يُرجى تعبئة كل خانات كلمة المرور",
+    "passwordTooShort": "كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف",
+    "passwordMismatch": "كلمة المرور الجديدة والتأكيد غير متطابقتين",
+    "notificationsNotSupported": "هذا المتصفح لا يدعم الإشعارات",
+    "notificationsBlocked": "الإشعارات غير مسموح بها — يمكنك تفعيلها من إعدادات المتصفح",
+    "regenerateFirst": "اضغط \"إعادة توليد\" أولًا لتوليد رمز",
+    "copyFailed": "فشل النسخ"
+  },
+  "success": {
+    "updated": "تم التحديث بنجاح",
+    "avatarUpdated": "تم تحديث الصورة الشخصية بنجاح",
+    "avatarRemoved": "تم حذف الصورة الشخصية",
+    "passwordUpdated": "تم تحديث كلمة المرور بنجاح",
+    "pushEnabled": "تم تفعيل إشعارات المتصفح",
+    "pushNotifBody": "ستصلك الإشعارات هنا بمجرد وصول رسالة جديدة 🎉",
+    "tokenGenerated": "تم توليد رمز جديد",
+    "tokenCopied": "تم نسخ الرمز"
+  },
+  "failures": {
+    "updateFailed": "فشل التحديث",
+    "avatarUploadFailed": "فشل رفع الصورة",
+    "avatarRemoveFailed": "فشل حذف الصورة",
+    "passwordUpdateFailed": "فشل تحديث كلمة المرور",
+    "notifPrefsSaveFailed": "فشل حفظ تفضيلات الإشعارات",
+    "tokenGenerateFailed": "فشل توليد الرمز"
+  },
+  "confirmRegenerateToken": "سيتم إلغاء الرمز الحالي فورًا ولن يعمل بعد ذلك — هل أنت متأكد؟",
+  "profilePicture": {
+    "title": "الصورة الشخصية",
+    "changeTitle": "تغيير الصورة الشخصية",
+    "uploadPhoto": "رفع صورة",
+    "removePhoto": "حذف الصورة",
+    "remove": "حذف",
+    "formatsHint": "JPG أو PNG أو GIF أو WEBP. الحد الأقصى 5 ميجابايت."
+  },
+  "personalInfo": {
+    "title": "المعلومات الشخصية",
+    "fullName": "الاسم الكامل",
+    "fullNameDesc": "اسمك الرسمي/الكامل",
+    "fullNamePlaceholder": "أضف اسمك الكامل",
+    "displayName": "اسم العرض",
+    "displayNameDesc": "يظهر للعملاء بدلًا من بريدك الإلكتروني",
+    "email": "البريد الإلكتروني",
+    "emailDesc": "يُستخدم لتسجيل الدخول إلى حسابك",
+    "role": "الدور",
+    "roleDesc": "مستوى الصلاحيات الخاص بك"
+  },
+  "password": {
+    "title": "كلمة المرور",
+    "current": "كلمة المرور الحالية",
+    "new": "كلمة المرور الجديدة",
+    "confirm": "تأكيد كلمة المرور الجديدة",
+    "update": "تحديث كلمة المرور"
+  },
+  "notifications": {
+    "title": "تفضيلات الإشعارات",
+    "enablePush": "تفعيل إشعارات المتصفح",
+    "enablePushDesc": "السماح لهذا المتصفح بإظهار إشعارات سطح المكتب",
+    "type": "نوع الإشعار",
+    "email": "البريد الإلكتروني",
+    "push": "الإشعار الفوري",
+    "labels": {
+      "login": "تسجيل دخول جديد لحسابك",
+      "conversation_created": "إنشاء محادثة جديدة",
+      "conversation_assigned": "إسناد محادثة إليك",
+      "conversation_mention": "الإشارة إليك في محادثة",
+      "assigned_conversation_message": "رسالة جديدة في محادثة مُسندة إليك",
+      "participating_conversation_message": "رسالة جديدة في محادثة تشارك فيها",
+      "contact_created": "إنشاء عميل جديد",
+      "contact_updated": "تعديل على عميل",
+      "scheduled_task_created": "إنشاء تاسك مجدول جديد",
+      "settings_updated": "تعديل في الإعدادات",
+      "team_updated": "إنشاء/تعديل/مسح تيم",
+      "inbox_updated": "إنشاء/تعديل/مسح Inbox",
+      "label_updated": "إنشاء/تعديل/مسح ليبل",
+      "canned_response_updated": "إنشاء/تعديل/مسح رد جاهز",
+      "resolve_category_updated": "إنشاء/تعديل/مسح تصنيف إغلاق",
+      "webhook_updated": "إنشاء/تعديل/مسح Webhook",
+      "conversation_reply_activity": "أي رد على محادثة (نشاط عام)"
+    }
+  },
+  "accessToken": {
+    "title": "رمز الوصول (Access Token)",
+    "desc": "يمكن استخدام هذا الرمز إذا كنت تنشئ تكاملًا عبر الـ API",
+    "noTokenYet": "لم يتم توليد رمز بعد — اضغط \"إعادة توليد\"",
+    "showHide": "إظهار/إخفاء",
+    "copy": "نسخ",
+    "regenerate": "إعادة توليد"
+  }
+}

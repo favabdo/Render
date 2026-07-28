@@ -1,0 +1,71 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "search": "Search",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "sending": "Sending...",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "retry": "Retry",
+    "viewAll": "View all",
+    "copy": "Copy",
+    "copied": "Copied",
+    "upload": "Upload",
+    "download": "Download",
+    "remove": "Remove",
+    "create": "Create",
+    "update": "Update"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "open": "Open",
+    "closed": "Closed",
+    "pending": "Pending",
+    "completed": "Completed",
+    "error": "Error",
+    "success": "Success"
+  },
+  "language": {
+    "switchTo": "العربية",
+    "toggleLabel": "Switch language"
+  },
+  "misc": {
+    "noResults": "No results found",
+    "somethingWentWrong": "Something went wrong",
+    "requiredField": "This field is required",
+    "unknown": "Unknown"
+  },
+  "roles": {
+    "superAdmin": "Super Admin",
+    "administrator": "Administrator",
+    "agent": "Agent",
+    "crmAgent": "CRM Agent"
+  },
+  "durationPicker": {
+    "numberOfDays": "Number of days",
+    "monthYear": "Month / Year",
+    "daysPlaceholder": "Number of days",
+    "countPlaceholder": "Count",
+    "month": "Month",
+    "year": "Year",
+    "daysMonthsLabel": "{{days}} days (~{{months}} months)"
+  },
+  "listSeparator": ", ",
+  "theme": {
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  },
+  "footer": "Copyright \u00a9 Nile Techno by Abdullah Elsawy 2026"
+}

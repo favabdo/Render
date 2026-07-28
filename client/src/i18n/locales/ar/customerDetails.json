@@ -1,0 +1,120 @@
+{
+  "loading": "جارٍ التحميل...",
+  "loadFailed": "تعذّر تحميل بيانات العميل",
+  "back": "رجوع",
+  "noName": "بدون اسم",
+  "inactive": "غير نشط",
+  "edit": "تعديل",
+  "openConversation": "فتح المحادثة",
+  "noConversationYet": "لا توجد محادثات مسجلة لجهة الاتصال هذه بعد",
+  "customerInfo": {
+    "title": "بيانات العميل",
+    "manager": "المدير المسؤول",
+    "contractDate": "تاريخ التعاقد",
+    "addedBy": "إضافة بواسطة",
+    "agentId": "#{{id}}",
+    "currentMaintenanceContract": "عقد الصيانة الحالي",
+    "branches": "الفروع",
+    "mainBranch": "الفرع الرئيسي",
+    "subBranch": "الفرع الفرعي",
+    "subBranchNumbered": "الفرع الفرعي {{num}}",
+    "subscribedModules": "الوحدات المشترك فيها"
+  },
+  "phoneNumbers": {
+    "title": "أرقام الهاتف",
+    "editLabel": "إضافة/تعديل اسم ثانوي للرقم",
+    "secondaryName": "اسم ثانوي",
+    "unlink": "فصل",
+    "promptLabel": "اكتب اسمًا ثانويًا لهذا الرقم (مثلاً: الشغل، الرقم الشخصي) — اتركه فارغًا لحذف الاسم الثانوي",
+    "labelSaved": "تم حفظ الاسم الثانوي بنجاح",
+    "labelSaveFailed": "فشل حفظ الاسم الثانوي"
+  },
+  "tabs": {
+    "visits": "الزيارات",
+    "maintenanceHistory": "سجل الصيانة"
+  },
+  "visits": {
+    "add": "إضافة زيارة",
+    "loading": "جارٍ التحميل...",
+    "empty": "لا توجد زيارات مسجلة",
+    "addedSuccess": "تمت إضافة الزيارة بنجاح",
+    "addFailed": "فشل إضافة الزيارة"
+  },
+  "contracts": {
+    "add": "إضافة عقد صيانة",
+    "loading": "جارٍ التحميل...",
+    "empty": "لا توجد عقود صيانة مسجلة",
+    "addedSuccess": "تمت إضافة عقد الصيانة بنجاح",
+    "addFailed": "فشل إضافة عقد الصيانة"
+  },
+  "customerUpdatedSuccess": "تم تحديث بيانات العميل بنجاح",
+  "customerUpdateFailed": "فشل تحديث بيانات العميل",
+  "phoneUnlinkedSuccess": "تم فصل الرقم لعميل جديد منفصل",
+  "visitCard": {
+    "arrival": "وصول: {{time}}",
+    "departure": "انصراف: {{time}}",
+    "unknownAgent": "غير معروف"
+  },
+  "contractStatus": {
+    "stopped": "متوقف",
+    "upcoming": "لم يبدأ بعد",
+    "expired": "منتهي",
+    "active": "ساري"
+  },
+  "contractCard": {
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "confirmStop": "هل أنت متأكد أنك تريد إيقاف عقد الصيانة هذا؟",
+    "confirmDelete": "هل أنت متأكد أنك تريد حذف عقد الصيانة هذا؟ هذا الإجراء نهائي.",
+    "stopSuccess": "تم إيقاف عقد الصيانة",
+    "stopFailed": "فشل إيقاف عقد الصيانة",
+    "deleteSuccess": "تم حذف عقد الصيانة",
+    "deleteFailed": "فشل حذف عقد الصيانة",
+    "stopContract": "إيقاف العقد",
+    "delete": "حذف"
+  },
+  "addVisitModal": {
+    "title": "إضافة زيارة",
+    "customer": "العميل",
+    "visitDate": "تاريخ الزيارة",
+    "workDone": "الأعمال المنفذة خلال الزيارة",
+    "arrivalOptional": "وقت الوصول (اختياري)",
+    "departureOptional": "وقت الانصراف (اختياري)",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ الزيارة",
+    "errors": {
+      "dateRequired": "تاريخ الزيارة مطلوب",
+      "workRequired": "يُرجى كتابة الأعمال المنفذة خلال الزيارة",
+      "genericError": "فشل إضافة الزيارة"
+    }
+  },
+  "addContractModal": {
+    "title": "إضافة عقد صيانة",
+    "customer": "العميل",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "durationOptional": "مدة عقد الصيانة (اختياري)",
+    "durationHint": "حدد المدة وسيُحسب تاريخ الانتهاء تلقائيًا (يمكنك تعديله يدويًا لاحقًا إذا أردت).",
+    "notesOptional": "ملاحظات (اختياري)",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ العقد",
+    "errors": {
+      "startRequired": "تاريخ بدء العقد مطلوب",
+      "endRequired": "تاريخ انتهاء العقد مطلوب",
+      "endBeforeStart": "يجب أن يكون تاريخ انتهاء العقد بعد تاريخ البدء",
+      "genericError": "فشل إضافة عقد الصيانة"
+    }
+  },
+  "unlinkModal": {
+    "title": "فصل رقم الهاتف",
+    "subtitle": "سيتم فصل الرقم {{phone}} عن العميل الحالي، وتحويله إلى بطاقة عميل جديدة منفصلة",
+    "newCustomerName": "اسم العميل الجديد",
+    "newCustomerNamePlaceholder": "اسم العميل الجديد",
+    "cancel": "إلغاء",
+    "unlinking": "جارٍ الفصل...",
+    "confirm": "تأكيد الفصل",
+    "genericError": "فشل فصل الرقم"
+  }
+}

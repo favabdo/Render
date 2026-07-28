@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "chats": "المحادثات",
+    "aiAssistant": "المساعد الذكي",
+    "contacts": "جهات الاتصال",
+    "templates": "القوالب",
+    "analytics": "التحليلات",
+    "scheduledTasks": "المهام المجدولة",
+    "settings": "الإعدادات"
+  },
+  "logout": "تسجيل الخروج",
+  "notifications": "الإشعارات",
+  "myProfile": "الملف الشخصي"
+}
