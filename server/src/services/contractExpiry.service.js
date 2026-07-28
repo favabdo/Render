@@ -17,47 +17,56 @@ const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 async function runContractExpirySweep(io) {
   try {
-    const settings = await companyRepo.getAutomationSettings();
-    if (!settings || !settings.contract_expired_enabled || !settings.contract_expired_message) return;
+    const companies = await companyRepo.listAllCompanies();
 
-    const candidates = await maintenanceContractRepo.findExpiredContractsPendingNotice();
-    if (!candidates.length) return;
-
-    for (const contract of candidates) {
+    for (const company of companies) {
       try {
-        // بنبعت الرسالة جوه محادثة (بنستخدم المحادثة المفتوحة لو موجودة، وإلا
-        // بننشئ واحدة جديدة) عشان الإيجنتس يقدروا يشوفوا إن الإشعار اتبعت
-        // ويكملوا مع العميل من نفس المكان لو رد
-        const { id: conversationId } = await conversationRepo.findOrCreateConversation(
-          contract.contact_phone,
-          contract.contact_name || null,
-          null,
-          contract.contact_id
-        );
+        const settings = await companyRepo.getAutomationSettings(company.id);
+        if (!settings || !settings.contract_expired_enabled || !settings.contract_expired_message) continue;
 
-        const message = await whatsappService.sendTextMessage(
-          contract.contact_phone,
-          settings.contract_expired_message,
-          conversationId,
-          null,
-          { id: null, name: 'Automation' }
-        );
-        await conversationRepo.touchConversation(conversationId);
+        const candidates = await maintenanceContractRepo.findExpiredContractsPendingNotice(company.id);
+        if (!candidates.length) continue;
 
-        // بنسجل إن الإشعار اتبعت الأول قبل أي حاجة تانية، عشان لو فشل الإرسال
-        // فعليًا (مفيش نت مثلاً) الرسالة تتسجل 'failed' لكن العقد ميتحاولش يتبعتله
-        // تاني كل نص ساعة للأبد — لو حابب تعيد المحاولة يدويًا في الحالة دي
-        await maintenanceContractRepo.markExpiryNoticeSent(contract.contract_id);
+        for (const contract of candidates) {
+          try {
+            // بنبعت الرسالة جوه محادثة (بنستخدم المحادثة المفتوحة لو موجودة، وإلا
+            // بننشئ واحدة جديدة) عشان الإيجنتس يقدروا يشوفوا إن الإشعار اتبعت
+            // ويكملوا مع العميل من نفس المكان لو رد
+            const { id: conversationId } = await conversationRepo.findOrCreateConversation(
+              contract.contact_phone,
+              contract.contact_name || null,
+              null,
+              contract.contact_id,
+              company.id
+            );
 
-        const updated = await conversationRepo.getConversationById(conversationId);
-        if (io && updated) {
-          io.emit('conversation_updated', updated);
-          if (message) socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message });
+            const message = await whatsappService.sendTextMessage(
+              contract.contact_phone,
+              settings.contract_expired_message,
+              conversationId,
+              null,
+              { id: null, name: 'Automation' }
+            );
+            await conversationRepo.touchConversation(conversationId);
+
+            // بنسجل إن الإشعار اتبعت الأول قبل أي حاجة تانية، عشان لو فشل الإرسال
+            // فعليًا (مفيش نت مثلاً) الرسالة تتسجل 'failed' لكن العقد ميتحاولش يتبعتله
+            // تاني كل نص ساعة للأبد — لو حابب تعيد المحاولة يدويًا في الحالة دي
+            await maintenanceContractRepo.markExpiryNoticeSent(contract.contract_id);
+
+            const updated = await conversationRepo.getConversationById(conversationId);
+            if (io && updated) {
+              socketService.emitToCompany(io, company.id, 'conversation_updated', updated);
+              if (message) socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message });
+            }
+
+            logger.info(`📨 اتبعت إشعار "عقد الصيانة منتهي" لعميل #${contract.contact_id} (عقد #${contract.contract_id}, شركة #${company.id})`);
+          } catch (err) {
+            logger.error(`❌ فشل إرسال إشعار انتهاء العقد #${contract.contract_id}:`, err.message);
+          }
         }
-
-        logger.info(`📨 اتبعت إشعار "عقد الصيانة منتهي" لعميل #${contract.contact_id} (عقد #${contract.contract_id})`);
       } catch (err) {
-        logger.error(`❌ فشل إرسال إشعار انتهاء العقد #${contract.contract_id}:`, err.message);
+        logger.error(`❌ فشل فحص أتمتة "عقد الصيانة منتهي" لشركة #${company.id}:`, err.message);
       }
     }
   } catch (err) {

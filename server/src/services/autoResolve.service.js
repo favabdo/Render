@@ -19,38 +19,46 @@ function autoResolveCategoryText(days) {
 
 async function runAutoResolveSweep(io) {
   try {
-    const days = await companyRepo.getPrimaryAutoResolveDays();
-    // null أو 0 يعني الخاصية متوقفة من إعدادات الحساب
-    if (!days || days <= 0) return;
+    const companies = await companyRepo.listAllCompanies();
 
-    const candidates = await conversationRepo.findConversationsInactiveSince(days);
-    if (!candidates.length) return;
+    for (const company of companies) {
+      const days = company.auto_resolve_days;
+      // null أو 0 يعني الخاصية متوقفة من إعدادات الحساب بتاع الشركة دي
+      if (!days || days <= 0) continue;
 
-    for (const { id } of candidates) {
       try {
-        // بنجيب المحادثة تاني قبل القفل عشان نتأكد إنها لسه مفتوحة وماتقفلتش
-        // (race condition نادرة لو إيجنت عمل Resolve يدوي في نفس اللحظة)
-        const conversation = await conversationRepo.getConversationById(id);
-        if (!conversation || conversation.locked_at || conversation.status === 'closed') continue;
+        const candidates = await conversationRepo.findConversationsInactiveSince(days, company.id);
+        if (!candidates.length) continue;
 
-        const category = autoResolveCategoryText(days);
-        const [, systemMessage] = await Promise.all([
-          conversationRepo.resolveConversation(id, { category, notes: null, resolvedBy: null }),
-          conversationRepo.addSystemMessage(
-            id,
-            `Conversation was automatically resolved after ${days} day(s) of inactivity`
-          ),
-        ]);
+        for (const { id } of candidates) {
+          try {
+            // بنجيب المحادثة تاني قبل القفل عشان نتأكد إنها لسه مفتوحة وماتقفلتش
+            // (race condition نادرة لو إيجنت عمل Resolve يدوي في نفس اللحظة)
+            const conversation = await conversationRepo.getConversationById(id);
+            if (!conversation || conversation.locked_at || conversation.status === 'closed') continue;
 
-        const updated = await conversationRepo.getConversationById(id);
-        if (io && updated) {
-          io.emit('conversation_updated', updated);
-          socketService.emitToConversationRoom(io, updated.id, 'new_message', { conversationId: updated.id, message: systemMessage });
+            const category = autoResolveCategoryText(days);
+            const [, systemMessage] = await Promise.all([
+              conversationRepo.resolveConversation(id, { category, notes: null, resolvedBy: null }),
+              conversationRepo.addSystemMessage(
+                id,
+                `Conversation was automatically resolved after ${days} day(s) of inactivity`
+              ),
+            ]);
+
+            const updated = await conversationRepo.getConversationById(id);
+            if (io && updated) {
+              socketService.emitToCompany(io, company.id, 'conversation_updated', updated);
+              socketService.emitToConversationRoom(io, updated.id, 'new_message', { conversationId: updated.id, message: systemMessage });
+            }
+
+            logger.info(`⏳ محادثة #${id} (شركة #${company.id}) اتقفلت تلقائيًا بعد ${days} يوم من عدم التفاعل`);
+          } catch (err) {
+            logger.error(`❌ فشل الـ Auto Resolve للمحادثة #${id}:`, err.message);
+          }
         }
-
-        logger.info(`⏳ محادثة #${id} اتقفلت تلقائيًا بعد ${days} يوم من عدم التفاعل`);
       } catch (err) {
-        logger.error(`❌ فشل الـ Auto Resolve للمحادثة #${id}:`, err.message);
+        logger.error(`❌ فشل فحص الـ Auto Resolve لشركة #${company.id}:`, err.message);
       }
     }
   } catch (err) {

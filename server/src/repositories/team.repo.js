@@ -1,15 +1,19 @@
 const { getPool, sql } = require('../database/connection');
 
 // كل التيمز، مع عدد الإيجنتس المنضمين لكل تيم (بيتعرض في كارت التيم بصفحة الإعدادات)
-async function listTeams() {
+async function listTeams(companyId = null) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT t.*,
       (
         SELECT COUNT(*) FROM [dbo].[NileChat_TeamMembers_byA] tm
         WHERE tm.team_id = t.id
       ) AS members_count
     FROM [dbo].[NileChat_Teams_byA] t
+    WHERE (@companyId IS NULL OR t.company_id = @companyId)
     ORDER BY t.created_at ASC
   `);
   return result.recordset;
@@ -24,7 +28,7 @@ async function getTeamById(id) {
   return result.recordset[0] || null;
 }
 
-async function createTeam({ name, description = null, icon = 'users-round', color = '#6C5CE7', routingStrategy = 'manual', createdBy = null }) {
+async function createTeam({ name, description = null, icon = 'users-round', color = '#6C5CE7', routingStrategy = 'manual', createdBy = null, companyId = null }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -34,10 +38,11 @@ async function createTeam({ name, description = null, icon = 'users-round', colo
     .input('color', sql.NVarChar(20), color)
     .input('routingStrategy', sql.NVarChar(20), routingStrategy)
     .input('createdBy', sql.BigInt, createdBy)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      INSERT INTO [dbo].[NileChat_Teams_byA] (name, description, icon, color, routing_strategy, created_by)
+      INSERT INTO [dbo].[NileChat_Teams_byA] (name, description, icon, color, routing_strategy, created_by, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name, @description, @icon, @color, @routingStrategy, @createdBy)
+      VALUES (@name, @description, @icon, @color, @routingStrategy, @createdBy, @companyId)
     `);
   return result.recordset[0];
 }

@@ -81,6 +81,7 @@ function requireAuth(req, res, next) {
           return res.status(401).json({ error: 'التوكن غير صحيح أو الحساب غير مفعّل' });
         }
         req.user = { userId: user.id, email: user.email, role: user.role };
+        req.companyId = user.company_id || null;
         if (enforceCrmAgentAccess(req, res)) return;
         next();
       })
@@ -95,6 +96,7 @@ function requireAuth(req, res, next) {
         return res.status(401).json({ error: 'الحساب موقوف أو محذوف، سجل دخول تاني' });
       }
       req.user = payload;
+      req.companyId = payload.companyId || null;
       if (enforceCrmAgentAccess(req, res)) return;
       next();
     })

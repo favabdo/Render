@@ -36,6 +36,8 @@ export default function ContactsPage() {
   const [counts, setCounts] = useState({ activeContract: 0, expiredContract: 0, noContract: 0, unregistered: 0 });
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const showToast = useToastStore((s) => s.showToast);
@@ -79,18 +81,30 @@ export default function ContactsPage() {
     setActiveTab(tab);
   }
 
+  function closeDeleteModal() {
+    setDeleteTarget(null);
+    setDeletePassword('');
+    setDeleteError('');
+  }
+
   function confirmDelete() {
     if (!deleteTarget) return;
+    setDeleteError('');
+    if (!deletePassword) {
+      setDeleteError(t('deleteModal.passwordRequired'));
+      return;
+    }
     const target = deleteTarget;
-    setDeleteTarget(null);
+    const password = deletePassword;
     const previousContacts = contacts;
     // Optimistic: الكارت بيختفي من الشبكة فورًا، ولو الحذف فشل بالسيرفر بنرجّعه
     // بمكانه القديم بالظبط (splice على نفس الـ index)
     const idx = previousContacts.findIndex((c) => c.id === target.id);
     setContacts((prev) => prev.filter((c) => c.id !== target.id));
+    closeDeleteModal();
 
     contactsApi
-      .remove(target.id)
+      .remove(target.id, password)
       .then(() => showToast(t('deleteSuccess'), 'success'))
       .catch((err) => {
         console.error('[API] deleteContact error:', err);
@@ -311,11 +325,25 @@ export default function ContactsPage() {
         <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'var(--surface)', borderRadius: 14, padding: 20, width: 320, maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
             <div style={{ fontSize: 14.5, fontWeight: 700, marginBottom: 8 }}>{t('deleteModal.title')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
               {t('deleteModal.confirm', { name: deleteTarget.name || t('deleteModal.fallbackName') })}
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="tpl-cancel-btn" onClick={() => setDeleteTarget(null)}>{t('deleteModal.cancel')}</button>
+            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{t('deleteModal.passwordLabel')}</div>
+            <input
+              type="password"
+              className="iw-input"
+              placeholder="••••••••"
+              style={{ marginBottom: 6, width: '100%' }}
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
+              autoFocus
+            />
+            {deleteError && (
+              <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 8 }}>{deleteError}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+              <button className="tpl-cancel-btn" onClick={closeDeleteModal}>{t('deleteModal.cancel')}</button>
               <button className="resolve-confirm-btn" style={{ background: 'var(--danger)' }} onClick={confirmDelete}>{t('deleteModal.delete')}</button>
             </div>
           </div>

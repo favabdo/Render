@@ -41,15 +41,16 @@ async function findContactByPhone(phoneNumber) {
 }
 
 // بينشئ كونتاكت جديد ويربطه فورًا برقم التليفون اللي بعت بيه
-async function createContactWithPhone(name, phoneNumber) {
+async function createContactWithPhone(name, phoneNumber, companyId = null) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('name', sql.NVarChar(200), name || phoneNumber)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name)
+      VALUES (@name, @companyId)
     `);
   const contact = result.recordset[0];
 
@@ -309,10 +310,11 @@ async function getContactByIdWithPhones(id) {
 // عقد اتضاف) بتاع كل عميل — نفس منطق getContactByIdWithCurrentContract. أما
 // contract_date (تاريخ التعاقد) و manager_phone (رقم المدير) فمعلومات مستقلة
 // محفوظة على الكونتاكت نفسه
-async function listContacts() {
+async function listContacts(companyId = null) {
   const pool = await getPool();
   const contactsResult = await pool
     .request()
+    .input('companyId', sql.BigInt, companyId)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
              c.created_by, c.is_vip, c.is_inactive, ${CREATED_BY_AGENT_NAME_SELECT},
@@ -322,6 +324,7 @@ async function listContacts() {
       ${CURRENT_CONTRACT_APPLY}
       ${CREATED_BY_AGENT_JOIN}
       WHERE c.status = 1
+        AND (@companyId IS NULL OR c.company_id = @companyId)
       ORDER BY c.name ASC
     `);
   const contactIds = contactsResult.recordset.map((r) => r.id);
@@ -420,7 +423,7 @@ function resolveContactsCategoryClause(category) {
   }
 }
 
-async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '', category = 'all', module = undefined } = {}) {
+async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, search = '', category = 'all', module = undefined, companyId = null } = {}) {
   const pool = await getPool();
   const safePage = Math.max(1, parseInt(page, 10) || 1);
   const safePageSize = Math.min(MAX_CONTACTS_PAGE_SIZE, Math.max(1, parseInt(pageSize, 10) || MAX_CONTACTS_PAGE_SIZE));
@@ -444,6 +447,7 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     .input('moduleFilter', sql.NVarChar(300), moduleFilter)
     .input('offset', sql.Int, offset)
     .input('pageSize', sql.Int, safePageSize)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
              c.created_by, c.is_vip, c.is_inactive, ${CREATED_BY_AGENT_NAME_SELECT},
@@ -454,6 +458,7 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
       ${CURRENT_CONTRACT_APPLY}
       ${CREATED_BY_AGENT_JOIN}
       WHERE c.status = 1
+      AND (@companyId IS NULL OR c.company_id = @companyId)
       AND (
          @q IS NULL
          OR c.name LIKE @q
@@ -498,6 +503,7 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
   const countsResult = await pool
     .request()
     .input('q', sql.NVarChar(200), q ? `%${q}%` : null)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
       SELECT
         SUM(CASE WHEN ${ACTIVE_CONTRACT_CONDITION} THEN 1 ELSE 0 END) AS active_contract_count,
@@ -510,6 +516,7 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
         SELECT CASE WHEN ${REGISTERED_CONDITION} THEN 1 ELSE 0 END AS is_registered
       ) reg
       WHERE c.status = 1
+      AND (@companyId IS NULL OR c.company_id = @companyId)
       AND (
          @q IS NULL
          OR c.name LIKE @q
@@ -605,10 +612,11 @@ async function unlinkPhoneToNewContact(contactId, phoneNumber, newName) {
   const insertResult = await pool
     .request()
     .input('name', sql.NVarChar(200), finalName)
+    .input('companyId', sql.BigInt, oldContact ? oldContact.company_id : null)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name)
+      VALUES (@name, @companyId)
     `);
   const newContact = insertResult.recordset[0];
 
@@ -641,6 +649,7 @@ async function createCustomerContact({
   modules,
   createdBy,
   createdByName,
+  companyId,
 }) {
   const pool = await getPool();
   const result = await pool
@@ -651,10 +660,11 @@ async function createCustomerContact({
     .input('managerName', sql.NVarChar(200), managerName || null)
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
     .input('createdBy', sql.BigInt, createdBy || null)
+    .input('companyId', sql.BigInt, companyId || null)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone, created_by)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone, created_by, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name, @location, @contractDate, @managerName, @managerPhone, @createdBy)
+      VALUES (@name, @location, @contractDate, @managerName, @managerPhone, @createdBy, @companyId)
     `);
   const contact = result.recordset[0];
 

@@ -15,6 +15,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [companyCode, setCompanyCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,7 +31,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const data = await login(email.trim(), password);
+      const data = await login(email.trim(), password, companyCode.trim());
       setAuth(data.token, data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -54,6 +55,22 @@ export default function LoginPage() {
           <div className="subtitle">{t('login.subtitle')}</div>
 
           <form id="login-form" autoComplete="on" onSubmit={handleSubmit}>
+            <div className="field-wrap">
+              <label className="field-label" htmlFor="login-company-code">
+                {t('login.companyCodeLabel')}
+              </label>
+              <input
+                type="text"
+                className="login-input"
+                id="login-company-code"
+                placeholder="NTX7K2Q9PL"
+                autoComplete="off"
+                required
+                style={{ textTransform: 'uppercase' }}
+                value={companyCode}
+                onChange={(e) => setCompanyCode(e.target.value)}
+              />
+            </div>
             <div className="field-wrap">
               <label className="field-label" htmlFor="login-email">
                 {t('login.emailLabel')}

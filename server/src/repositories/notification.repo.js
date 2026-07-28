@@ -22,9 +22,12 @@ async function createNotification({
     .input('actorName', sql.NVarChar(200), actorName)
     .query(`
       INSERT INTO [dbo].[NileChat_Notifications_byA]
-        (user_id, type, title, message, reference_id, status, actor_id, actor_name)
+        (user_id, type, title, message, reference_id, status, actor_id, actor_name, company_id)
       OUTPUT INSERTED.*
-      VALUES (@userId, @type, @title, @message, @referenceId, 1, @actorId, @actorName)
+      VALUES (
+        @userId, @type, @title, @message, @referenceId, 1, @actorId, @actorName,
+        (SELECT company_id FROM [dbo].[NileChat_Users_byA] WHERE id = @userId)
+      )
     `);
   return result.recordset[0];
 }

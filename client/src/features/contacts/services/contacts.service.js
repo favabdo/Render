@@ -18,7 +18,7 @@ export const contactsApi = {
   createCustomerCard: (payload) => apiClient.post('/api/contacts/customer-card', payload).then((r) => r.data),
   updateCustomerCard: (contactId, payload) =>
     apiClient.patch(`/api/contacts/${contactId}/customer-card`, payload).then((r) => r.data),
-  remove: (contactId) => apiClient.delete(`/api/contacts/${contactId}`).then((r) => r.data),
+  remove: (contactId, password) => apiClient.delete(`/api/contacts/${contactId}`, { data: { password } }).then((r) => r.data),
 };
 
 export const devicesApi = {

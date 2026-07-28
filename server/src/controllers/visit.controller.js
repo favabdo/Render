@@ -6,6 +6,7 @@
 const visitRepo = require('../repositories/visit.repo');
 const contactRepo = require('../repositories/contact.repo');
 const userRepo = require('../repositories/user.repo');
+const socketService = require('../sockets/socket');
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -41,6 +42,7 @@ async function buildVisitPayload(req, { contactId, contactName, agent: preResolv
     departureTime: departureTime || null,
     agentId: req.user.userId,
     agentName,
+    companyId: req.companyId,
   };
 }
 
@@ -67,7 +69,7 @@ async function addVisitForContact(req, res) {
   const visit = await visitRepo.addVisit(payload);
 
   const io = req.app.get('io');
-  if (io) io.emit('visit_added', { contactId: req.params.contactId, visit });
+  if (io) socketService.emitToCompany(io, req.companyId, 'visit_added', { contactId: req.params.contactId, visit });
 
   res.status(201).json({ ok: true, visit });
 }
@@ -94,7 +96,7 @@ async function addVisitStandalone(req, res) {
   const visit = await visitRepo.addVisit(payload);
 
   const io = req.app.get('io');
-  if (io) io.emit('visit_added', { contactId: contactId || null, visit });
+  if (io) socketService.emitToCompany(io, req.companyId, 'visit_added', { contactId: contactId || null, visit });
 
   res.status(201).json({ ok: true, visit });
 }

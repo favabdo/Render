@@ -33,6 +33,27 @@ async function getCompanyById(id) {
   return result.recordset[0] || null;
 }
 
+// بيدور على شركة بالكود بتاعها — ده اللي بيتاخد من خانة "كود الشركة" في شاشة
+// تسجيل الدخول ويتأكد إنه مطابق فعلاً لشركة اليوزر (auth.controller.login)
+async function getCompanyByCode(code) {
+  if (!code) return null;
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('code', sql.NVarChar(50), String(code).trim())
+    .query(`SELECT * FROM [dbo].[NileChat_Companies_byA] WHERE code = @code`);
+  return result.recordset[0] || null;
+}
+
+// كل الشركات المسجلة في النظام — بتُستخدم من أي job/scheduler خلفي (Auto
+// Resolve، تنبيه انتهاء عقود الصيانة...) لازم يشتغل لكل شركة لوحدها بإعداداتها
+// هي بالظبط، مش بس أول شركة في النظام
+async function listAllCompanies() {
+  const pool = await getPool();
+  const result = await pool.request().query(`SELECT * FROM [dbo].[NileChat_Companies_byA] ORDER BY id ASC`);
+  return result.recordset;
+}
+
 // أول شركة اتعملت في النظام (Nile Techno Support) — بنستخدمها كـ fallback لأي
 // يوزر لسه مش مربوط بشركة، ولحد ما يتعمل فعليًا اختيار/إنشاء شركة وقت التسجيل
 async function getFirstCompany() {
@@ -227,6 +248,8 @@ async function updateAutomationSettings(companyId, fields = {}) {
 
 module.exports = {
   getCompanyById,
+  getCompanyByCode,
+  listAllCompanies,
   getFirstCompany,
   getCompanyForUser,
   createCompany,

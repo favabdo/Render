@@ -3,7 +3,7 @@ const repo = require('../repositories/resolveCategory.repo');
 const notificationService = require('../services/notification.service');
 
 async function list(req, res) {
-  const items = await repo.listResolveCategories();
+  const items = await repo.listResolveCategories(req.companyId);
   res.json(items);
 }
 
@@ -17,6 +17,7 @@ async function create(req, res) {
     description: description || null,
     color: color || 'rgba(108,92,231,0.1)',
     createdBy: req.user.userId,
+    companyId: req.companyId,
   });
   res.status(201).json(created);
   notificationService.notifyTypedActivity(req, notificationService.NOTIFICATION_TYPES.RESOLVE_CATEGORY_UPDATED, `أضاف تصنيف إغلاق جديد "${created.name}"`, created.id);

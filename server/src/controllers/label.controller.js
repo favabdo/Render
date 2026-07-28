@@ -3,11 +3,12 @@ const repo = require('../repositories/label.repo');
 const conversationRepo = require('../repositories/conversation.repo');
 const notificationService = require('../services/notification.service');
 const logger = require('../utils/logger');
+const socketService = require('../sockets/socket');
 
 // ===== إدارة الليبلز نفسها (Settings > Labels) =====
 
 async function list(req, res) {
-  const items = await repo.listLabels();
+  const items = await repo.listLabels(req.companyId);
   res.json(items);
 }
 
@@ -20,6 +21,7 @@ async function create(req, res) {
     color: color || '#6C5CE7',
     description: description || null,
     createdBy: req.user.userId,
+    companyId: req.companyId,
   });
   res.status(201).json(created);
 
@@ -57,8 +59,8 @@ function broadcastLabelsList(req) {
   const io = req.app.get('io');
   if (!io) return;
   repo
-    .listLabels()
-    .then((labels) => io.emit('labels_updated', labels))
+    .listLabels(req.companyId)
+    .then((labels) => socketService.emitToCompany(io, req.companyId, 'labels_updated', labels))
     .catch((err) => logger.error('❌ فشل بث تحديث الليبلز:', err.message));
 }
 
@@ -79,7 +81,7 @@ async function addToConversation(req, res) {
   const labels = await repo.addLabelToConversation(req.params.id, labelId);
 
   const io = req.app.get('io');
-  if (io) io.emit('conversation_labels_updated', { conversationId: req.params.id, labels });
+  if (io) socketService.emitToCompany(io, req.companyId, 'conversation_labels_updated', { conversationId: req.params.id, labels });
 
   res.json({ ok: true, labels });
 }
@@ -91,7 +93,7 @@ async function removeFromConversation(req, res) {
   const labels = await repo.removeLabelFromConversation(req.params.id, req.params.labelId);
 
   const io = req.app.get('io');
-  if (io) io.emit('conversation_labels_updated', { conversationId: req.params.id, labels });
+  if (io) socketService.emitToCompany(io, req.companyId, 'conversation_labels_updated', { conversationId: req.params.id, labels });
 
   res.json({ ok: true, labels });
 }

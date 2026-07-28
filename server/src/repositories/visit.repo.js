@@ -38,7 +38,7 @@ async function getVisitById(visitId) {
   return result.recordset[0] || null;
 }
 
-async function addVisit({ contactId, customerName, visitDate, workDone, arrivalTime, departureTime, agentId, agentName }) {
+async function addVisit({ contactId, customerName, visitDate, workDone, arrivalTime, departureTime, agentId, agentName, companyId }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -50,11 +50,12 @@ async function addVisit({ contactId, customerName, visitDate, workDone, arrivalT
     .input('departureTime', sql.NVarChar(5), departureTime || null)
     .input('agentId', sql.BigInt, agentId || null)
     .input('agentName', sql.NVarChar(200), agentName || null)
+    .input('companyId', sql.BigInt, companyId || null)
     .query(`
       INSERT INTO [dbo].[NileChat_Visits_byA]
-        (contact_id, customer_name, visit_date, work_done, arrival_time, departure_time, agent_id, agent_name)
+        (contact_id, customer_name, visit_date, work_done, arrival_time, departure_time, agent_id, agent_name, company_id)
       OUTPUT INSERTED.id
-      VALUES (@contactId, @customerName, @visitDate, @workDone, @arrivalTime, @departureTime, @agentId, @agentName)
+      VALUES (@contactId, @customerName, @visitDate, @workDone, @arrivalTime, @departureTime, @agentId, @agentName, @companyId)
     `);
   return getVisitById(result.recordset[0].id);
 }

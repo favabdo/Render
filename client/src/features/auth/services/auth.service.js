@@ -1,7 +1,7 @@
 import apiClient from '../../../services/apiClient';
 
-export async function login(email, password) {
-  const { data } = await apiClient.post('/auth/login', { email, password });
+export async function login(email, password, companyCode) {
+  const { data } = await apiClient.post('/auth/login', { email, password, companyCode });
   return data; // { token, user }
 }
 

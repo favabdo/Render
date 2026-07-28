@@ -101,6 +101,7 @@ async function createInbox(req, res) {
     verifiedName: verified.verifiedName,
     displayPhoneNumber: verified.displayPhoneNumber,
     createdBy: req.user.userId,
+    companyId: req.companyId,
   });
 
   res.status(201).json({ ok: true, inbox });
@@ -109,7 +110,7 @@ async function createInbox(req, res) {
 
 // ===== قايمة الـ Inboxes (لعرضها في صفحة الإعدادات) =====
 async function listInboxes(req, res) {
-  const inboxes = await inboxRepo.listInboxes();
+  const inboxes = await inboxRepo.listInboxes(req.companyId);
   res.json(inboxes);
 }
 

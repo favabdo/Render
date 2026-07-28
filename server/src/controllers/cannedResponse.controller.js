@@ -3,7 +3,7 @@ const repo = require('../repositories/cannedResponse.repo');
 const notificationService = require('../services/notification.service');
 
 async function list(req, res) {
-  const items = await repo.listCannedResponses();
+  const items = await repo.listCannedResponses(req.companyId);
   res.json(items);
 }
 
@@ -16,6 +16,7 @@ async function create(req, res) {
     label: label.trim(),
     messageText: text.trim(),
     createdBy: req.user.userId,
+    companyId: req.companyId,
   });
   res.status(201).json(created);
   notificationService.notifyTypedActivity(req, notificationService.NOTIFICATION_TYPES.CANNED_RESPONSE_UPDATED, `أضاف رد جاهز جديد "${created.label}"`, created.id);

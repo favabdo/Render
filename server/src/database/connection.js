@@ -1331,6 +1331,83 @@ async function ensureNotificationsTableExists() {
   logger.info('✅ جدول الإشعارات (Notifications) جاهز.');
 }
 
+// ===== Multi-company: كل جدول بيانات رئيسي بيتربط بـ company_id بتاع الشركة
+// اللي بيمتلك الصف ده. الهدف: كل بيانات كل شركة تفضل معزولة تمامًا عن أي
+// شركة تانية بمجرد ما كل استعلام (SELECT/INSERT/UPDATE) في الـ repositories
+// يتفلتر بـ company_id بتاع اليوزر الداخل (شوف middleware/auth.js وطريقة
+// استخدام req.companyId في كل repo). لو حبينا نضيف شركة جديدة في المستقبل،
+// نفس الجداول دي هتستوعبها من غير أي تعديل تاني — بس نضيف صف في
+// NileChat_Companies_byA وكود مختلف، وكل بيانات الشركة الجديدة هتتخزن وتتفلتر
+// تلقائيًا بنفس الآلية.
+const COMPANY_ID_TABLES = [
+  'NileChat_Conversations_byA',
+  'NileChat_Contacts_byA',
+  'NileChat_Inboxes_byA',
+  'NileChat_Devices_byA',
+  'NileChat_ScheduledTasks_byA',
+  'NileChat_Visits_byA',
+  'NileChat_MaintenanceContracts_byA',
+  'NileChat_CannedResponses_byA',
+  'NileChat_ResolveCategories_byA',
+  'NileChat_Labels_byA',
+  'NileChat_Teams_byA',
+  'NileChat_Notifications_byA',
+  'NileChat_ConversationRatings_byA',
+  TABLE_NAME, // جدول الرسايل نفسه (وارد اسمه من env.DB_TABLE_NAME)
+];
+
+async function ensureCompanyIdColumns() {
+  const pool = await getPool();
+  for (const table of COMPANY_ID_TABLES) {
+    await pool.request().query(`
+      IF EXISTS (SELECT * FROM sys.tables WHERE name = '${table}')
+         AND NOT EXISTS (
+           SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.${table}') AND name = 'company_id'
+         )
+      BEGIN
+        ALTER TABLE [dbo].[${table}] ADD company_id BIGINT NULL;
+      END
+    `);
+    await pool.request().query(`
+      IF EXISTS (SELECT * FROM sys.tables WHERE name = '${table}')
+         AND EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.${table}') AND name = 'company_id')
+         AND NOT EXISTS (
+           SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.${table}') AND name = 'IX_${table}_company_id'
+         )
+      BEGIN
+        CREATE INDEX IX_${table}_company_id ON [dbo].[${table}](company_id);
+      END
+    `);
+  }
+  logger.info('✅ عمود company_id متاح (مع إندكس) على كل الجداول الرئيسية.');
+}
+
+// أي صف قديم (من قبل ما تتعمل الهجرة دي) لسه ملوش company_id، بنربطه تلقائيًا
+// بأول شركة موجودة في النظام — بالظبط نفس فكرة ensureUsersHaveCompanyAssigned
+// بس على باقي الجداول كلها. أي صف جديد بعد كده هيتسجل بـ company_id فعلي من
+// أول لحظة (شوف كل repo.js بيبعت companyId في الإدراج)
+async function ensureExistingRowsHaveCompanyAssigned() {
+  const pool = await getPool();
+  const firstCompanyResult = await pool.request().query(`
+    SELECT TOP 1 id FROM [dbo].[NileChat_Companies_byA] ORDER BY id ASC
+  `);
+  const firstCompanyId = firstCompanyResult.recordset[0]?.id;
+  if (!firstCompanyId) return;
+
+  for (const table of COMPANY_ID_TABLES) {
+    await pool
+      .request()
+      .input('companyId', sql.BigInt, firstCompanyId)
+      .query(`
+        IF EXISTS (SELECT * FROM sys.tables WHERE name = '${table}')
+        BEGIN
+          UPDATE [dbo].[${table}] SET company_id = @companyId WHERE company_id IS NULL;
+        END
+      `);
+  }
+  logger.info('✅ كل الصفوف القديمة اتربطت بأول شركة في النظام (Backfill company_id).');
+}
+
 async function ensureSchema() {
   await ensureTableExists();
   await ensureConversationsTableExists();
@@ -1379,6 +1456,10 @@ async function ensureSchema() {
   await ensureConversationTeamsTableExists();
   await ensureWebhooksTableExists();
   await ensureNotificationsTableExists();
+  await ensureCompanyIdColumns();
+  // من غير باك فيل تلقائي بطلب المستخدم — العمود بيتضاف بس فاضي (NULL)، وهو
+  // اللي هيملاه بنفسه يدوي. الدالة ensureExistingRowsHaveCompanyAssigned لسه
+  // موجودة تحت ومصدّرة لو حبيت تستخدمها بنفسك بعدين وقت ما تحب.
 }
 
 module.exports = {
@@ -1427,6 +1508,8 @@ module.exports = {
   ensureConversationTeamsTableExists,
   ensureWebhooksTableExists,
   ensureNotificationsTableExists,
+  ensureCompanyIdColumns,
+  ensureExistingRowsHaveCompanyAssigned,
   ensureSchema,
   TABLE_NAME,
 };

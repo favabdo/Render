@@ -11,13 +11,17 @@ const mediaStorage = require('../utils/mediaStorage');
 const notificationService = require('../services/notification.service');
 const logger = require('../utils/logger');
 const { invalidateUserStatusCache } = require('../middleware/auth');
+const socketService = require('../sockets/socket');
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // الدعوة صالحة لمدة 7 أيام
 
 async function login(req, res) {
-  const { email, password } = req.body;
+  const { email, password, companyCode } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'لازم تبعت email و password' });
+  }
+  if (!companyCode) {
+    return res.status(400).json({ error: 'لازم تكتب كود الشركة' });
   }
 
   const user = await userRepo.findUserByEmail(email);
@@ -37,8 +41,16 @@ async function login(req, res) {
     return res.status(401).json({ error: 'بيانات الدخول غلط' });
   }
 
+  // كود الشركة لازم يكون فعلاً كود شركة موجودة، ولازم يكون بالظبط نفس شركة
+  // اليوزر ده (مش أي شركة تانية في النظام) — عشان نتأكد ١٠٠٪ إن الإيجنت الداخل
+  // ده تابع للشركة اللي بيحاول يدخلها فعلاً
+  const company = await companyRepo.getCompanyByCode(companyCode);
+  if (!company || company.id !== user.company_id) {
+    return res.status(401).json({ error: 'كود الشركة غلط' });
+  }
+
   const token = jwt.sign(
-    { userId: user.id, email: user.email, role: user.role },
+    { userId: user.id, email: user.email, role: user.role, companyId: company.id },
     env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -50,6 +62,8 @@ async function login(req, res) {
       email: user.email,
       role: user.role,
       display_name: userRepo.resolveDisplayName(user),
+      company_id: company.id,
+      company_name: company.name,
     },
   });
 
@@ -355,7 +369,7 @@ async function updateUserAccount(req, res) {
   if (status !== undefined && status !== 'active') {
     invalidateUserStatusCache(user.id);
     const io = req.app.get('io');
-    if (io) io.emit('agent_status_changed', { userId: user.id, status: user.status, reason: 'deactivated' });
+    if (io) socketService.emitToCompany(io, req.companyId, 'agent_status_changed', { userId: user.id, status: user.status, reason: 'deactivated' });
   }
 
   res.json({ ok: true, user });
@@ -395,7 +409,7 @@ async function deleteUserAccount(req, res) {
   // المحذوف فاتح الداشبورد دلوقتي يتقفل عنده فورًا من غير ما يعمل أي حاجة
   invalidateUserStatusCache(deleted.id);
   const io = req.app.get('io');
-  if (io) io.emit('agent_status_changed', { userId: deleted.id, status: 'deleted', reason: 'deleted' });
+  if (io) socketService.emitToCompany(io, req.companyId, 'agent_status_changed', { userId: deleted.id, status: 'deleted', reason: 'deleted' });
 
   res.json({ ok: true });
   notificationService.notifyTypedActivity(req, notificationService.NOTIFICATION_TYPES.SETTINGS_UPDATED, `مسح حساب الإيجنت ${deleted.email}`, deleted.id);

@@ -24,7 +24,7 @@ async function getDeviceById(deviceId) {
   return result.recordset[0] || null;
 }
 
-async function addDevice(contactId, { name, anydesk = null, password = null }) {
+async function addDevice(contactId, { name, anydesk = null, password = null }, companyId = null) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -32,10 +32,11 @@ async function addDevice(contactId, { name, anydesk = null, password = null }) {
     .input('name', sql.NVarChar(200), name)
     .input('anydesk', sql.NVarChar(150), anydesk)
     .input('password', sql.NVarChar(200), password)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      INSERT INTO [dbo].[NileChat_Devices_byA] (contact_id, name, anydesk, password)
+      INSERT INTO [dbo].[NileChat_Devices_byA] (contact_id, name, anydesk, password, company_id)
       OUTPUT INSERTED.*
-      VALUES (@contactId, @name, @anydesk, @password)
+      VALUES (@contactId, @name, @anydesk, @password, @companyId)
     `);
   return result.recordset[0];
 }

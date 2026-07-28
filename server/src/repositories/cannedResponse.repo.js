@@ -1,28 +1,33 @@
 const { getPool, sql } = require('../database/connection');
 
-async function listCannedResponses() {
+async function listCannedResponses(companyId = null) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT cr.*, COALESCE(u.display_name, u.email) AS created_by_name
     FROM [dbo].[NileChat_CannedResponses_byA] cr
     LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = cr.created_by
+    WHERE (@companyId IS NULL OR cr.company_id = @companyId)
     ORDER BY COALESCE(cr.sort_order, 999999999) ASC, cr.created_at ASC
   `);
   return result.recordset;
 }
 
-async function createCannedResponse({ label, messageText, createdBy = null }) {
+async function createCannedResponse({ label, messageText, createdBy = null, companyId = null }) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('label', sql.NVarChar(200), label)
     .input('messageText', sql.NVarChar(sql.MAX), messageText)
     .input('createdBy', sql.BigInt, createdBy)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      DECLARE @nextOrder INT = (SELECT ISNULL(MAX(sort_order), 0) + 1 FROM [dbo].[NileChat_CannedResponses_byA]);
-      INSERT INTO [dbo].[NileChat_CannedResponses_byA] (label, message_text, created_by, sort_order)
+      DECLARE @nextOrder INT = (SELECT ISNULL(MAX(sort_order), 0) + 1 FROM [dbo].[NileChat_CannedResponses_byA] WHERE (@companyId IS NULL OR company_id = @companyId));
+      INSERT INTO [dbo].[NileChat_CannedResponses_byA] (label, message_text, created_by, sort_order, company_id)
       OUTPUT INSERTED.*
-      VALUES (@label, @messageText, @createdBy, @nextOrder)
+      VALUES (@label, @messageText, @createdBy, @nextOrder, @companyId)
     `);
   return result.recordset[0];
 }

@@ -74,9 +74,12 @@ async function addContract({ contactId, startDate, endDate, notes, createdBy, cr
     .input('createdByName', sql.NVarChar(200), createdByName || null)
     .query(`
       INSERT INTO [dbo].[NileChat_MaintenanceContracts_byA]
-        (contact_id, start_date, end_date, notes, created_by, created_by_name)
+        (contact_id, start_date, end_date, notes, created_by, created_by_name, company_id)
       OUTPUT INSERTED.id
-      VALUES (@contactId, @startDate, @endDate, @notes, @createdBy, @createdByName)
+      VALUES (
+        @contactId, @startDate, @endDate, @notes, @createdBy, @createdByName,
+        (SELECT company_id FROM [dbo].[NileChat_Contacts_byA] WHERE id = @contactId)
+      )
     `);
   return getContractById(result.recordset[0].id);
 }
@@ -136,9 +139,12 @@ async function getCurrentContractForContact(contactId) {
 // أوقفها يدويًا (لو الأدمن أوقفها بنفسه فده مش "انتهاء طبيعي")، ولسه
 // expiry_notice_sent_at فاضي. بترجع رقم تليفون العميل الأساسي (أول رقم متسجل
 // له) عشان contractExpiry.service.js يقدر يبعت عليه مباشرة
-async function findExpiredContractsPendingNotice() {
+async function findExpiredContractsPendingNotice(companyId) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT m.id AS contract_id, m.contact_id, m.end_date,
            c.name AS contact_name,
            p.phone_number AS contact_phone
@@ -153,6 +159,7 @@ async function findExpiredContractsPendingNotice() {
     WHERE m.stopped_at IS NULL
       AND m.expiry_notice_sent_at IS NULL
       AND m.end_date < CAST(SYSUTCDATETIME() AS DATE)
+      AND (@companyId IS NULL OR m.company_id = @companyId)
       -- لازم يكون ده آخر عقد اتضاف للعميل ده (مش عقد قديم اتغطى بعقد جديد)
       AND m.id = (
         SELECT TOP 1 m2.id

@@ -2,9 +2,12 @@ const { getPool, sql } = require('../database/connection');
 
 // كل الليبلز المتاحة في الشركة، مع عدد المحادثات المحطوط عليها كل ليبل
 // (بيتعرض في صفحة الإعدادات زي عمود "Conversations")
-async function listLabels() {
+async function listLabels(companyId = null) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT l.*,
       COALESCE(u.display_name, u.email) AS created_by_name,
       (
@@ -13,12 +16,13 @@ async function listLabels() {
       ) AS conversation_count
     FROM [dbo].[NileChat_Labels_byA] l
     LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = l.created_by
+    WHERE (@companyId IS NULL OR l.company_id = @companyId)
     ORDER BY l.created_at ASC
   `);
   return result.recordset;
 }
 
-async function createLabel({ name, color = null, description = null, createdBy = null }) {
+async function createLabel({ name, color = null, description = null, createdBy = null, companyId = null }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -26,10 +30,11 @@ async function createLabel({ name, color = null, description = null, createdBy =
     .input('color', sql.NVarChar(20), color)
     .input('description', sql.NVarChar(300), description)
     .input('createdBy', sql.BigInt, createdBy)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      INSERT INTO [dbo].[NileChat_Labels_byA] (name, color, description, created_by)
+      INSERT INTO [dbo].[NileChat_Labels_byA] (name, color, description, created_by, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name, @color, @description, @createdBy)
+      VALUES (@name, @color, @description, @createdBy, @companyId)
     `);
   return result.recordset[0];
 }

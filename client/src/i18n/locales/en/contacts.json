@@ -34,7 +34,9 @@
     "confirm": "Are you sure you want to delete \"{{name}}\"? All their data (visits, maintenance contracts, devices) will be deleted.",
     "fallbackName": "the customer",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "passwordLabel": "Your Password",
+    "passwordRequired": "Enter your password to confirm deleting the customer"
   },
   "cardModal": {
     "editTitle": "Edit Customer",

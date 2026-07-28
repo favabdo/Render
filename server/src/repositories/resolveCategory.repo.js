@@ -1,17 +1,21 @@
 const { getPool, sql } = require('../database/connection');
 
-async function listResolveCategories() {
+async function listResolveCategories(companyId = null) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT rc.*, COALESCE(u.display_name, u.email) AS created_by_name
     FROM [dbo].[NileChat_ResolveCategories_byA] rc
     LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = rc.created_by
+    WHERE (@companyId IS NULL OR rc.company_id = @companyId)
     ORDER BY COALESCE(rc.sort_order, 999999999) ASC, rc.created_at ASC
   `);
   return result.recordset;
 }
 
-async function createResolveCategory({ name, icon = null, description = null, color = null, createdBy = null }) {
+async function createResolveCategory({ name, icon = null, description = null, color = null, createdBy = null, companyId = null }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -20,11 +24,12 @@ async function createResolveCategory({ name, icon = null, description = null, co
     .input('description', sql.NVarChar(300), description)
     .input('color', sql.NVarChar(50), color)
     .input('createdBy', sql.BigInt, createdBy)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      DECLARE @nextOrder INT = (SELECT ISNULL(MAX(sort_order), 0) + 1 FROM [dbo].[NileChat_ResolveCategories_byA]);
-      INSERT INTO [dbo].[NileChat_ResolveCategories_byA] (name, icon, description, color, created_by, sort_order)
+      DECLARE @nextOrder INT = (SELECT ISNULL(MAX(sort_order), 0) + 1 FROM [dbo].[NileChat_ResolveCategories_byA] WHERE (@companyId IS NULL OR company_id = @companyId));
+      INSERT INTO [dbo].[NileChat_ResolveCategories_byA] (name, icon, description, color, created_by, sort_order, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name, @icon, @description, @color, @createdBy, @nextOrder)
+      VALUES (@name, @icon, @description, @color, @createdBy, @nextOrder, @companyId)
     `);
   return result.recordset[0];
 }

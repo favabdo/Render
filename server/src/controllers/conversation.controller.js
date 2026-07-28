@@ -56,7 +56,7 @@ function isAgentTierRole(role) {
 }
 
 async function listConversations(req, res) {
-  const conversations = await conversationRepo.listConversations(isAgentTierRole(req.user?.role));
+  const conversations = await conversationRepo.listConversations(isAgentTierRole(req.user?.role), req.companyId);
   res.json(conversations);
 }
 
@@ -135,7 +135,7 @@ async function assign(req, res) {
     .getConversationById(req.params.id)
     .then((conversation) => {
       if (io && conversation) {
-        io.emit('conversation_updated', conversation);
+        socketService.emitToCompany(io, req.companyId, 'conversation_updated', conversation);
         socketService.emitToConversationRoom(io, conversation.id, 'new_message', { conversationId: conversation.id, message: systemMessage });
       }
       if (conversation) {
@@ -195,7 +195,7 @@ async function resolve(req, res) {
 
   const io = req.app.get('io');
   if (io) {
-    io.emit('conversation_updated', updated);
+    socketService.emitToCompany(io, req.companyId, 'conversation_updated', updated);
     socketService.emitToConversationRoom(io, updated.id, 'new_message', { conversationId: updated.id, message: systemMessage });
   }
 
@@ -242,7 +242,7 @@ async function reopen(req, res) {
 
   const io = req.app.get('io');
   if (io) {
-    io.emit('conversation_updated', updated);
+    socketService.emitToCompany(io, req.companyId, 'conversation_updated', updated);
     socketService.emitToConversationRoom(io, updated.id, 'new_message', { conversationId: updated.id, message: systemMessage });
   }
 
@@ -286,13 +286,13 @@ async function addNote(req, res) {
     .then((note) => {
       // بنبعتها لايف لكل الإيجنتس الفاتحين المحادثة دي عن طريق socket منفصل (new_note)
       // عشان محدش يخلطها بـ 'new_message' (اللي مرتبط بمنطق العميل/واتساب)
-      if (io) io.emit('new_note', { conversationId: conversation.id, note });
+      if (io) socketService.emitToCompany(io, req.companyId, 'new_note', { conversationId: conversation.id, note });
     })
     .catch((err) => {
       // حالة نادرة جدًا (مشكلة اتصال لحظية بالداتابيز) — بما إننا رجّعنا "ok" فعلاً،
       // لازم نبلّغ الواجهة بشكل صريح إن الملاحظة دي معملتش عشان الإيجنت يبعتها تاني
       logger.error('❌ فشل تسجيل ملاحظة خاصة:', err.message);
-      if (io) io.emit('note_failed', { conversationId: conversation.id, text: trimmedText });
+      if (io) socketService.emitToCompany(io, req.companyId, 'note_failed', { conversationId: conversation.id, text: trimmedText });
     });
 
   // "You are mentioned in a conversation" — بندور في نص الملاحظة على @اسم أي
@@ -393,7 +393,7 @@ async function reply(req, res) {
       req.timing?.mark('background:message_persisted');
       if (io) {
         socketService.emitToConversationRoom(io, conversation.id, 'new_message', { conversationId: conversation.id, message });
-        io.emit('conversation_updated', socketService.buildConversationSummary(conversation.id, message));
+        socketService.emitToCompany(io, req.companyId, 'conversation_updated', socketService.buildConversationSummary(conversation.id, message));
       }
       req.timing?.mark('background:socket_emit');
       const webhookPromise = webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_CREATED, {
@@ -422,7 +422,7 @@ async function reply(req, res) {
     })
     .catch((err) => {
       logger.error('❌ فشل تسجيل/إرسال الرد:', err.message);
-      if (io) io.emit('message_failed', { conversationId: conversation.id, text });
+      if (io) socketService.emitToCompany(io, req.companyId, 'message_failed', { conversationId: conversation.id, text });
     });
 }
 
@@ -496,7 +496,7 @@ async function replyMedia(req, res) {
       req.timing?.mark('background:message_persisted');
       if (io) {
         socketService.emitToConversationRoom(io, conversation.id, 'new_message', { conversationId: conversation.id, message: { ...message, client_id: clientId } });
-        io.emit('conversation_updated', socketService.buildConversationSummary(conversation.id, message));
+        socketService.emitToCompany(io, req.companyId, 'conversation_updated', socketService.buildConversationSummary(conversation.id, message));
       }
       req.timing?.mark('background:socket_emit');
       const webhookPromise = webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_CREATED, {
@@ -524,7 +524,7 @@ async function replyMedia(req, res) {
     })
     .catch((err) => {
       logger.error('❌ فشل تسجيل/إرسال رد الوسائط:', err.message);
-      if (io) io.emit('message_failed', { conversationId: conversation.id, clientId });
+      if (io) socketService.emitToCompany(io, req.companyId, 'message_failed', { conversationId: conversation.id, clientId });
     });
 }
 

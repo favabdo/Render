@@ -8,11 +8,11 @@ const logger = require('../utils/logger');
 
 // بيدور على الكونتاكت الحقيقي بتاع الرقم ده، ولو مش موجود بينشئه تلقائيًا باسمه اللي ظاهر
 // على واتساب (الإيجنت يقدر يغيّره بعدين براحته). بتُستخدم لما رسالة واتساب جديدة توصل.
-async function findOrCreateContactForIncoming(phoneNumber, waProfileName) {
+async function findOrCreateContactForIncoming(phoneNumber, waProfileName, companyId = null) {
   try {
     let contact = await contactRepo.findContactByPhone(phoneNumber);
     if (!contact) {
-      contact = await contactRepo.createContactWithPhone(waProfileName || phoneNumber, phoneNumber);
+      contact = await contactRepo.createContactWithPhone(waProfileName || phoneNumber, phoneNumber, companyId);
       if (contact) {
         webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
           contact_id: contact.id,
@@ -30,7 +30,7 @@ async function findOrCreateContactForIncoming(phoneNumber, waProfileName) {
 
 // بيربط رقم المحادثة دي بكونتاكت موجود بالفعل (دمج) — أو ينشئ كونتاكت جديد منفصل بيه
 // mode: 'link' (لازم contactId) أو 'new' (لازم name)
-async function linkContactToConversation(conversation, { mode, contactId, name }) {
+async function linkContactToConversation(conversation, { mode, contactId, name }, companyId = null) {
   let targetContact;
 
   if (mode === 'link') {
@@ -68,7 +68,7 @@ async function linkContactToConversation(conversation, { mode, contactId, name }
       err.status = 400;
       throw err;
     }
-    targetContact = await contactRepo.createContactWithPhone(trimmed, conversation.contact_number);
+    targetContact = await contactRepo.createContactWithPhone(trimmed, conversation.contact_number, companyId);
 
     webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
       contact_id: targetContact.id,

@@ -6,6 +6,7 @@
 const maintenanceContractRepo = require('../repositories/maintenanceContract.repo');
 const contactRepo = require('../repositories/contact.repo');
 const userRepo = require('../repositories/user.repo');
+const socketService = require('../sockets/socket');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -63,8 +64,8 @@ async function addContractForContact(req, res) {
 
   const io = req.app.get('io');
   if (io) {
-    io.emit('maintenance_contract_added', { contactId: req.params.contactId, contract });
-    if (updatedContact) io.emit('contact_updated', updatedContact);
+    socketService.emitToCompany(io, req.companyId, 'maintenance_contract_added', { contactId: req.params.contactId, contract });
+    if (updatedContact) socketService.emitToCompany(io, req.companyId, 'contact_updated', updatedContact);
   }
 
   res.status(201).json({ ok: true, contract, contact: updatedContact });
@@ -90,8 +91,8 @@ async function stopContractForContact(req, res) {
   const updatedContact = await contactRepo.getContactByIdWithPhones(req.params.contactId);
   const io = req.app.get('io');
   if (io) {
-    io.emit('maintenance_contract_stopped', { contactId: req.params.contactId, contract });
-    if (updatedContact) io.emit('contact_updated', updatedContact);
+    socketService.emitToCompany(io, req.companyId, 'maintenance_contract_stopped', { contactId: req.params.contactId, contract });
+    if (updatedContact) socketService.emitToCompany(io, req.companyId, 'contact_updated', updatedContact);
   }
 
   res.json({ ok: true, contract, contact: updatedContact });
@@ -108,8 +109,8 @@ async function deleteContractForContact(req, res) {
   const updatedContact = await contactRepo.getContactByIdWithPhones(req.params.contactId);
   const io = req.app.get('io');
   if (io) {
-    io.emit('maintenance_contract_deleted', { contactId: req.params.contactId, contractId: req.params.contractId });
-    if (updatedContact) io.emit('contact_updated', updatedContact);
+    socketService.emitToCompany(io, req.companyId, 'maintenance_contract_deleted', { contactId: req.params.contactId, contractId: req.params.contractId });
+    if (updatedContact) socketService.emitToCompany(io, req.companyId, 'contact_updated', updatedContact);
   }
 
   res.json({ ok: true, contact: updatedContact });

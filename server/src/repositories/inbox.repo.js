@@ -1,13 +1,17 @@
 const { getPool, sql } = require('../database/connection');
 
-async function listInboxes() {
+async function listInboxes(companyId = null) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT
       i.id, i.name, i.channel_type, i.api_provider, i.phone_number, i.phone_number_id,
       i.business_account_id, i.verified_name, i.display_phone_number, i.status, i.created_at,
       (SELECT COUNT(*) FROM [dbo].[NileChat_InboxAgents_byA] ia WHERE ia.inbox_id = i.id) AS agents_count
     FROM [dbo].[NileChat_Inboxes_byA] i
+    WHERE (@companyId IS NULL OR i.company_id = @companyId)
     ORDER BY i.created_at DESC
   `);
   return result.recordset;
@@ -83,6 +87,7 @@ async function createWhatsappInbox({
   verifiedName = null,
   displayPhoneNumber = null,
   createdBy = null,
+  companyId = null,
 }) {
   const pool = await getPool();
   const result = await pool
@@ -94,16 +99,17 @@ async function createWhatsappInbox({
     .input('verifiedName', sql.NVarChar(200), verifiedName)
     .input('displayPhoneNumber', sql.NVarChar(50), displayPhoneNumber)
     .input('createdBy', sql.BigInt, createdBy)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
       INSERT INTO [dbo].[NileChat_Inboxes_byA]
         (name, channel_type, api_provider, phone_number, phone_number_id,
-         access_token, verified_name, display_phone_number, status, created_by)
+         access_token, verified_name, display_phone_number, status, created_by, company_id)
       OUTPUT INSERTED.id, INSERTED.name, INSERTED.channel_type, INSERTED.api_provider, INSERTED.phone_number,
              INSERTED.phone_number_id, INSERTED.business_account_id, INSERTED.verified_name,
              INSERTED.display_phone_number, INSERTED.status, INSERTED.created_at
       VALUES
         (@name, 'whatsapp', 'whatsapp_cloud', @phoneNumber, @phoneNumberId,
-         @accessToken, @verifiedName, @displayPhoneNumber, 'active', @createdBy)
+         @accessToken, @verifiedName, @displayPhoneNumber, 'active', @createdBy, @companyId)
     `);
   return result.recordset[0];
 }

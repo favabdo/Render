@@ -36,10 +36,14 @@ async function listScheduledTasksForContact(contactId) {
 }
 
 // كل التاسكات من كل العملاء — مستخدمة في صفحة "Scheduled Tasks" في السايد بار
-async function listAllScheduledTasks() {
+async function listAllScheduledTasks(companyId = null) {
   const pool = await getPool();
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
+    WHERE (@companyId IS NULL OR t.company_id = @companyId)
     ORDER BY t.created_at DESC
   `);
   return result.recordset;
@@ -66,9 +70,12 @@ async function addScheduledTask(contactId, { customerName, taskText, agentId, ag
     .input('dueDate', sql.Date, dueDate)
     .query(`
       INSERT INTO [dbo].[NileChat_ScheduledTasks_byA]
-        (contact_id, customer_name, task_text, agent_id, agent_name, status, due_date)
+        (contact_id, customer_name, task_text, agent_id, agent_name, status, due_date, company_id)
       OUTPUT INSERTED.id
-      VALUES (@contactId, @customerName, @taskText, @agentId, @agentName, 'open', @dueDate)
+      VALUES (
+        @contactId, @customerName, @taskText, @agentId, @agentName, 'open', @dueDate,
+        (SELECT company_id FROM [dbo].[NileChat_Contacts_byA] WHERE id = @contactId)
+      )
     `);
   // بنرجع الصف كامل عن طريق نفس دالة الـ JOIN عشان الرد يرجع فيه الاسم اللايف
   // من الأول، بنفس الشكل بالظبط اللي هيتعرض بيه بعد كده في أي قراءة تانية

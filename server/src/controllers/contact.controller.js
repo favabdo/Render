@@ -6,6 +6,7 @@ const webhookDispatchService = require('../services/webhookDispatch.service');
 const userRepo = require('../repositories/user.repo');
 const notificationService = require('../services/notification.service');
 const logger = require('../utils/logger');
+const socketService = require('../sockets/socket');
 
 // بينضف قايمة الموديولات الجاية من الفرونت (كارت العميل): بيشيل الفاضي
 // والمكرر، وبيحد أقصى عدد وطول لكل اسم عشان محدش يبعت حاجة غريبة تعطل الداتابيز
@@ -21,7 +22,7 @@ function sanitizeModulesList(modules) {
 
 // كل الكونتاكتس الحقيقيين (لصفحة Contacts، وكمان لاختيار "اربط بكونتاكت موجود")
 async function listContacts(req, res) {
-  const contacts = await contactRepo.listContacts();
+  const contacts = await contactRepo.listContacts(req.companyId);
   res.json(contacts);
 }
 
@@ -39,6 +40,7 @@ async function listContactsPaginated(req, res) {
     category: req.query.category || (req.query.registered === 'yes' ? 'registered' : req.query.registered === 'no' ? 'unregistered' : 'all'),
     // فلتر اختياري بموديول معين (تاب "الكل" في "عملاء مسجلين" بصفحة Contacts)
     module: req.query.module || undefined,
+    companyId: req.companyId,
   });
   res.json(result);
 }
@@ -68,7 +70,7 @@ async function updateContact(req, res) {
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_updated', contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_updated', contact);
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
     contact_id: contact.id,
@@ -94,7 +96,7 @@ async function addPhone(req, res) {
   if (!result.contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_updated', result.contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_updated', result.contact);
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
     contact_id: result.contact.id,
@@ -118,7 +120,7 @@ async function updatePhoneLabel(req, res) {
 
   const contact = await contactRepo.getContactByIdWithPhones(req.params.id);
   const io = req.app.get('io');
-  if (io) io.emit('contact_updated', contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_updated', contact);
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
     contact_id: contact.id,
@@ -141,7 +143,7 @@ async function updateCustomerVip(req, res) {
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_updated', contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_updated', contact);
 
   res.json({ ok: true, contact });
 
@@ -159,7 +161,7 @@ async function updateCustomerInactive(req, res) {
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_updated', contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_updated', contact);
 
   res.json({ ok: true, contact });
 
@@ -171,11 +173,11 @@ async function linkConversationContact(req, res) {
   const conversation = await conversationRepo.getConversationById(req.params.id);
   if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
 
-  await contactService.linkContactToConversation(conversation, { mode, contactId, name });
+  await contactService.linkContactToConversation(conversation, { mode, contactId, name }, req.companyId);
 
   const updated = await conversationRepo.getConversationById(req.params.id);
   const io = req.app.get('io');
-  if (io) io.emit('conversation_updated', updated);
+  if (io) socketService.emitToCompany(io, req.companyId, 'conversation_updated', updated);
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_UPDATED, {
     conversation_id: updated.id,
@@ -232,11 +234,12 @@ async function createCustomerCard(req, res) {
     maintenanceEndDate: maintenanceEndDate || null,
     modules: sanitizeModulesList(modules),
     createdBy: req.user.userId,
+    companyId: req.companyId,
     createdByName: agentName,
   });
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_created', contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_created', contact);
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_CREATED, {
     contact_id: contact.id,
@@ -270,7 +273,7 @@ async function updateCustomerCard(req, res) {
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_updated', contact);
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_updated', contact);
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
     contact_id: contact.id,
@@ -293,8 +296,8 @@ async function unlinkPhone(req, res) {
 
   const io = req.app.get('io');
   if (io) {
-    io.emit('contact_created', newContact);
-    if (updatedOldContact) io.emit('contact_updated', updatedOldContact);
+    socketService.emitToCompany(io, req.companyId, 'contact_created', newContact);
+    if (updatedOldContact) socketService.emitToCompany(io, req.companyId, 'contact_updated', updatedOldContact);
   }
 
   res.status(201).json({ ok: true, contact: newContact, oldContact: updatedOldContact });
@@ -339,7 +342,7 @@ async function deleteContact(req, res) {
   }
 
   const io = req.app.get('io');
-  if (io) io.emit('contact_deleted', { id: deleted.id });
+  if (io) socketService.emitToCompany(io, req.companyId, 'contact_deleted', { id: deleted.id });
 
   webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_DELETED, {
     contact_id: deleted.id,

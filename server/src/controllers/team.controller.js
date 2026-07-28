@@ -3,13 +3,14 @@ const repo = require('../repositories/team.repo');
 const conversationRepo = require('../repositories/conversation.repo');
 const notificationService = require('../services/notification.service');
 const logger = require('../utils/logger');
+const socketService = require('../sockets/socket');
 
 // ملحوظة: اتشالت فكرة "Routing Strategy" خالص من الفورم (كانت select يدوي) واتستبدلت
 // بإضافة إيجنتس حقيقيين للتيم مباشرة وقت الإنشاء/التعديل (agentIds). عمود routing_strategy
 // فاضل في الداتابيز كـ default 'manual' بس مش بيتعرض ولا بيتحدّث من الواجهة تاني.
 
 async function list(req, res) {
-  const items = await repo.listTeams();
+  const items = await repo.listTeams(req.companyId);
   res.json(items);
 }
 
@@ -23,6 +24,7 @@ async function create(req, res) {
     icon: icon || 'users-round',
     color: color || '#6C5CE7',
     createdBy: req.user.userId,
+    companyId: req.companyId,
   });
 
   if (Array.isArray(agentIds) && agentIds.length > 0) {
@@ -71,8 +73,8 @@ function broadcastTeamsList(req) {
   const io = req.app.get('io');
   if (!io) return;
   repo
-    .listTeams()
-    .then((teams) => io.emit('teams_updated', teams))
+    .listTeams(req.companyId)
+    .then((teams) => socketService.emitToCompany(io, req.companyId, 'teams_updated', teams))
     .catch((err) => logger.error('❌ فشل بث تحديث التيمز:', err.message));
 }
 
@@ -116,7 +118,7 @@ async function addToConversation(req, res) {
   const teams = await repo.addTeamToConversation(req.params.id, teamId);
 
   const io = req.app.get('io');
-  if (io) io.emit('conversation_teams_updated', { conversationId: req.params.id, teams });
+  if (io) socketService.emitToCompany(io, req.companyId, 'conversation_teams_updated', { conversationId: req.params.id, teams });
 
   res.json({ ok: true, teams });
 }
@@ -128,7 +130,7 @@ async function removeFromConversation(req, res) {
   const teams = await repo.removeTeamFromConversation(req.params.id, req.params.teamId);
 
   const io = req.app.get('io');
-  if (io) io.emit('conversation_teams_updated', { conversationId: req.params.id, teams });
+  if (io) socketService.emitToCompany(io, req.companyId, 'conversation_teams_updated', { conversationId: req.params.id, teams });
 
   res.json({ ok: true, teams });
 }

@@ -16,6 +16,14 @@ function conversationRoom(conversationId) {
   return `conversation:${conversationId}`;
 }
 
+// اسم غرفة الـ Socket.IO الخاصة بشركة معينة — أي حدث بيمس بيانات شركة (عميل،
+// محادثة، إنبوكس، ليبل...) لازم يتبعت للغرفة دي بس (شوف emitToCompany تحت)،
+// عشان أجنتس شركة تانية ملهمش أي وصول لحظي (Realtime) لبيانات شركة غيرهم حتى
+// لو الاتنين شغالين على نفس السيرفر/نفس قاعدة البيانات
+function companyRoom(companyId) {
+  return `company:${companyId}`;
+}
+
 function initSocket(server) {
   const io = new Server(server, {
     cors: { origin: env.DASHBOARD_ORIGIN },
@@ -37,6 +45,7 @@ function initSocket(server) {
       try {
         const payload = jwt.verify(raw, env.JWT_SECRET);
         socket.data.userRole = payload.role;
+        socket.data.companyId = payload.companyId || null;
       } catch (err) {
         // توكن غير صالح — نكمل الاتصال عادي بس من غير هوية معروفة
       }
@@ -49,6 +58,15 @@ function initSocket(server) {
 
     if (socket.data?.userRole !== undefined && Number(socket.data.userRole) <= 1) {
       socket.join(PRIVILEGED_ROOM);
+    }
+
+    // بمجرد ما نعرف شركة الإيجنت ده من التوكن، بننضمه لغرفتها — أي حدث بعد كده
+    // (contact_created/conversation_updated/...) بيتبعت بس لغرفة الشركة دي عن
+    // طريق emitToCompany، فمش هيوصله أي حدث من شركة تانية أبدًا. لو التوكن مش
+    // معروف أصلًا (اتصال قديم أو غير موثّق)، الاتصال بيفضل من غير غرفة شركة —
+    // يعني افتراضيًا مش هيوصله ولا حدث company-scoped (الوضع الأكثر أمانًا)
+    if (socket.data?.companyId) {
+      socket.join(companyRoom(socket.data.companyId));
     }
 
     // Socket.IO Conversation Rooms — الفرونت إند بيبعت join_conversation لما
@@ -122,11 +140,25 @@ function buildConversationSummary(conversationId, message) {
   };
 }
 
+// بيبعت حدث لكل الإيجنتس المتصلين اللي تابعين لشركة معينة بس — ده اللي المفروض
+// كل الكنترولرز تستخدمه بدل io.emit(...) العام القديم لأي حدث بيمس بيانات
+// مرتبطة بشركة (عميل/محادثة/إنبوكس/ليبل/تيم/جهاز/زيارة/عقد/تاسك...). لو
+// companyId مش موجود (احتياطي بس، مش المفروض يحصل من كنترولر شغال براحته
+// خلف requireAuth) بترجع من غير ما تبعت أي حاجة عشان منسربش حدث لكل الشركات
+function emitToCompany(io, companyId, event, payload) {
+  if (!io || !companyId) return;
+  io.to(companyRoom(companyId)).emit(event, payload);
+}
+
 module.exports = {
   initSocket,
   emitToPrivilegedRoom,
   emitToConversationRoom,
+  emitToCompany,
   buildConversationSummary,
   conversationRoom,
+  companyRoom,
   PRIVILEGED_ROOM,
 };
+
+

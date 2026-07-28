@@ -2,6 +2,7 @@
 // قسم "Devices" في لوحة العميل — أجهزة الدعم الفني (AnyDesk) الخاصة بكل عميل (كونتاكت)
 const deviceRepo = require('../repositories/device.repo');
 const contactRepo = require('../repositories/contact.repo');
+const socketService = require('../sockets/socket');
 
 async function listDevices(req, res) {
   // الاستعلامين مستقلين عن بعض — جلب الأجهزة محتاج بس الـ contactId نفسه،
@@ -26,10 +27,10 @@ async function addDevice(req, res) {
     name: trimmedName,
     anydesk: (anydesk || '').trim() || null,
     password: (pw || '').trim() || null,
-  });
+  }, req.companyId);
 
   const io = req.app.get('io');
-  if (io) io.emit('device_added', { contactId: req.params.contactId, device });
+  if (io) socketService.emitToCompany(io, req.companyId, 'device_added', { contactId: req.params.contactId, device });
 
   res.status(201).json({ ok: true, device });
 }
@@ -51,7 +52,7 @@ async function updateDevice(req, res) {
   });
 
   const io = req.app.get('io');
-  if (io) io.emit('device_updated', { contactId: req.params.contactId, device });
+  if (io) socketService.emitToCompany(io, req.companyId, 'device_updated', { contactId: req.params.contactId, device });
 
   res.json({ ok: true, device });
 }
@@ -65,7 +66,7 @@ async function deleteDevice(req, res) {
   await deviceRepo.deleteDevice(req.params.deviceId);
 
   const io = req.app.get('io');
-  if (io) io.emit('device_deleted', { contactId: req.params.contactId, deviceId: req.params.deviceId });
+  if (io) socketService.emitToCompany(io, req.companyId, 'device_deleted', { contactId: req.params.contactId, deviceId: req.params.deviceId });
 
   res.json({ ok: true });
 }

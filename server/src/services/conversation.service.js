@@ -168,6 +168,10 @@ async function processIncomingMessages(value, io, wabaId = null) {
     }
   }
 
+  // الشركة المالكة للـ Inbox اللي استقبل الرسالة دي — بتتبع بيها المحادثة/الرسايل
+  // الجديدة وأي حدث Realtime خاص بيها (شوف emitToCompany في كل مكان تحت)
+  const companyId = matchedInbox?.company_id || null;
+
   for (const msg of value.messages) {
     const messageType = msg.type;
     let messageText = null;
@@ -240,13 +244,14 @@ async function processIncomingMessages(value, io, wabaId = null) {
     }
 
     // أول ما رقم يبعت رسالة: لو عندنا كونتاكت مسجل بالرقم ده نستخدمه، ولو لأ ننشئ كونتاكت جديد تلقائيًا
-    const matchedContact = await contactService.findOrCreateContactForIncoming(msg.from, contactName);
+    const matchedContact = await contactService.findOrCreateContactForIncoming(msg.from, contactName, companyId);
 
     const { id: conversationId, isNew } = await conversationRepo.findOrCreateConversation(
       msg.from,
       contactName,
       matchedInbox?.id || null,
-      matchedContact?.id || null
+      matchedContact?.id || null,
+      companyId
     );
     // التحديث ده وتسجيل الرسالة نفسها مستقلين تمامًا عن بعض (مفيش أي اعتماد
     // بين نتيجة الواحد والتاني)، فبنشغلهم مع بعض بدل الواحد بعد التاني
@@ -275,7 +280,7 @@ async function processIncomingMessages(value, io, wabaId = null) {
     // جوه socket.js
     if (io) {
       socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message: saved });
-      io.emit('conversation_updated', socketService.buildConversationSummary(conversationId, saved));
+      socketService.emitToCompany(io, companyId, 'conversation_updated', socketService.buildConversationSummary(conversationId, saved));
     }
 
     // دلوقتي بعد ما الرسالة اتسجلت وظهرت للإيجنت فورًا، لو دي رسالة وسائط
@@ -338,7 +343,7 @@ async function processIncomingMessages(value, io, wabaId = null) {
     // بس أول رسالة بتفتح المحادثة)، عشان لو العميل ذكر كلمة زي "فاتورة" في
     // نص المحادثة في أي وقت، تتحول المحادثة فورًا للتيم المحدد
     if (messageText) {
-      applyKeywordRoutingForMessage(conversationId, messageText, io).catch((err) => {
+      applyKeywordRoutingForMessage(conversationId, messageText, io, companyId).catch((err) => {
         logger.error('❌ فشل تنفيذ قاعدة الـ Keyword Routing:', err.message);
       });
     }
@@ -355,7 +360,8 @@ async function processIncomingMessages(value, io, wabaId = null) {
       matchedContact?.id || null,
       msg.from,
       matchedInbox?.id || null,
-      io
+      io,
+      companyId
     ).catch((err) => {
       logger.error('❌ فشل تنفيذ رد تلقائي "عقد الصيانة منتهي":', err.message);
     });
@@ -364,7 +370,7 @@ async function processIncomingMessages(value, io, wabaId = null) {
     // بتتنفذ مرة واحدة بس (أول رسالة فعلاً بتنشئ المحادثة)، مش مع كل رسالة جاية
     // بعد كده على نفس المحادثة المفتوحة
     if (isNew) {
-      applyAutomationForNewConversation(conversationId, matchedInbox?.id || null, msg.from, io).catch((err) => {
+      applyAutomationForNewConversation(conversationId, matchedInbox?.id || null, msg.from, io, companyId).catch((err) => {
         logger.error('❌ فشل تنفيذ قواعد الأتمتة على محادثة جديدة:', err.message);
       });
     }
@@ -423,8 +429,8 @@ async function notifyAgentsAboutIncomingMessage({ conversationId, isNew, contact
   }
 }
 
-async function applyAutomationForNewConversation(conversationId, inboxId, contactNumber, io) {
-  const settings = await companyRepo.getAutomationSettings();
+async function applyAutomationForNewConversation(conversationId, inboxId, contactNumber, io, companyId) {
+  const settings = await companyRepo.getAutomationSettings(companyId);
   if (!settings) return;
 
   // بتحدد نص رسالة الترحيب اللي هتتبعت فعليًا: لو خاصية الجدول مش مفعّلة
@@ -453,7 +459,7 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
         ]);
         const updated = await conversationRepo.getConversationById(conversationId);
         if (io && updated) {
-          io.emit('conversation_updated', updated);
+          socketService.emitToCompany(io, companyId, 'conversation_updated', updated);
           socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message: systemMessage });
         }
       }
@@ -475,7 +481,7 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
       await conversationRepo.touchConversation(conversationId);
       if (io && message) {
         socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message });
-        io.emit('conversation_updated', socketService.buildConversationSummary(conversationId, message));
+        socketService.emitToCompany(io, companyId, 'conversation_updated', socketService.buildConversationSummary(conversationId, message));
       }
     } catch (err) {
       logger.error('❌ فشل إرسال رسالة الترحيب التلقائية:', err.message);
@@ -492,8 +498,8 @@ async function applyAutomationForNewConversation(conversationId, inboxId, contac
 // التيم يدويًا من كارت العميل (نفس الـ repo function ونفس حدث الـ socket
 // conversation_teams_updated)، عشان تظهر فورًا في كارت العميل وكارت المحادثة
 // من برا بالظبط زي ما لو كانت اتحطت يدوي
-async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
-  const settings = await companyRepo.getAutomationSettings();
+async function applyKeywordRoutingForMessage(conversationId, messageText, io, companyId) {
+  const settings = await companyRepo.getAutomationSettings(companyId);
   if (!settings || !settings.keyword_routing_enabled) return;
 
   const rules = settings.keyword_routing_rules || [];
@@ -543,10 +549,10 @@ async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
         // نفس حدث الـ socket بالظبط اللي بيتبعت لما التيم يتحط يدويًا، عشان
         // كارت العميل وكارت المحادثة في القايمة الجانبية يتحدّثوا فورًا بنفس
         // الطريقة تمامًا من غير أي فرق محسوس عن الإضافة اليدوية
-        io.emit('conversation_teams_updated', { conversationId, teams: latestTeams });
+        socketService.emitToCompany(io, companyId, 'conversation_teams_updated', { conversationId, teams: latestTeams });
         if (systemMessage) {
           socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message: systemMessage });
-          io.emit('conversation_updated', socketService.buildConversationSummary(conversationId, systemMessage));
+          socketService.emitToCompany(io, companyId, 'conversation_updated', socketService.buildConversationSummary(conversationId, systemMessage));
         }
       }
     }
@@ -564,10 +570,10 @@ async function applyKeywordRoutingForMessage(conversationId, messageText, io) {
 // مرة واحدة، contract_expired_repeat_enabled للرد على كل رسالة) — تقدر تفعّل
 // أو تقفل أي واحدة فيهم لوحدها من صفحة الإعدادات (Settings -> Automation)،
 // وبيشاركوا نفس نص الرسالة (contract_expired_message).
-async function applyContractExpiryReplyForMessage(conversationId, contactId, contactNumber, inboxId, io) {
+async function applyContractExpiryReplyForMessage(conversationId, contactId, contactNumber, inboxId, io, companyId) {
   if (!contactId) return;
 
-  const settings = await companyRepo.getAutomationSettings();
+  const settings = await companyRepo.getAutomationSettings(companyId);
   if (!settings || !settings.contract_expired_repeat_enabled || !settings.contract_expired_message) return;
 
   const isExpired = await maintenanceContractRepo.isCurrentContractExpired(contactId);
@@ -583,7 +589,7 @@ async function applyContractExpiryReplyForMessage(conversationId, contactId, con
   await conversationRepo.touchConversation(conversationId);
   if (io && message) {
     socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message });
-    io.emit('conversation_updated', socketService.buildConversationSummary(conversationId, message));
+    socketService.emitToCompany(io, companyId, 'conversation_updated', socketService.buildConversationSummary(conversationId, message));
   }
 }
 

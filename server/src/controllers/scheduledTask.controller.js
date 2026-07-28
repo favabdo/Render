@@ -6,6 +6,7 @@ const scheduledTaskRepo = require('../repositories/scheduledTask.repo');
 const contactRepo = require('../repositories/contact.repo');
 const userRepo = require('../repositories/user.repo');
 const notificationService = require('../services/notification.service');
+const socketService = require('../sockets/socket');
 
 async function listTasks(req, res) {
   const [contact, tasks] = await Promise.all([
@@ -18,7 +19,7 @@ async function listTasks(req, res) {
 
 // كل التاسكات من كل العملاء — لصفحة "Scheduled Tasks" في السايد بار
 async function listAllTasks(req, res) {
-  const tasks = await scheduledTaskRepo.listAllScheduledTasks();
+  const tasks = await scheduledTaskRepo.listAllScheduledTasks(req.companyId);
   res.json(tasks);
 }
 
@@ -46,7 +47,7 @@ async function addTask(req, res) {
   });
 
   const io = req.app.get('io');
-  if (io) io.emit('scheduled_task_added', { contactId: req.params.contactId, task });
+  if (io) socketService.emitToCompany(io, req.companyId, 'scheduled_task_added', { contactId: req.params.contactId, task });
 
   res.status(201).json({ ok: true, task });
 
@@ -63,7 +64,7 @@ async function endTask(req, res) {
   if (!task) return res.status(409).json({ error: 'التاسك دي مقفولة بالفعل' });
 
   const io = req.app.get('io');
-  if (io) io.emit('scheduled_task_ended', { contactId: req.params.contactId, task });
+  if (io) socketService.emitToCompany(io, req.companyId, 'scheduled_task_ended', { contactId: req.params.contactId, task });
 
   res.json({ ok: true, task });
 }

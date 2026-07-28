@@ -5,7 +5,7 @@ const { getPool, sql, TABLE_NAME } = require('../database/connection');
 // عشان لو حصل رد نبعته من نفس الرقم اللي العميل كلمنا منه بالظبط
 // contactId: الكونتاكت الحقيقي اللي الرقم ده مرتبط بيه دلوقتي (ممكن يتغيّر لو حصل دمج بعدين،
 // فبنعيد مزامنته في كل رسالة جديدة عشان يفضل متسق مع جدول ContactPhones)
-async function findOrCreateConversation(contactNumber, contactName, inboxId = null, contactId = null) {
+async function findOrCreateConversation(contactNumber, contactName, inboxId = null, contactId = null, companyId = null) {
   const pool = await getPool();
 
   const existing = await pool
@@ -52,10 +52,11 @@ async function findOrCreateConversation(contactNumber, contactName, inboxId = nu
     .input('contactName', sql.NVarChar(200), contactName)
     .input('inboxId', sql.BigInt, inboxId)
     .input('contactId', sql.BigInt, contactId)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
-      INSERT INTO [dbo].[NileChat_Conversations_byA] (contact_number, contact_name, status, last_message_at, inbox_id, contact_id)
+      INSERT INTO [dbo].[NileChat_Conversations_byA] (contact_number, contact_name, status, last_message_at, inbox_id, contact_id, company_id)
       OUTPUT INSERTED.id
-      VALUES (@contactNumber, @contactName, 'open', SYSUTCDATETIME(), @inboxId, @contactId)
+      VALUES (@contactNumber, @contactName, 'open', SYSUTCDATETIME(), @inboxId, @contactId, @companyId)
     `);
 
   return { id: inserted.recordset[0].id, isNew: true };
@@ -91,13 +92,16 @@ async function touchConversation(conversationId) {
     .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET last_message_at = SYSUTCDATETIME() WHERE id = @id`);
 }
 
-async function listConversations(hideRatingMessages = false) {
+async function listConversations(hideRatingMessages = false, companyId = null) {
   const pool = await getPool();
   // الإيجنت (role > 1) مش المفروض يشوف رسايل أتمتة "ما بعد الحل" (CSAT/تقييم)
   // حتى في معاينة آخر رسالة في قايمة المحادثات — فبنستثنيها من الـ subqueries
   // دي لو hideRatingMessages=true (شوف conversation.controller.js)
   const postResolveFilter = hideRatingMessages ? 'AND m.is_post_resolve = 0' : '';
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input('companyId', sql.BigInt, companyId)
+    .query(`
     SELECT c.*,
       COALESCE(u.display_name, u.email) AS assigned_agent_name,
       COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
@@ -152,6 +156,7 @@ async function listConversations(hideRatingMessages = false) {
         CASE WHEN CAST(SYSUTCDATETIME() AS DATE) BETWEEN m.start_date AND m.end_date THEN 0 ELSE 1 END,
         m.end_date DESC
     ) mc
+    WHERE (@companyId IS NULL OR c.company_id = @companyId)
     ORDER BY c.last_message_at DESC
   `);
   const conversations = result.recordset;
@@ -375,17 +380,19 @@ async function getConversationsForContact(contactId, excludeConversationId = nul
 
 // بيرجع المحادثات المفتوحة (مش مقفولة نهائيًا) اللي معداش عليها نشاط (last_message_at)
 // من عدد الأيام ده — مرشحة إنها تتعمللها Resolve تلقائي بسبب عدم التفاعل
-async function findConversationsInactiveSince(days) {
+async function findConversationsInactiveSince(days, companyId) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('days', sql.Int, days)
+    .input('companyId', sql.BigInt, companyId)
     .query(`
       SELECT id FROM [dbo].[NileChat_Conversations_byA]
       WHERE locked_at IS NULL
         AND status != 'closed'
         AND last_message_at IS NOT NULL
         AND last_message_at <= DATEADD(DAY, -@days, SYSUTCDATETIME())
+        AND (@companyId IS NULL OR company_id = @companyId)
     `);
   return result.recordset;
 }
