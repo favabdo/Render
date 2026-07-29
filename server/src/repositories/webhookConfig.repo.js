@@ -4,6 +4,10 @@
 
 const { getPool, sql } = require('../database/connection');
 const companyRepo = require('./company.repo');
+const cache = require('../services/cache.service');
+
+const listKey = (companyId) => cache.cacheKey('webhooks', 'list', companyId);
+const byIdKey = (id) => cache.cacheKey('webhook', id);
 
 function parseEvents(raw) {
   if (!raw) return [];
@@ -37,36 +41,48 @@ async function resolveCompanyId(companyId) {
   return company ? company.id : null;
 }
 
+// كاش: webhooks:list:{companyId} (24h) — إعدادات الـ Webhooks (url/secret/events/
+// enabled) نفسها بتتغير بس من صفحة الإعدادات. ملحوظة مهمة: recordDeliveryResult
+// (تسجيل نتيجة آخر إرسال) عمدًا مبيبطلش الكاش ده — لو بطّلناه، أي رسالة/حدث
+// بيوصل هيمسح الكاش فورًا بعد ما نقراه (لإن الدالة دي بتتنفذ فورًا بعد كل قراءة
+// في webhookDispatch.service.js)، وده هيلغي أي فايدة من الكاش بالظبط في أكتر
+// مسار محتاج تقليل قراءة SQL (كل حدث محادثة). التكلفة الوحيدة: حقول
+// last_triggered_at/last_status_code/last_error المعروضة في واجهة الإعدادات
+// ممكن تتأخر لحد TTL (24 ساعة) — قرار مقصود، موضح في التقرير النهائي.
 async function listByCompany(companyId = null) {
   const resolvedCompanyId = await resolveCompanyId(companyId);
   if (!resolvedCompanyId) return [];
 
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('companyId', sql.BigInt, resolvedCompanyId)
-    .query(`
-      SELECT * FROM [dbo].[NileChat_Webhooks_byA]
-      WHERE company_id = @companyId
-      ORDER BY created_at DESC
-    `);
-  return result.recordset.map(mapWebhookRow);
+  return cache.getOrSet(listKey(resolvedCompanyId), cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('companyId', sql.BigInt, resolvedCompanyId)
+      .query(`
+        SELECT * FROM [dbo].[NileChat_Webhooks_byA]
+        WHERE company_id = @companyId
+        ORDER BY created_at DESC
+      `);
+    return result.recordset.map(mapWebhookRow);
+  });
 }
 
 async function getById(id, companyId = null) {
   const resolvedCompanyId = await resolveCompanyId(companyId);
   if (!resolvedCompanyId) return null;
 
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .input('companyId', sql.BigInt, resolvedCompanyId)
-    .query(`
-      SELECT * FROM [dbo].[NileChat_Webhooks_byA]
-      WHERE id = @id AND company_id = @companyId
-    `);
-  return result.recordset[0] ? mapWebhookRow(result.recordset[0]) : null;
+  return cache.getOrSet(byIdKey(id), cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('id', sql.BigInt, id)
+      .input('companyId', sql.BigInt, resolvedCompanyId)
+      .query(`
+        SELECT * FROM [dbo].[NileChat_Webhooks_byA]
+        WHERE id = @id AND company_id = @companyId
+      `);
+    return result.recordset[0] ? mapWebhookRow(result.recordset[0]) : null;
+  });
 }
 
 async function create({ url, secret, events, createdBy }, companyId = null) {
@@ -86,6 +102,7 @@ async function create({ url, secret, events, createdBy }, companyId = null) {
       OUTPUT INSERTED.*
       VALUES (@companyId, @url, @secret, @events, @createdBy)
     `);
+  await cache.del(listKey(resolvedCompanyId));
   return mapWebhookRow(result.recordset[0]);
 }
 
@@ -121,6 +138,7 @@ async function update(id, fields, companyId = null) {
     SET ${sets.join(', ')}
     WHERE id = @id AND company_id = @companyId
   `);
+  await cache.del([byIdKey(id), listKey(resolvedCompanyId)]);
   return getById(id, resolvedCompanyId);
 }
 
@@ -137,6 +155,7 @@ async function remove(id, companyId = null) {
       DELETE FROM [dbo].[NileChat_Webhooks_byA]
       WHERE id = @id AND company_id = @companyId
     `);
+  await cache.del([byIdKey(id), listKey(resolvedCompanyId)]);
   return result.rowsAffected[0] > 0;
 }
 

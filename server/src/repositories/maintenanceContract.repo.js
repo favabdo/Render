@@ -9,6 +9,9 @@
 // لسه ما جاش. ده الشرط الوحيد اللي بيسمح بإضافة عقد جديد: مينفعش تضيف عقد جديد
 // وفيه عقد ساري (جوه مدته) ومش موقوف.
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
+
+const listKey = (contactId) => cache.cacheKey('contracts', 'customer', contactId);
 
 const SELECT_COLUMNS = `
   id, contact_id, start_date, end_date, notes, created_by, created_by_name,
@@ -17,18 +20,21 @@ const SELECT_COLUMNS = `
 
 // كل عقود الصيانة الخاصة بعميل معين، الأحدث بدايةً الأول (بيتعرضوا في سيكشن
 // "سجل الصيانة" جمب سيكشن الزيارات في صفحة تفاصيل العميل)
+// كاش: contracts:customer:{contactId} (15m)
 async function listContractsForContact(contactId) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('contactId', sql.BigInt, contactId)
-    .query(`
-      SELECT ${SELECT_COLUMNS}
-      FROM [dbo].[NileChat_MaintenanceContracts_byA]
-      WHERE contact_id = @contactId
-      ORDER BY start_date DESC, created_at DESC
-    `);
-  return result.recordset;
+  return cache.getOrSet(listKey(contactId), cache.TTL.CONTRACTS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('contactId', sql.BigInt, contactId)
+      .query(`
+        SELECT ${SELECT_COLUMNS}
+        FROM [dbo].[NileChat_MaintenanceContracts_byA]
+        WHERE contact_id = @contactId
+        ORDER BY start_date DESC, created_at DESC
+      `);
+    return result.recordset;
+  });
 }
 
 async function getContractById(contractId) {
@@ -81,6 +87,7 @@ async function addContract({ contactId, startDate, endDate, notes, createdBy, cr
         (SELECT company_id FROM [dbo].[NileChat_Contacts_byA] WHERE id = @contactId)
       )
     `);
+  await cache.del(listKey(contactId));
   return getContractById(result.recordset[0].id);
 }
 
@@ -97,10 +104,11 @@ async function stopContract(contractId, { stoppedBy, stoppedByName } = {}) {
     .query(`
       UPDATE [dbo].[NileChat_MaintenanceContracts_byA]
       SET stopped_at = SYSUTCDATETIME(), stopped_by = @stoppedBy, stopped_by_name = @stoppedByName
-      OUTPUT INSERTED.id
+      OUTPUT INSERTED.id, INSERTED.contact_id
       WHERE id = @id AND stopped_at IS NULL
     `);
   if (!result.recordset[0]) return null;
+  await cache.del(listKey(result.recordset[0].contact_id));
   return getContractById(result.recordset[0].id);
 }
 
@@ -110,8 +118,10 @@ async function deleteContract(contractId) {
   const result = await pool
     .request()
     .input('id', sql.BigInt, contractId)
-    .query(`DELETE FROM [dbo].[NileChat_MaintenanceContracts_byA] OUTPUT DELETED.id WHERE id = @id`);
-  return !!result.recordset[0];
+    .query(`DELETE FROM [dbo].[NileChat_MaintenanceContracts_byA] OUTPUT DELETED.id, DELETED.contact_id WHERE id = @id`);
+  const deleted = result.recordset[0] || null;
+  if (deleted) await cache.del(listKey(deleted.contact_id));
+  return !!deleted;
 }
 
 // "العقد الحالي" بتاع عميل معين: دلوقتي بقى دايمًا آخر عقد اتضاف (الأحدث

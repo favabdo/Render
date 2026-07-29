@@ -64,4 +64,32 @@ module.exports = {
   // منتظرة + متوسط وقت الـ acquire) — مطفي افتراضيًا، مفيش أي راوت إضافي غير لو
   // اتفعّل صراحةً.
   DB_POOL_METRICS_ENDPOINT: process.env.DB_POOL_METRICS_ENDPOINT === 'true',
+
+  // ============================================================
+  // طبقة الكاش (Redis) — cache-aside للموارد "قراءة أغلب الوقت" بس
+  // (Teams/Labels/Agents/Company Settings/Automation/Webhooks/Inbox Settings/
+  // Contact & Customer Details/Devices/Maintenance Contracts/Visits/Scheduled
+  // Tasks). أي حاجة ليها علاقة بالمحادثات/الرسايل/الـ webhook الوارد من واتساب
+  // ممنوعة تتكاش خالص — شوف services/cache.service.js للتفاصيل.
+  // ============================================================
+  CACHE_ENABLED: process.env.CACHE_ENABLED !== 'false', // مفعّل افتراضيًا، لكن لو Redis مش موجود بيرجع تلقائيًا لـ SQL Server من غير أي كسر (شوف cache.service.js)
+  REDIS_URL: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
+  // بادئة + رقم إصدار الكاش — بيتحطوا قبل أي مفتاح فعليًا (namespace + versioning).
+  // لو حبينا "نفضي" الكاش كله دفعة واحدة (مثلاً بعد تعديل جوهري في شكل البيانات
+  // المخزنة) بنرفع الرقم ده بس من الـ env، من غير أي FLUSHALL على Redis نفسه —
+  // المفاتيح القديمة هتفضل موجودة لحد ما الـ TTL بتاعها يخلص وتتمسح لوحدها.
+  CACHE_PREFIX: process.env.CACHE_PREFIX || 'nc',
+  CACHE_VERSION: process.env.CACHE_VERSION || 'v1',
+  // كل الـ TTLs بالثانية، مظبوطة بالظبط زي المطلوب لكل نوع مورد
+  CACHE_TTL: {
+    SETTINGS: parseInt(process.env.CACHE_TTL_SETTINGS || '86400', 10),   // 24h: Company Settings / Automation Settings / Webhooks / Inbox Settings
+    TEAMS: parseInt(process.env.CACHE_TTL_TEAMS || '86400', 10),         // 24h
+    LABELS: parseInt(process.env.CACHE_TTL_LABELS || '86400', 10),       // 24h
+    AGENTS: parseInt(process.env.CACHE_TTL_AGENTS || '600', 10),         // 10m
+    CUSTOMER: parseInt(process.env.CACHE_TTL_CUSTOMER || '900', 10),     // 15m: Contact/Customer Details
+    DEVICES: parseInt(process.env.CACHE_TTL_DEVICES || '900', 10),       // 15m
+    CONTRACTS: parseInt(process.env.CACHE_TTL_CONTRACTS || '900', 10),   // 15m
+    VISITS: parseInt(process.env.CACHE_TTL_VISITS || '900', 10),        // 15m
+    TASKS: parseInt(process.env.CACHE_TTL_TASKS || '300', 10),          // 5m
+  },
 };

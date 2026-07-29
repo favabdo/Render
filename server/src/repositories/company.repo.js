@@ -3,6 +3,11 @@
 
 const { getPool, sql, generateCompanyCode } = require('../database/connection');
 const { parseScheduleJson } = require('../utils/welcomeSchedule');
+const cache = require('../services/cache.service');
+
+const byIdKey = (id) => cache.cacheKey('company', id, 'settings');
+const byCodeKey = (code) => cache.cacheKey('company', 'code', code);
+const FIRST_COMPANY_KEY = 'company:first:settings';
 
 // بيحاول يفك الـ JSON بتاع قواعد الـ Keyword Routing (array من { team_id, keywords }).
 // لو مفيش قيمة أو الـ JSON باظ بيرجع array فاضية بدل ما يرمي استثناء
@@ -24,25 +29,37 @@ function parseKeywordRoutingRules(raw) {
   }
 }
 
+// كاش: company:{id}:settings (24h) — بيانات الشركة (اسم/كود/auto_resolve_days/
+// كل حقول الأتمتة) بتتغير بس من صفحات الإعدادات (Company Settings / Automation
+// Settings)، فالصف ده "قراءة أغلب الوقت" فعلاً. نقطة الكاش الوحيدة دي كافية
+// لتسريع getAutomationSettings/getPrimaryAutoResolveDays كمان تلقائيًا، لإنهم
+// بيستخدموا نفس الصف من غير أي استعلام SQL إضافي
 async function getCompanyById(id) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .query(`SELECT * FROM [dbo].[NileChat_Companies_byA] WHERE id = @id`);
-  return result.recordset[0] || null;
+  return cache.getOrSet(byIdKey(id), cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('id', sql.BigInt, id)
+      .query(`SELECT * FROM [dbo].[NileChat_Companies_byA] WHERE id = @id`);
+    return result.recordset[0] || null;
+  });
 }
 
 // بيدور على شركة بالكود بتاعها — ده اللي بيتاخد من خانة "كود الشركة" في شاشة
-// تسجيل الدخول ويتأكد إنه مطابق فعلاً لشركة اليوزر (auth.controller.login)
+// تسجيل الدخول ويتأكد إنه مطابق فعلاً لشركة اليوزر (auth.controller.login).
+// كاش: company:code:{code} (24h) — بيتنادى مع كل محاولة تسجيل دخول، فالكاش هنا
+// بيوفّر استعلام SQL كامل على كل لوجين، والكود بتاع الشركة عمليًا ثابت
 async function getCompanyByCode(code) {
   if (!code) return null;
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('code', sql.NVarChar(50), String(code).trim())
-    .query(`SELECT * FROM [dbo].[NileChat_Companies_byA] WHERE code = @code`);
-  return result.recordset[0] || null;
+  const trimmed = String(code).trim();
+  return cache.getOrSet(byCodeKey(trimmed), cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('code', sql.NVarChar(50), trimmed)
+      .query(`SELECT * FROM [dbo].[NileChat_Companies_byA] WHERE code = @code`);
+    return result.recordset[0] || null;
+  });
 }
 
 // كل الشركات المسجلة في النظام — بتُستخدم من أي job/scheduler خلفي (Auto
@@ -57,11 +74,13 @@ async function listAllCompanies() {
 // أول شركة اتعملت في النظام (Nile Techno Support) — بنستخدمها كـ fallback لأي
 // يوزر لسه مش مربوط بشركة، ولحد ما يتعمل فعليًا اختيار/إنشاء شركة وقت التسجيل
 async function getFirstCompany() {
-  const pool = await getPool();
-  const result = await pool.request().query(`
-    SELECT TOP 1 * FROM [dbo].[NileChat_Companies_byA] ORDER BY id ASC
-  `);
-  return result.recordset[0] || null;
+  return cache.getOrSet(FIRST_COMPANY_KEY, cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT TOP 1 * FROM [dbo].[NileChat_Companies_byA] ORDER BY id ASC
+    `);
+    return result.recordset[0] || null;
+  });
 }
 
 // بيرجع بيانات شركة اليوزر (لو مربوط بواحدة)، وإلا أول شركة في النظام كـ fallback
@@ -111,6 +130,9 @@ async function updateCompany(id, { name, autoResolveDays } = {}) {
     OUTPUT INSERTED.*
     WHERE id = @id
   `);
+  // company:first:settings ممكن تكون بتشاور على نفس الصف ده لو دي أول شركة في
+  // النظام؛ بنبطّلها كمان كإجراء أمان رخيص بدل ما نستعلم SQL تاني بس عشان نتأكد
+  await cache.del([byIdKey(id), FIRST_COMPANY_KEY]);
   return result.recordset[0] || null;
 }
 
@@ -243,6 +265,7 @@ async function updateAutomationSettings(companyId, fields = {}) {
     SET ${sets.join(', ')}
     WHERE id = @id
   `);
+  await cache.del([byIdKey(companyId), FIRST_COMPANY_KEY]);
   return getAutomationSettings(companyId);
 }
 

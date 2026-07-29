@@ -1,31 +1,44 @@
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
+
+// ملحوظة عن الكاش: listKey لازم ياخد companyId في اعتباره — لو استخدمنا
+// مفتاح واحد ثابت 'team:list' هيتشارك بين كل الشركات، وأول شركة تقرا القايمة
+// هتكاش قايمتها هي وأي شركة تانية بعدها هتقرا نفس القايمة الغلط من الكاش.
+// فبنحط companyId (أو 'all' لو مفيش) كجزء من المفتاح نفسه.
+const listKey = (companyId) => cache.cacheKey('team', 'list', companyId ?? 'all');
+const byIdKey = (id) => cache.cacheKey('team', id);
 
 // كل التيمز، مع عدد الإيجنتس المنضمين لكل تيم (بيتعرض في كارت التيم بصفحة الإعدادات)
+// كاش: team:list:{companyId} (24h) — التيمز بتتغير بس لما أدمن يضيف/يعدّل/يمسح تيم من الإعدادات
 async function listTeams(companyId = null) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('companyId', sql.BigInt, companyId)
-    .query(`
-    SELECT t.*,
-      (
-        SELECT COUNT(*) FROM [dbo].[NileChat_TeamMembers_byA] tm
-        WHERE tm.team_id = t.id
-      ) AS members_count
-    FROM [dbo].[NileChat_Teams_byA] t
-    WHERE (@companyId IS NULL OR t.company_id = @companyId)
-    ORDER BY t.created_at ASC
-  `);
-  return result.recordset;
+  return cache.getOrSet(listKey(companyId), cache.TTL.TEAMS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('companyId', sql.BigInt, companyId)
+      .query(`
+      SELECT t.*,
+        (
+          SELECT COUNT(*) FROM [dbo].[NileChat_TeamMembers_byA] tm
+          WHERE tm.team_id = t.id
+        ) AS members_count
+      FROM [dbo].[NileChat_Teams_byA] t
+      WHERE (@companyId IS NULL OR t.company_id = @companyId)
+      ORDER BY t.created_at ASC
+    `);
+    return result.recordset;
+  });
 }
 
 async function getTeamById(id) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .query(`SELECT * FROM [dbo].[NileChat_Teams_byA] WHERE id = @id`);
-  return result.recordset[0] || null;
+  return cache.getOrSet(byIdKey(id), cache.TTL.TEAMS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('id', sql.BigInt, id)
+      .query(`SELECT * FROM [dbo].[NileChat_Teams_byA] WHERE id = @id`);
+    return result.recordset[0] || null;
+  });
 }
 
 async function createTeam({ name, description = null, icon = 'users-round', color = '#6C5CE7', routingStrategy = 'manual', createdBy = null, companyId = null }) {
@@ -44,6 +57,7 @@ async function createTeam({ name, description = null, icon = 'users-round', colo
       OUTPUT INSERTED.*
       VALUES (@name, @description, @icon, @color, @routingStrategy, @createdBy, @companyId)
     `);
+  await cache.del(listKey(companyId));
   return result.recordset[0];
 }
 
@@ -64,7 +78,9 @@ async function updateTeam(id, { name, description = null, icon = 'users-round', 
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
-  return result.recordset[0] || null;
+  const updated = result.recordset[0] || null;
+  if (updated) await cache.del([byIdKey(id), listKey(updated.company_id)]);
+  return updated;
 }
 
 async function deleteTeam(id) {
@@ -75,8 +91,10 @@ async function deleteTeam(id) {
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
-    .query(`DELETE FROM [dbo].[NileChat_Teams_byA] OUTPUT DELETED.id WHERE id = @id`);
-  return result.recordset[0] || null;
+    .query(`DELETE FROM [dbo].[NileChat_Teams_byA] OUTPUT DELETED.id, DELETED.company_id WHERE id = @id`);
+  const deleted = result.recordset[0] || null;
+  if (deleted) await cache.del([byIdKey(id), listKey(deleted.company_id)]);
+  return deleted;
 }
 
 async function getMembersForTeam(teamId) {
@@ -113,6 +131,11 @@ async function setMembersForTeam(teamId, userIds) {
       `);
   }
 
+  // members_count بتتحسب جوه listTeams، فأي تغيير في الأعضاء لازم يبطّل الكاش
+  // بتاعها — بنجيب company_id بتاع التيم ده (getTeamById نفسها متكاشة فمفيش
+  // تكلفة استعلام إضافية أغلب الوقت) عشان نبطّل مفتاح القايمة الصح بالظبط
+  const team = await getTeamById(teamId);
+  if (team) await cache.del(listKey(team.company_id));
   return getMembersForTeam(teamId);
 }
 

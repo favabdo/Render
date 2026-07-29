@@ -9,6 +9,12 @@
 // الكونتاكتس عن طريق الـ JOIN، فلو الإيجنت غيّر اسم العميل بعد كده، الاسم
 // المعروض في كارت التاسك (حتى القديمة المقفولة) بيتحدّث لوحده تلقائيًا.
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
+
+const listKey = (contactId) => cache.cacheKey('tasks', 'customer', contactId);
+// ALL_LIST_KEY لازم ياخد companyId في الاعتبار (زي team:list/labels:list
+// بالظبط) عشان تاسكات شركة معينة ميتشاركوش الكاش مع شركة تانية
+const allListKey = (companyId) => cache.cacheKey('tasks', 'list', companyId ?? 'all');
 
 // نفس عمود الـ SELECT في كل الاستعلامات: بيرجع بيانات التاسك زي ما هي، وبيجيب
 // اسم العميل الحالي (المحدّث) من جدول الكونتاكتس بدل الاسم المجمّد وقت الإضافة
@@ -22,31 +28,39 @@ const JOIN_CONTACTS = `
   LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = t.contact_id
 `;
 
+// كاش: tasks:customer:{contactId} (5m) — سجل تاسكات العميل بيتغير بس لما إيجنت
+// يضيف/يقفل تاسك. ملحوظة: اسم العميل المعروض (customer_name) لايف من جوين، فلو
+// اسم العميل اتغير ممكن يتأخر ظهوره هنا لحد 5 دقايق (TTL قصير أصلاً عشان كده)
 async function listScheduledTasksForContact(contactId) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('contactId', sql.BigInt, contactId)
-    .query(`
-      SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
-      WHERE t.contact_id = @contactId
-      ORDER BY t.created_at DESC
-    `);
-  return result.recordset;
+  return cache.getOrSet(listKey(contactId), cache.TTL.TASKS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('contactId', sql.BigInt, contactId)
+      .query(`
+        SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
+        WHERE t.contact_id = @contactId
+        ORDER BY t.created_at DESC
+      `);
+    return result.recordset;
+  });
 }
 
 // كل التاسكات من كل العملاء — مستخدمة في صفحة "Scheduled Tasks" في السايد بار
+// كاش: tasks:list:{companyId} (5m)
 async function listAllScheduledTasks(companyId = null) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('companyId', sql.BigInt, companyId)
-    .query(`
-    SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
-    WHERE (@companyId IS NULL OR t.company_id = @companyId)
-    ORDER BY t.created_at DESC
-  `);
-  return result.recordset;
+  return cache.getOrSet(allListKey(companyId), cache.TTL.TASKS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('companyId', sql.BigInt, companyId)
+      .query(`
+      SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
+      WHERE (@companyId IS NULL OR t.company_id = @companyId)
+      ORDER BY t.created_at DESC
+    `);
+    return result.recordset;
+  });
 }
 
 async function getScheduledTaskById(taskId) {
@@ -71,15 +85,17 @@ async function addScheduledTask(contactId, { customerName, taskText, agentId, ag
     .query(`
       INSERT INTO [dbo].[NileChat_ScheduledTasks_byA]
         (contact_id, customer_name, task_text, agent_id, agent_name, status, due_date, company_id)
-      OUTPUT INSERTED.id
+      OUTPUT INSERTED.id, INSERTED.company_id
       VALUES (
         @contactId, @customerName, @taskText, @agentId, @agentName, 'open', @dueDate,
         (SELECT company_id FROM [dbo].[NileChat_Contacts_byA] WHERE id = @contactId)
       )
     `);
+  const inserted = result.recordset[0];
+  await cache.del([listKey(contactId), allListKey(inserted.company_id)]);
   // بنرجع الصف كامل عن طريق نفس دالة الـ JOIN عشان الرد يرجع فيه الاسم اللايف
   // من الأول، بنفس الشكل بالظبط اللي هيتعرض بيه بعد كده في أي قراءة تانية
-  return getScheduledTaskById(result.recordset[0].id);
+  return getScheduledTaskById(inserted.id);
 }
 
 // لما التاسك تتقفل، بنسجل معاد الإند (ended_at) وكمان بنحسب فورًا هل التسليم كان
@@ -100,11 +116,13 @@ async function endScheduledTask(taskId) {
             WHEN CAST(SYSUTCDATETIME() AS DATE) <= due_date THEN 'on_time'
             ELSE 'late'
           END
-      OUTPUT INSERTED.id
+      OUTPUT INSERTED.id, INSERTED.contact_id, INSERTED.company_id
       WHERE id = @id AND status = 'open'
     `);
-  if (!result.recordset[0]) return null;
-  return getScheduledTaskById(result.recordset[0].id);
+  const updated = result.recordset[0];
+  if (!updated) return null;
+  await cache.del([listKey(updated.contact_id), allListKey(updated.company_id)]);
+  return getScheduledTaskById(updated.id);
 }
 
 module.exports = {

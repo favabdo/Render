@@ -1,20 +1,31 @@
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
 
+const listKey = (companyId) => cache.cacheKey('inboxes', 'list', companyId ?? 'all');
+const agentsKey = (inboxId) => cache.cacheKey('inbox', inboxId, 'agents');
+
+// كاش: inboxes:list:{companyId} (24h) — قايمة الـ Inboxes بتتغير بس من صفحة الإعدادات.
+// ملحوظة مهمة: getInboxById/getDefaultActiveInbox/findInboxByPhoneNumberId
+// عمدًا مش متكاشين — الأولانية مشتركة مع مسار إرسال رسائل الواتساب الصادرة
+// (بتجيب access_token وقت الإرسال)، والتانيين على مسار الـ webhook الوارد من
+// واتساب مباشرة.
 async function listInboxes(companyId = null) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('companyId', sql.BigInt, companyId)
-    .query(`
-    SELECT
-      i.id, i.name, i.channel_type, i.api_provider, i.phone_number, i.phone_number_id,
-      i.business_account_id, i.verified_name, i.display_phone_number, i.status, i.created_at,
-      (SELECT COUNT(*) FROM [dbo].[NileChat_InboxAgents_byA] ia WHERE ia.inbox_id = i.id) AS agents_count
-    FROM [dbo].[NileChat_Inboxes_byA] i
-    WHERE (@companyId IS NULL OR i.company_id = @companyId)
-    ORDER BY i.created_at DESC
-  `);
-  return result.recordset;
+  return cache.getOrSet(listKey(companyId), cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('companyId', sql.BigInt, companyId)
+      .query(`
+      SELECT
+        i.id, i.name, i.channel_type, i.api_provider, i.phone_number, i.phone_number_id,
+        i.business_account_id, i.verified_name, i.display_phone_number, i.status, i.created_at
+        , (SELECT COUNT(*) FROM [dbo].[NileChat_InboxAgents_byA] ia WHERE ia.inbox_id = i.id) AS agents_count
+      FROM [dbo].[NileChat_Inboxes_byA] i
+      WHERE (@companyId IS NULL OR i.company_id = @companyId)
+      ORDER BY i.created_at DESC
+    `);
+    return result.recordset;
+  });
 }
 
 async function getInboxById(id) {
@@ -37,10 +48,12 @@ async function setBusinessAccountId(inboxId, businessAccountId) {
     .query(`
       UPDATE [dbo].[NileChat_Inboxes_byA]
       SET business_account_id = @businessAccountId
-      OUTPUT INSERTED.id, INSERTED.business_account_id
+      OUTPUT INSERTED.id, INSERTED.business_account_id, INSERTED.company_id
       WHERE id = @id
     `);
-  return result.recordset[0] || null;
+  const updated = result.recordset[0] || null;
+  if (updated) await cache.del(listKey(updated.company_id));
+  return updated;
 }
 
 // بتسجل الـ id بتاع WhatsApp Flow "تقييم ما بعد الحل" بعد ما يتعمله publish
@@ -111,6 +124,7 @@ async function createWhatsappInbox({
         (@name, 'whatsapp', 'whatsapp_cloud', @phoneNumber, @phoneNumberId,
          @accessToken, @verifiedName, @displayPhoneNumber, 'active', @createdBy, @companyId)
     `);
+  await cache.del(listKey(companyId));
   return result.recordset[0];
 }
 
@@ -127,10 +141,12 @@ async function updateInboxStatus(id, status) {
     .query(`
       UPDATE [dbo].[NileChat_Inboxes_byA]
       SET status = @status
-      OUTPUT INSERTED.id, INSERTED.status
+      OUTPUT INSERTED.id, INSERTED.status, INSERTED.company_id
       WHERE id = @id
     `);
-  return result.recordset[0] || null;
+  const updated = result.recordset[0] || null;
+  if (updated) await cache.del(listKey(updated.company_id));
+  return updated;
 }
 
 async function deleteInbox(id) {
@@ -142,23 +158,29 @@ async function deleteInbox(id) {
   const result = await pool
     .request()
     .input('id', sql.BigInt, id)
-    .query(`DELETE FROM [dbo].[NileChat_Inboxes_byA] OUTPUT DELETED.id WHERE id = @id`);
-  return result.recordset[0] || null;
+    .query(`DELETE FROM [dbo].[NileChat_Inboxes_byA] OUTPUT DELETED.id, DELETED.company_id WHERE id = @id`);
+  const deleted = result.recordset[0] || null;
+  if (deleted) await cache.del([listKey(deleted.company_id), agentsKey(id)]);
+  return deleted;
 }
 
+// كاش: inbox:{id}:agents (24h) — لستة الإيجنتس المعينين على Inbox معين، بتتغير
+// بس من setAgentsForInbox (تعيين/إزالة إيجنتس من صفحة الإعدادات)
 async function getAgentsForInbox(inboxId) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('inboxId', sql.BigInt, inboxId)
-    .query(`
-      SELECT u.id, u.email, u.role, u.status, u.display_name
-      FROM [dbo].[NileChat_InboxAgents_byA] ia
-      JOIN [dbo].[NileChat_Users_byA] u ON u.id = ia.user_id
-      WHERE ia.inbox_id = @inboxId
-      ORDER BY u.email
-    `);
-  return result.recordset;
+  return cache.getOrSet(agentsKey(inboxId), cache.TTL.SETTINGS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('inboxId', sql.BigInt, inboxId)
+      .query(`
+        SELECT u.id, u.email, u.role, u.status, u.display_name
+        FROM [dbo].[NileChat_InboxAgents_byA] ia
+        JOIN [dbo].[NileChat_Users_byA] u ON u.id = ia.user_id
+        WHERE ia.inbox_id = @inboxId
+        ORDER BY u.email
+      `);
+    return result.recordset;
+  });
 }
 
 // بيمسح كل الموظفين القدام ويحط القايمة الجديدة (زي Chatwoot: تحديد كامل مش إضافة تراكمية)
@@ -180,6 +202,10 @@ async function setAgentsForInbox(inboxId, userIds) {
       `);
   }
 
+  // agents_count بتتحسب جوه listInboxes، فلازم نبطّل الاتنين — بنجيب company_id
+  // بتاع الإنبوكس ده عشان نبطّل مفتاح القايمة الصح بالظبط
+  const inbox = await getInboxById(inboxId);
+  await cache.del([agentsKey(inboxId), listKey(inbox ? inbox.company_id : null)]);
   return getAgentsForInbox(inboxId);
 }
 

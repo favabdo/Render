@@ -1,25 +1,33 @@
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
+
+// listKey لازم ياخد companyId في الاعتبار (زي team.repo.js بالظبط) عشان
+// كاش ليبلز شركة معينة ميتشاركش مع شركة تانية
+const listKey = (companyId) => cache.cacheKey('labels', 'list', companyId ?? 'all');
 
 // كل الليبلز المتاحة في الشركة، مع عدد المحادثات المحطوط عليها كل ليبل
 // (بيتعرض في صفحة الإعدادات زي عمود "Conversations")
+// كاش: labels:list:{companyId} (24h) — الليبلز نفسها بتتغير بس من صفحة الإعدادات (أضف/عدّل/امسح)
 async function listLabels(companyId = null) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('companyId', sql.BigInt, companyId)
-    .query(`
-    SELECT l.*,
-      COALESCE(u.display_name, u.email) AS created_by_name,
-      (
-        SELECT COUNT(*) FROM [dbo].[NileChat_ConversationLabels_byA] cl
-        WHERE cl.label_id = l.id
-      ) AS conversation_count
-    FROM [dbo].[NileChat_Labels_byA] l
-    LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = l.created_by
-    WHERE (@companyId IS NULL OR l.company_id = @companyId)
-    ORDER BY l.created_at ASC
-  `);
-  return result.recordset;
+  return cache.getOrSet(listKey(companyId), cache.TTL.LABELS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('companyId', sql.BigInt, companyId)
+      .query(`
+      SELECT l.*,
+        COALESCE(u.display_name, u.email) AS created_by_name,
+        (
+          SELECT COUNT(*) FROM [dbo].[NileChat_ConversationLabels_byA] cl
+          WHERE cl.label_id = l.id
+        ) AS conversation_count
+      FROM [dbo].[NileChat_Labels_byA] l
+      LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = l.created_by
+      WHERE (@companyId IS NULL OR l.company_id = @companyId)
+      ORDER BY l.created_at ASC
+    `);
+    return result.recordset;
+  });
 }
 
 async function createLabel({ name, color = null, description = null, createdBy = null, companyId = null }) {
@@ -36,6 +44,7 @@ async function createLabel({ name, color = null, description = null, createdBy =
       OUTPUT INSERTED.*
       VALUES (@name, @color, @description, @createdBy, @companyId)
     `);
+  await cache.del(listKey(companyId));
   return result.recordset[0];
 }
 
@@ -53,7 +62,9 @@ async function updateLabel(id, { name, color = null, description = null }) {
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
-  return result.recordset[0] || null;
+  const updated = result.recordset[0] || null;
+  if (updated) await cache.del(listKey(updated.company_id));
+  return updated;
 }
 
 async function deleteLabel(id) {
@@ -62,9 +73,11 @@ async function deleteLabel(id) {
   await pool.request().input('id', sql.BigInt, id).query(`
     DELETE FROM [dbo].[NileChat_ConversationLabels_byA] WHERE label_id = @id
   `);
-  await pool.request().input('id', sql.BigInt, id).query(`
-    DELETE FROM [dbo].[NileChat_Labels_byA] WHERE id = @id
+  const result = await pool.request().input('id', sql.BigInt, id).query(`
+    DELETE FROM [dbo].[NileChat_Labels_byA] OUTPUT DELETED.company_id WHERE id = @id
   `);
+  const deleted = result.recordset[0] || null;
+  await cache.del(listKey(deleted ? deleted.company_id : null));
 }
 
 // كل الليبلز المتحطة على محادثة معينة

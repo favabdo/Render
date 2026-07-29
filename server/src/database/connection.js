@@ -1353,6 +1353,16 @@ const COMPANY_ID_TABLES = [
   'NileChat_Teams_byA',
   'NileChat_Notifications_byA',
   'NileChat_ConversationRatings_byA',
+  // جداول فرعية/ربط (child/join tables) — طلب المستخدم صراحةً إنها تاخد نفس
+  // المعاملة بالظبط، عشان لو شركة جديدة اتضافت تلاقي كل حاجة فاضية تمامًا
+  // وتبدأ من الأول على مزاجها في كل جدول من غير أي بيانات قديمة تفضل شايفاها
+  'NileChat_ContactBranches_byA',
+  'NileChat_ContactModules_byA',
+  'NileChat_ContactPhones_byA',
+  'NileChat_ConversationLabels_byA',
+  'NileChat_ConversationTeams_byA',
+  'NileChat_InboxAgents_byA',
+  'NileChat_TeamMembers_byA',
   TABLE_NAME, // جدول الرسايل نفسه (وارد اسمه من env.DB_TABLE_NAME)
 ];
 
@@ -1378,8 +1388,31 @@ async function ensureCompanyIdColumns() {
         CREATE INDEX IX_${table}_company_id ON [dbo].[${table}](company_id);
       END
     `);
+    // عمود company_code جمب company_id مباشرة — نفس عمود code بتاع
+    // NileChat_Companies_byA، بس منسوخ هنا كـ نص جاهز للقراءة/الفلترة/التصدير
+    // السريع من غير ما تحتاج تعمل JOIN مع جدول الشركات كل مرة. زي company_id
+    // بالظبط، بيتضاف فاضي (NULL) من غير أي تعبئة تلقائية.
+    await pool.request().query(`
+      IF EXISTS (SELECT * FROM sys.tables WHERE name = '${table}')
+         AND NOT EXISTS (
+           SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.${table}') AND name = 'company_code'
+         )
+      BEGIN
+        ALTER TABLE [dbo].[${table}] ADD company_code NVARCHAR(50) NULL;
+      END
+    `);
+    await pool.request().query(`
+      IF EXISTS (SELECT * FROM sys.tables WHERE name = '${table}')
+         AND EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.${table}') AND name = 'company_code')
+         AND NOT EXISTS (
+           SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.${table}') AND name = 'IX_${table}_company_code'
+         )
+      BEGIN
+        CREATE INDEX IX_${table}_company_code ON [dbo].[${table}](company_code);
+      END
+    `);
   }
-  logger.info('✅ عمود company_id متاح (مع إندكس) على كل الجداول الرئيسية.');
+  logger.info('✅ عمودَي company_id و company_code متاحين (مع إندكس) على كل الجداول الرئيسية.');
 }
 
 // أي صف قديم (من قبل ما تتعمل الهجرة دي) لسه ملوش company_id، بنربطه تلقائيًا

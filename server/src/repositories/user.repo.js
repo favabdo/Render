@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
+
+const AGENTS_LIST_KEY = 'agents:list';
 
 async function findUserByEmail(email) {
   const pool = await getPool();
@@ -49,12 +52,18 @@ async function findUserByAccessToken(token) {
   return result.recordset[0] || null;
 }
 
+// كل الإيجنتس (تُستخدم في صفحة الإعدادات، وكمان في منطق auto-assign وقت أي
+// رسالة جديدة). كاش: agents:list (10m) — قايمة الإيجنتس نفسها بتتغير بس لما
+// أدمن يضيف/يعدّل/يمسح إيجنت من الإعدادات، فمفيش خطورة إنها تتقرا من الكاش حتى
+// لو بتتستخدم من مسار المحادثات — البيانات دي مش "بيانات محادثة حية" في حد ذاتها
 async function listUsers() {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .query(`SELECT id, email, role, status, company_id, company_code, display_name FROM [dbo].[NileChat_Users_byA] ORDER BY id`);
-  return result.recordset;
+  return cache.getOrSet(AGENTS_LIST_KEY, cache.TTL.AGENTS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .query(`SELECT id, email, role, status, company_id, company_code, display_name FROM [dbo].[NileChat_Users_byA] ORDER BY id`);
+    return result.recordset;
+  });
 }
 
 // الاسم اللي المفروض يتعرض في الواجهة: اسم العرض لو الإيجنت حدده، وإلا الإيميل
@@ -113,6 +122,7 @@ async function createUser({ email, password, role = 1, status = 'active', compan
       OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.status, INSERTED.company_id, INSERTED.company_code
       VALUES (@email, @password, @role, @status, @company_id, @company_code)
     `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0];
 }
 
@@ -154,6 +164,7 @@ async function updateUser(id, fields) {
     OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.status, INSERTED.company_id, INSERTED.company_code, INSERTED.display_name
     WHERE id = @id
   `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0] || null;
 }
 
@@ -170,6 +181,7 @@ async function updateDisplayName(id, displayName) {
       OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.status, INSERTED.display_name
       WHERE id = @id
     `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0] || null;
 }
 
@@ -207,6 +219,7 @@ async function updateProfile(id, { full_name, display_name, email } = {}) {
            INSERTED.display_name, INSERTED.full_name, INSERTED.avatar_url
     WHERE id = @id
   `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0] || null;
 }
 
@@ -341,6 +354,7 @@ async function completeInvite(id, plainPassword) {
       OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.status
       WHERE id = @id
     `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0] || null;
 }
 
@@ -355,6 +369,7 @@ async function deleteUser(id) {
       OUTPUT DELETED.id, DELETED.email
       WHERE id = @id
     `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0] || null;
 }
 

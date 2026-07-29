@@ -1,6 +1,19 @@
 const { getPool, sql, TABLE_NAME } = require('../database/connection');
 const maintenanceContractRepo = require('./maintenanceContract.repo');
 const { PREDEFINED_CONTACT_MODULES } = require('../utils/contactModules');
+const cache = require('../services/cache.service');
+
+// customer:{id} = تفاصيل العميل الكاملة (بيانات + تليفونات + موديولز + فروع، أي
+// getContactByIdWithPhones) — دي "Customer/Contact Details" المطلوب كاشها.
+// contact:{id}:basic = نفس صف NileChat_Contacts_byA الخام بس، مستخدم كـ existence
+// check سريع في كونترولرز الأجهزة/العقود/المهام/الزيارات
+const customerKey = (id) => cache.cacheKey('customer', id);
+const basicKey = (id) => cache.cacheKey('contact', id, 'basic');
+
+// أي تغيير في بيانات العميل لازم يبطّل الكاشين مع بعض، لإن basicKey فرعي من نفس الصف
+async function invalidateContactCache(id) {
+  await cache.del([customerKey(id), basicKey(id)]);
+}
 
 // نفس منطق "العقد الحالي" الموجود في maintenanceContract.repo.getCurrentContractForContact
 // لكن كـ OUTER APPLY جوه استعلام واحد، عشان نجيب العقد الحالي لكل الكونتاكتس دفعة
@@ -66,13 +79,16 @@ async function createContactWithPhone(name, phoneNumber, companyId = null) {
   return contact;
 }
 
+// كاش: contact:{id}:basic (15m)
 async function getContactById(id) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('id', sql.BigInt, id)
-    .query(`SELECT * FROM [dbo].[NileChat_Contacts_byA] WHERE id = @id`);
-  return result.recordset[0] || null;
+  return cache.getOrSet(basicKey(id), cache.TTL.CUSTOMER, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('id', sql.BigInt, id)
+      .query(`SELECT * FROM [dbo].[NileChat_Contacts_byA] WHERE id = @id`);
+    return result.recordset[0] || null;
+  });
 }
 
 // زي getContactById بالظبط، لكن maintenance_start_date/maintenance_end_date بييجوا
@@ -164,6 +180,7 @@ async function replaceBranchesForContact(contactId, branches) {
     .query(`
       UPDATE [dbo].[NileChat_Contacts_byA] SET location = @location WHERE id = @contactId
     `);
+  await invalidateContactCache(contactId);
 }
 
 async function addPhoneToContact(contactId, phoneNumber) {
@@ -187,6 +204,7 @@ async function addPhoneToContact(contactId, phoneNumber) {
       VALUES (@contactId, @phone)
     `);
 
+  await invalidateContactCache(contactId);
   return { contact: await getContactByIdWithPhones(contactId) };
 }
 
@@ -206,6 +224,7 @@ async function updatePhoneLabel(contactId, phoneNumber, label) {
       OUTPUT INSERTED.*
       WHERE contact_id = @contactId AND phone_number = @phone
     `);
+  await invalidateContactCache(contactId);
   return result.recordset[0] || null;
 }
 
@@ -224,6 +243,7 @@ async function setContactVip(contactId, isVip) {
       OUTPUT INSERTED.*
       WHERE id = @contactId
     `);
+  await invalidateContactCache(contactId);
   return result.recordset[0] || null;
 }
 
@@ -242,6 +262,7 @@ async function setContactInactive(contactId, isInactive) {
       OUTPUT INSERTED.*
       WHERE id = @contactId
     `);
+  await invalidateContactCache(contactId);
   return result.recordset[0] || null;
 }
 
@@ -293,16 +314,21 @@ async function setContactModules(contactId, modules) {
     throw err;
   }
 
+  await invalidateContactCache(contactId);
   return getModulesForContact(contactId);
 }
 
+// كاش: customer:{id} (15m) — "Customer/Contact Details" كاملة (بيانات + تليفونات
+// + موديولز + فروع)
 async function getContactByIdWithPhones(id) {
-  const contact = await getContactByIdWithCurrentContract(id);
-  if (!contact) return null;
-  const phones = await getPhonesForContact(id);
-  const modules = await getModulesForContact(id);
-  const branches = await getBranchesForContact(id);
-  return { ...contact, phones, modules, branches };
+  return cache.getOrSet(customerKey(id), cache.TTL.CUSTOMER, async () => {
+    const contact = await getContactByIdWithCurrentContract(id);
+    if (!contact) return null;
+    const phones = await getPhonesForContact(id);
+    const modules = await getModulesForContact(id);
+    const branches = await getBranchesForContact(id);
+    return { ...contact, phones, modules, branches };
+  });
 }
 
 // كل الكونتاكتس (تُستخدم في صفحة Contacts وفي قايمة اختيار "اربط بكونتاكت موجود")
@@ -555,6 +581,7 @@ async function updateContactName(id, name) {
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
+  await invalidateContactCache(id);
   return result.recordset[0] || null;
 }
 
@@ -580,6 +607,7 @@ async function linkPhoneToContact(phoneNumber, contactId) {
       .input('contactId', sql.BigInt, contactId)
       .query(`INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number) VALUES (@contactId, @phone)`);
   }
+  await invalidateContactCache(contactId);
 }
 
 // لو كونتاكت بقى من غير أي رقم بعد الدمج (كل أرقامه اتنقلت لكونتاكت تاني)، نشيله عشان
@@ -589,6 +617,7 @@ async function deletePhonelessContact(contactId) {
   const phones = await getPhonesForContact(contactId);
   if (phones.length > 0) return false;
   await pool.request().input('id', sql.BigInt, contactId).query(`DELETE FROM [dbo].[NileChat_Contacts_byA] WHERE id = @id`);
+  await invalidateContactCache(contactId);
   return true;
 }
 
@@ -626,6 +655,7 @@ async function unlinkPhoneToNewContact(contactId, phoneNumber, newName) {
     .input('newContactId', sql.BigInt, newContact.id)
     .query(`UPDATE [dbo].[NileChat_ContactPhones_byA] SET contact_id = @newContactId WHERE phone_number = @phone`);
 
+  await invalidateContactCache(contactId);
   return getContactByIdWithPhones(newContact.id);
 }
 
@@ -729,6 +759,7 @@ async function updateCustomerDetails(id, { name, location, branches, signedContr
       WHERE id = @id
     `);
   if (!result.recordset[0]) return null;
+  await invalidateContactCache(id);
 
   if (branches !== undefined) {
     await replaceBranchesForContact(id, branches);
@@ -760,6 +791,7 @@ async function softDeleteContact(contactId) {
       OUTPUT DELETED.id, DELETED.name
       WHERE id = @contactId AND status = 1
     `);
+  await invalidateContactCache(contactId);
   return result.recordset[0] || null;
 }
 
@@ -776,6 +808,7 @@ async function restoreContact(contactId) {
       OUTPUT INSERTED.*
       WHERE id = @contactId AND status = 0
     `);
+  await invalidateContactCache(contactId);
   return result.recordset[0] || null;
 }
 

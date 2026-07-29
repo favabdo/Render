@@ -5,6 +5,9 @@
 // (Scheduled Tasks)، بنجيب اسم العميل لايف من جدول الكونتاكتس عن طريق JOIN لو
 // فيه contact_id، وبنقع على customer_name كـ fallback لو مفيش.
 const { getPool, sql } = require('../database/connection');
+const cache = require('../services/cache.service');
+
+const listKey = (contactId) => cache.cacheKey('visits', 'customer', contactId);
 
 const SELECT_COLUMNS = `
   v.id, v.contact_id, v.visit_date, v.work_done, v.arrival_time, v.departure_time,
@@ -16,17 +19,21 @@ const JOIN_CONTACTS = `
   LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = v.contact_id
 `;
 
+// كاش: visits:customer:{contactId} (15m) — سجل زيارات العميل بيتغير بس لما
+// إيجنت يضيف زيارة جديدة من صفحة تفاصيل العميل
 async function listVisitsForContact(contactId) {
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('contactId', sql.BigInt, contactId)
-    .query(`
-      SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
-      WHERE v.contact_id = @contactId
-      ORDER BY v.visit_date DESC, v.created_at DESC
-    `);
-  return result.recordset;
+  return cache.getOrSet(listKey(contactId), cache.TTL.VISITS, async () => {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('contactId', sql.BigInt, contactId)
+      .query(`
+        SELECT ${SELECT_COLUMNS} ${JOIN_CONTACTS}
+        WHERE v.contact_id = @contactId
+        ORDER BY v.visit_date DESC, v.created_at DESC
+      `);
+    return result.recordset;
+  });
 }
 
 async function getVisitById(visitId) {
@@ -57,6 +64,9 @@ async function addVisit({ contactId, customerName, visitDate, workDone, arrivalT
       OUTPUT INSERTED.id
       VALUES (@contactId, @customerName, @visitDate, @workDone, @arrivalTime, @departureTime, @agentId, @agentName, @companyId)
     `);
+  // لو الزيارة مش مربوطة بكونتاكت حقيقي (contactId فاضي، اسم يدوي بس)، مفيش
+  // كاش قايمة اتخزن أصلاً لعميل معين نبطّله
+  if (contactId) await cache.del(listKey(contactId));
   return getVisitById(result.recordset[0].id);
 }
 
