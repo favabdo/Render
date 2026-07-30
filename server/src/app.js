@@ -46,6 +46,17 @@ if (env.DB_POOL_METRICS_ENDPOINT) {
 const clientDistPath = path.join(__dirname, '..', '..', 'client', 'dist');
 app.use(express.static(clientDistPath));
 
+// ملفات الوسائط (صور/فيديوهات/صوتيات/مستندات) اللي بتتسجل وقت التشغيل (شوف
+// utils/mediaStorage.js) بتتخزن فعليًا جوه client/public/uploads — مش جوه
+// client/dist. Vite بينسخ محتويات public/ جوه dist/ *وقت الـ build* بس، فأي
+// ملف بيتسجل بعد كده (وقت التشغيل الفعلي: ميديا واردة من واتساب أو ميديا
+// بيرفعها الإيجنت) مبيكونش موجود جوه dist أصلاً، وبالتالي أي رابط media_url
+// كان بيرجع 404 عن طريق الـ static middleware اللي فوق (صورة مكسورة / خطأ
+// تشغيل صوت في الواجهة حتى لو الملف اتحفظ صح على الديسك). عشان كده لازم راوت
+// static منفصل يتأشر مباشرة على مكان الحفظ الفعلي، مش على dist
+const uploadsPath = path.join(__dirname, '..', '..', 'client', 'public', 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
 // أي رابط داخلي بتاع React Router (زي /chats أو /login بعد Refresh) لازم يترجعله
 // index.html عشان المتصفح يشغّل الـ React app والراوتينج يحصل من جوا المتصفح نفسه.
 // ده لازم يتحط هنا *قبل* أي راوتر محمي بـ requireAuth، لأن الراوترات دي بتستخدم
