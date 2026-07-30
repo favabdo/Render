@@ -50,6 +50,10 @@ export default function AutomationModal({ type, settings, onClose, onSaved }) {
   const [agentId, setAgentId] = useState(s.auto_assign_agent_id || '');
 
   const [message, setMessage] = useState((type === 'welcome' ? s.welcome_message : type === 'contract_expired' ? s.contract_expired_message : s.csat_message) || '');
+  const [ratingIssueMessage, setRatingIssueMessage] = useState(s.rating_issue_message || '');
+  const [ratingAgentMessage, setRatingAgentMessage] = useState(s.rating_agent_message || '');
+  const [ratingFeedbackMessage, setRatingFeedbackMessage] = useState(s.rating_feedback_message || '');
+  const [ratingThanksMessage, setRatingThanksMessage] = useState(s.rating_thanks_message || '');
   const [useSchedule, setUseSchedule] = useState(!!s.welcome_schedule_enabled);
   const [offHoursMessage, setOffHoursMessage] = useState(s.welcome_offhours_message || '');
   const [days, setDays] = useState(() => {
@@ -121,6 +125,10 @@ export default function AutomationModal({ type, settings, onClose, onSaved }) {
       body.auto_assign_agent_id = agentId ? Number(agentId) : null;
     } else if (type === 'rating') {
       body.rating_enabled = enabled;
+      body.rating_issue_message = ratingIssueMessage.trim();
+      body.rating_agent_message = ratingAgentMessage.trim();
+      body.rating_feedback_message = ratingFeedbackMessage.trim();
+      body.rating_thanks_message = ratingThanksMessage.trim();
     } else if (type === 'keyword_routing') {
       const completeRules = rules.filter((r) => r.team_id && r.keywords.length);
       if (enabled && !completeRules.length) return setError(t('automationModal.errors.addOneCompleteRule'));
@@ -286,6 +294,50 @@ export default function AutomationModal({ type, settings, onClose, onSaved }) {
               <button className={`toggle${repeatEnabled ? ' on' : ''}`} onClick={() => setRepeatEnabled((v) => !v)}></button>
             </div>
           )}
+        </div>
+      )}
+
+      {type === 'rating' && (
+        <div style={{ marginTop: 8 }}>
+          <div className="iw-form-hint" style={{ marginBottom: 12 }}>
+            {t('automationModal.meta.rating.messagesHint')}
+          </div>
+
+          <div className="resolve-cats-label">{t('automationModal.meta.rating.issueMessageLabel')}</div>
+          <textarea
+            className="resolve-notes"
+            style={{ marginBottom: 12 }}
+            placeholder={t('automationModal.meta.rating.issueMessagePlaceholder')}
+            value={ratingIssueMessage}
+            onChange={(e) => setRatingIssueMessage(e.target.value)}
+          />
+
+          <div className="resolve-cats-label">{t('automationModal.meta.rating.agentMessageLabel')}</div>
+          <textarea
+            className="resolve-notes"
+            style={{ marginBottom: 12 }}
+            placeholder={t('automationModal.meta.rating.agentMessagePlaceholder')}
+            value={ratingAgentMessage}
+            onChange={(e) => setRatingAgentMessage(e.target.value)}
+          />
+
+          <div className="resolve-cats-label">{t('automationModal.meta.rating.feedbackMessageLabel')}</div>
+          <textarea
+            className="resolve-notes"
+            style={{ marginBottom: 12 }}
+            placeholder={t('automationModal.meta.rating.feedbackMessagePlaceholder')}
+            value={ratingFeedbackMessage}
+            onChange={(e) => setRatingFeedbackMessage(e.target.value)}
+          />
+
+          <div className="resolve-cats-label">{t('automationModal.meta.rating.thanksMessageLabel')}</div>
+          <textarea
+            className="resolve-notes"
+            style={{ marginBottom: 6 }}
+            placeholder={t('automationModal.meta.rating.thanksMessagePlaceholder')}
+            value={ratingThanksMessage}
+            onChange={(e) => setRatingThanksMessage(e.target.value)}
+          />
         </div>
       )}
 

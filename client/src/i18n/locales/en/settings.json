@@ -313,7 +313,7 @@
         "title": "Route conversations by keyword"
       },
       "csat": {
-        "title": "Send CSAT after resolution"
+        "title": "Send a message after closing the conversation"
       },
       "contractExpired": {
         "title": "Maintenance Contract Expired"
@@ -329,7 +329,7 @@
       "welcomeOn": "When conversation is created → Send: \"{{preview}}\"",
       "welcomeOff": "When conversation is created → Send a fixed auto-reply (disabled)",
       "csatOn": "When conversation is resolved → Send: \"{{preview}}\"",
-      "csatOff": "When conversation is resolved → Send satisfaction survey (disabled)",
+      "csatOff": "When conversation is resolved → Send a message (disabled)",
       "keywordRoutingOff": "When message contains chosen keywords → Assign to selected team (disabled)",
       "keywordRoutingSingle": "When message contains {{preview}} → Assign to {{team}}",
       "keywordRoutingMultiple": "{{count}} keyword rules active → Routes to: {{teams}}",
@@ -366,11 +366,11 @@
         "placeholder": "Thanks for reaching out! One of our support representatives will get back to you shortly."
       },
       "csat": {
-        "title": "Send CSAT after resolution",
-        "enableDesc": "Send a satisfaction survey right after a conversation is resolved",
-        "messageLabel": "CSAT message sent to the customer",
+        "title": "Send a message after closing the conversation",
+        "enableDesc": "Send a message to the customer right after the conversation is closed",
+        "messageLabel": "Message sent to the customer after the conversation is closed",
         "messageHint": "This exact text is sent automatically the moment an agent resolves the conversation.",
-        "placeholder": "Thanks for reaching out! Please rate your experience today from 1 to 5."
+        "placeholder": "Thanks for reaching out! We hope we were able to help you today 🙏"
       },
       "keyword_routing": {
         "title": "Route conversations by keyword",
@@ -387,7 +387,16 @@
       },
       "rating": {
         "title": "Post-Resolve Rating",
-        "enableDesc": "When a conversation is resolved, send the customer a star rating for issue resolution + a star rating for the support agent + an optional text comment"
+        "enableDesc": "When a conversation is resolved, send the customer a star rating for issue resolution + a star rating for the support agent + an optional text comment",
+        "messagesHint": "If you leave any of these fields empty, the customer will receive the default text shown as a placeholder inside it.",
+        "issueMessageLabel": "Issue-resolution rating request message",
+        "issueMessagePlaceholder": "Please rate your experience with us — rate how well we resolved your issue and rate the agent, and feel free to leave a comment 👇",
+        "agentMessageLabel": "Support agent rating request message",
+        "agentMessagePlaceholder": "Great, thank you! Now please rate the support agent who helped you — choose your rating from the list below 👇",
+        "feedbackMessageLabel": "Text feedback request message",
+        "feedbackMessagePlaceholder": "If you'd like to leave any comment or feedback to help us improve, write it now. Or tap \"Skip\" if you don't want to add a comment",
+        "thanksMessageLabel": "Thank-you message after rating",
+        "thanksMessagePlaceholder": "Thank you so much for your time and rating — it helps us serve you better 🌟"
       }
     },
     "assignNewConversationsTo": "Assign new conversations to",
