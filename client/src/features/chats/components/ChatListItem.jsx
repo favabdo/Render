@@ -3,9 +3,8 @@ import { UserRound, Crown } from 'lucide-react';
 import Avatar from '../../../components/ui/Avatar';
 import { hexToRgba } from '../utils/mappers';
 
-export default function ChatListItem({ c, active, typingNames = [], onClick }) {
+export default function ChatListItem({ c, active, onClick }) {
   const { t } = useTranslation('chats');
-  const isTyping = typingNames.length > 0;
   return (
     <div className={`chat-item${active ? ' active' : ''}`} onClick={onClick}>
       <div className="chat-item-avatar">
@@ -38,15 +37,7 @@ export default function ChatListItem({ c, active, typingNames = [], onClick }) {
           <span>{c.time}</span>
         </div>
         <div className="chat-item-msg">
-          {isTyping ? (
-            <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
-              {typingNames.length === 1
-                ? t('header.typingOne', { name: typingNames[0] })
-                : t('header.typingMany', { names: typingNames.join(', ') })}
-            </span>
-          ) : (
-            <span>{c.lastMsg}</span>
-          )}
+          <span>{c.lastMsg}</span>
           {c.unread > 0 && <span className="unread-badge">{c.unread}</span>}
         </div>
         <div className={`chat-item-agent${c.assignedTo ? '' : ' unassigned'}`}>

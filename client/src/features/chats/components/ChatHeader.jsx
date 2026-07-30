@@ -18,7 +18,6 @@ function firstTwoWords(text) {
 
 export default function ChatHeader({
   conversation,
-  typingNames,
   onBack,
   onToggleSearch,
   searchOpen,
@@ -43,23 +42,17 @@ export default function ChatHeader({
     setBannerExpanded(!isMobileLayout());
   }, [c.id]);
   const statusText =
-    typingNames.length > 0
-      ? typingNames.length === 1
-        ? t('header.typingOne', { name: typingNames[0] })
-        : t('header.typingMany', { names: typingNames.join(', ') })
-      : c.status === 'open'
-        ? t('header.online')
-        : c.status === 'pending'
-          ? t('header.pending')
-          : t('header.resolved');
+    c.status === 'open'
+      ? t('header.online')
+      : c.status === 'pending'
+        ? t('header.pending')
+        : t('header.resolved');
   const statusColor =
-    typingNames.length > 0
-      ? 'var(--primary)'
-      : c.status === 'open'
-        ? 'var(--success)'
-        : c.status === 'pending'
-          ? 'var(--warning)'
-          : 'var(--text-secondary)';
+    c.status === 'open'
+      ? 'var(--success)'
+      : c.status === 'pending'
+        ? 'var(--warning)'
+        : 'var(--text-secondary)';
 
   const activeLabel = c.labels && c.labels.length > 0 ? c.labels[0] : null;
 

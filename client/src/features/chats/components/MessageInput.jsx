@@ -33,6 +33,7 @@ export default function MessageInput({
   onSendFile,
   onTypingChange,
   cannedResponses,
+  typingNames = [],
 }) {
   const { t } = useTranslation('chats');
   const [text, setText] = useState('');
@@ -205,6 +206,20 @@ export default function MessageInput({
           <span>{t('messageInput.resolvedBanner')}</span>
         </div>
       )}
+      <div className={`typing-indicator-bar${!resolved && typingNames.length > 0 ? ' show' : ''}`}>
+        <div className="typing-indicator-pill">
+          <span className="typing-indicator-dots">
+            <i></i>
+            <i></i>
+            <i></i>
+          </span>
+          <span>
+            {typingNames.length === 1
+              ? t('header.typingOne', { name: typingNames[0] })
+              : t('header.typingMany', { names: typingNames.join(', ') })}
+          </span>
+        </div>
+      </div>
       {!resolved && cannedResponses.length > 0 && (
         <div className="saved-replies-bar">
           <span className="sr-label">{t('messageInput.quickReplies')}</span>

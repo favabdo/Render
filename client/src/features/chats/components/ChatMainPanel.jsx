@@ -231,7 +231,6 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
       <div id="chat-area" style={{ display: 'flex', flex: 1, flexDirection: 'column' }}>
         <ChatHeader
           conversation={c}
-          typingNames={typingNames}
           onBack={closeChat}
           onToggleSearch={() => setSearchOpen((v) => !v)}
           searchOpen={searchOpen}
@@ -262,6 +261,7 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
           onSendFile={handleSendFile}
           onTypingChange={handleTypingChange}
           cannedResponses={cannedResponses}
+          typingNames={typingNames}
         />
       </div>
 

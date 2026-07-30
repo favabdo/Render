@@ -132,7 +132,10 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
     /* رسالة الشات على الموبايل: نص أصغر وسطر واحد بس (من غير نزول سطر جديد)
        عشان الرسالة تبان كاملة جوه البوكس (اللي عرضه بيمتلئ المسافة بين
        المشبك والمايك) بدل ما تتقطع أو تلف على أكتر من سطر */
-    #msg-input{font-size:13px!important;white-space:nowrap;overflow-x:auto;overflow-y:hidden}
+    /* لازم يفضل 16px برضه هنا (مش أصغر) — لو نزّلناه هيبوّظ قاعدة منع الزوم
+       اللي فوق (input,textarea,select{font-size:16px}) وأي متصفح موبايل هيزوّم
+       في الصفحة كلها لما تدوس تكتب (ده بالظبط اللي كان بيحصل قبل كده) */
+    #msg-input{font-size:16px!important;white-space:nowrap;overflow-x:auto;overflow-y:hidden}
 
     /* صفحة تفاصيل العميل على الموبايل: زرار التعديل وزرار فتح المحادثة
        بينزلوا تحت الاسم وسهم العودة بدل ما يفضلوا جمبهم (ده كان بيوسّع

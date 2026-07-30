@@ -7,7 +7,7 @@ const FILTER_KEYS = ['all', 'me', 'open', 'resolved'];
 
 export default function ChatListPanel({ currentAgentName }) {
   const { t } = useTranslation('chats');
-  const { conversations, filter, search, selectedChatId, typingAgents, setFilter, setSearch, selectChat } = useChatsStore();
+  const { conversations, filter, search, selectedChatId, setFilter, setSearch, selectChat } = useChatsStore();
 
   let filtered = conversations;
   if (filter === 'me') {
@@ -55,15 +55,7 @@ export default function ChatListPanel({ currentAgentName }) {
             <div style={{ fontSize: 13 }}>{t('list.empty')}</div>
           </div>
         ) : (
-          filtered.map((c) => (
-            <ChatListItem
-              key={c.id}
-              c={c}
-              active={c.id === selectedChatId}
-              typingNames={Array.from(typingAgents[String(c.id)] || [])}
-              onClick={() => selectChat(c.id)}
-            />
-          ))
+          filtered.map((c) => <ChatListItem key={c.id} c={c} active={c.id === selectedChatId} onClick={() => selectChat(c.id)} />)
         )}
       </div>
     </div>
