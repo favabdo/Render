@@ -9,9 +9,11 @@ const logger = require('../utils/logger');
 const PRIVILEGED_ROOM = 'post_resolve_viewers'; // admin/owner بس (role <= 1)
 
 // اسم غرفة الـ Socket.IO الخاصة بمحادثة معينة — أي حدث "تيار الرسايل الثقيل"
-// (typing/stop_typing، media_ready...) بيتبعت للغرفة دي بس عشان منبعتش لكل
-// الإيجنتس المتصلين حتى لو مش فاتحين المحادثة دي أصلاً. new_message نفسه
-// فضل global عمدًا — التفصيل في تعليق conversation.service.js
+// (الرسالة الكاملة زي ما هي، media_ready...) بيتبعت للغرفة دي بس عشان منبعتش
+// لكل الإيجنتس المتصلين حتى لو مش فاتحين المحادثة دي أصلاً. مؤشر الكتابة
+// (typing/stop_typing) مش هنا — ده بيتبعت لغرفة الشركة كلها (companyRoom)،
+// مش بس لمين فاتح نفس المحادثة (شوف السبب في تعليق socket.on('typing', ...)
+// تحت). new_message نفسه فضل global عمدًا — التفصيل في تعليق conversation.service.js
 function conversationRoom(conversationId) {
   return `conversation:${conversationId}`;
 }
@@ -71,8 +73,9 @@ function initSocket(server) {
 
     // Socket.IO Conversation Rooms — الفرونت إند بيبعت join_conversation لما
     // يفتح شات معين، وleave_conversation لما يقفله أو يتنقل لشات تاني (قبل ما
-    // ينضم للجديد). كده بدل ما نبعت تيار الرسايل الثقيل (typing/media...) لكل
-    // الإيجنتس المتصلين، بنبعته بس لمين فاتح نفس المحادثة فعلاً.
+    // ينضم للجديد). كده بدل ما نبعت تيار الرسايل الثقيل (الرسالة الكاملة/media...)
+    // لكل الإيجنتس المتصلين، بنبعته بس لمين فاتح نفس المحادثة فعلاً. مؤشر الكتابة
+    // مستثنى من ده عمدًا — شوف تعليق socket.on('typing', ...) تحت.
     socket.on('join_conversation', (conversationId) => {
       if (!conversationId) return;
       socket.join(conversationRoom(conversationId));
@@ -83,18 +86,26 @@ function initSocket(server) {
       socket.leave(conversationRoom(conversationId));
     });
 
-    // مؤشر "بيكتب دلوقتي" — بنستقبله من الإيجنت اللي بيكتب وبنبعته بس للإيجنتس
-    // اللي فاتحين نفس المحادثة (غرفة conversation:${id})، بدل البرودكاست العام
-    // القديم اللي كان بيوصل لكل حد متصل بصرف النظر عن المحادثة المفتوحة عنده.
-    // socket.to(room) زي broadcast.emit بالظبط: بيستثني صاحب الاتصال نفسه.
+    // مؤشر "بيكتب دلوقتي": بيتبعت لكل إيجنتس الشركة (غرفة company:${id})، مش بس
+    // اللي فاتحين نفس المحادثة، عشان يرجع يشتغل زي الأول قبل ما القسمة لغرف
+    // لكل محادثة (join_conversation) تحصر وصوله بس على مين فاتح نفس المحادثة
+    // بالظبط — وده كان بيخلي المؤشر عمليًا ميظهرش أبدًا (نادر جدًا إن اتنين
+    // إيجنتس فاتحين بالظبط نفس المحادثة في نفس اللحظة). دلوقتي أي إيجنت بيكتب
+    // في أي محادثة، كل زمايله في الشركة بيوصلهم الحدث (الفرونت إند بيعرض
+    // مؤشر "بيكتب" في هيدر الشات لو فاتح نفس المحادثة، وفي قايمة الشاتس جمب
+    // اسم العميل حتى لو المحادثة دي مش مفتوحة عنده أصلًا). لو الاتصال من غير
+    // شركة معروفة (توكن قديم/غير موثّق)، بنرجع لبرودكاست عام زي السلوك الأصلي
+    // قبل إضافة عزل الشركات
     socket.on('typing', (payload) => {
       if (!payload || !payload.conversationId) return;
-      socket.to(conversationRoom(payload.conversationId)).emit('typing', payload);
+      if (socket.data?.companyId) socket.to(companyRoom(socket.data.companyId)).emit('typing', payload);
+      else socket.broadcast.emit('typing', payload);
     });
 
     socket.on('stop_typing', (payload) => {
       if (!payload || !payload.conversationId) return;
-      socket.to(conversationRoom(payload.conversationId)).emit('stop_typing', payload);
+      if (socket.data?.companyId) socket.to(companyRoom(socket.data.companyId)).emit('stop_typing', payload);
+      else socket.broadcast.emit('stop_typing', payload);
     });
 
     socket.on('disconnect', () => {

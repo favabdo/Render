@@ -1,6 +1,20 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Search, CheckCircle, RotateCcw, User, X, ChevronUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import Avatar from '../../../components/ui/Avatar';
+
+// نفس المنطق المستخدم في MessageInput.jsx لتحديد لو إحنا في لاي أوت الموبايل
+function isMobileLayout() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width:860px)').matches;
+}
+
+// أول كلمتين بس من رسالة تحذير عقد الصيانة — مستخدمة في الشكل المنكمش على
+// الموبايل (شوف maintenanceBannerText تحت) عشان مساحة الشات ميبقاش صغير أوي
+function firstTwoWords(text) {
+  if (!text) return '';
+  const words = text.trim().split(/\s+/);
+  return words.length <= 2 ? text : `${words.slice(0, 2).join(' ')}…`;
+}
 
 export default function ChatHeader({
   conversation,
@@ -19,6 +33,15 @@ export default function ChatHeader({
 }) {
   const { t } = useTranslation('chats');
   const c = conversation;
+
+  // على الموبايل، رسالة تحذير عقد الصيانة بتيجي منكمشة (أول كلمتين بس) عشان
+  // مساحة الشات ميبقاش صغير أوي — وبتتفتح كاملة لو داس على السهم. على الديسكتوب
+  // بتفضل ظاهرة كاملة زي الأول عادي. بنرجّع الحالة لمنكمشة تاني كل ما نفتح
+  // محادثة تانية (بدل ما تفضل متفتحة من محادثة سابقة)
+  const [bannerExpanded, setBannerExpanded] = useState(() => !isMobileLayout());
+  useEffect(() => {
+    setBannerExpanded(!isMobileLayout());
+  }, [c.id]);
   const statusText =
     typingNames.length > 0
       ? typingNames.length === 1
@@ -103,7 +126,18 @@ export default function ChatHeader({
       {maintenanceBannerText && (
         <div className="chat-maintenance-banner show">
           <AlertTriangle size={15} style={{ flexShrink: 0 }} />
-          <span>{maintenanceBannerText}</span>
+          <span className="chat-maintenance-banner-text">
+            {bannerExpanded ? maintenanceBannerText : firstTwoWords(maintenanceBannerText)}
+          </span>
+          <button
+            type="button"
+            className="chat-maintenance-banner-toggle"
+            onClick={() => setBannerExpanded((v) => !v)}
+            title={bannerExpanded ? t('header.maintenanceCollapse') : t('header.maintenanceExpand')}
+            aria-label={bannerExpanded ? t('header.maintenanceCollapse') : t('header.maintenanceExpand')}
+          >
+            {bannerExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
         </div>
       )}
 

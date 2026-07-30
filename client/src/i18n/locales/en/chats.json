@@ -36,7 +36,9 @@
     "prev": "Previous",
     "next": "Next",
     "close": "Close",
-    "maintenanceExpired": "This customer's maintenance contract expired {{days}} days ago (on {{date}}) — please check with management before continuing to assist them"
+    "maintenanceExpired": "This customer's maintenance contract expired {{days}} days ago (on {{date}}) — please check with management before continuing to assist them",
+    "maintenanceExpand": "Show full message",
+    "maintenanceCollapse": "Collapse message"
   },
   "assign": {
     "title": "Assign to Agent",
