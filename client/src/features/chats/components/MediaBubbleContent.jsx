@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { FileWarning, Loader2, FileText } from 'lucide-react';
 import { docKindLabel } from '../utils/mappers';
+import MessageTicks from './MessageTicks';
 
 export default function MediaBubbleContent({ m, onOpenLightbox }) {
   const { t } = useTranslation('chats');
@@ -19,7 +20,7 @@ export default function MediaBubbleContent({ m, onOpenLightbox }) {
           )}
         </div>
         {m.text && <div className="msg-media-caption">{m.text}</div>}
-        <div className="msg-time" style={{ padding: '0 8px 6px' }}>{m.time}</div>
+        <div className="msg-time" style={{ padding: '0 8px 6px' }}>{m.time}<MessageTicks m={m} /></div>
       </>
     );
   }
@@ -51,7 +52,7 @@ export default function MediaBubbleContent({ m, onOpenLightbox }) {
       {body}
       {m._pending && <div className="msg-upload-progress">{m.failed ? t('mediaBubble.failed') : t('mediaBubble.sending')}</div>}
       {m.text && <div className="msg-media-caption">{m.text}</div>}
-      <div className="msg-time" style={{ padding: '0 8px 6px' }}>{m.time}</div>
+      <div className="msg-time" style={{ padding: '0 8px 6px' }}>{m.time}<MessageTicks m={m} /></div>
     </>
   );
 }

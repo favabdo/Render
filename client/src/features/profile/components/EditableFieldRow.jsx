@@ -27,22 +27,22 @@ export default function EditableFieldRow({ label, desc, value, placeholder, type
         <div className="setting-desc">{desc}</div>
       </div>
       {!editing ? (
-        <span style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           {value ? (
-            <span>{value}</span>
+            <span style={{ minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{value}</span>
           ) : (
             <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{placeholder || '—'}</span>
           )}
-          <button className="st-icon-btn" title={t('actions.edit')} aria-label={t('actions.edit')} onClick={startEdit}>
+          <button className="st-icon-btn" title={t('actions.edit')} aria-label={t('actions.edit')} onClick={startEdit} style={{ flexShrink: 0 }}>
             <Pencil size={13} />
           </button>
         </span>
       ) : (
-        <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
           <input
             type={type}
             className="agent-name-edit-input"
-            style={{ width: 200 }}
+            style={{ width: 200, maxWidth: '100%', boxSizing: 'border-box' }}
             maxLength={150}
             value={draft}
             autoFocus

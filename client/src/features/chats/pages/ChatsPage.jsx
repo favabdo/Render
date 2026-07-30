@@ -142,6 +142,10 @@ export default function ChatsPage() {
               mediaUrl: message.media_url || m.mediaUrl,
               mediaMime: message.media_mime || m.mediaMime,
               fileName: message.media_filename || m.fileName,
+              // بتظهر تيك واحد فورًا أول ما الرسالة توصل هنا (optimistic)، بغض
+              // النظر عن الحالة الحقيقية من واتساب — الحالة الحقيقية (sent/
+              // delivered/read) بتتحدّث بعدين عن طريق message_status_updated
+              status: 'sent',
             })
           );
           return;
@@ -159,7 +163,26 @@ export default function ChatsPage() {
         mediaUrl: message.media_url || null,
         mediaMime: message.media_mime || null,
         fileName: message.media_filename || null,
+        status: message.direction === 'out' ? 'sent' : null,
       });
+    }
+
+    // تحديث حالة رسالة بعتناها (sent/delivered/read) أو فشلها بعد ما كانت
+    // اتأكدت خالص — بيوصل من processStatusUpdates في السيرفر لما ميتا ترجع
+    // حالة جديدة لرسالة بعتناها قبل كده. لو الحالة 'failed' بنستخدم نفس مسار
+    // الفشل الموجود أصلاً (Retry/Cancel) بدل ما نعرض تيك.
+    function onMessageStatusUpdated({ conversationId, message }) {
+      const state = useChatsStore.getState();
+      const c = state.conversations.find((x) => String(x.id) === String(conversationId));
+      if (!c || message?.id == null) return;
+      state.replaceMessage(
+        c.id,
+        (m) => String(m.id) === String(message.id),
+        (m) =>
+          message.status === 'failed'
+            ? { ...m, failed: true }
+            : { ...m, status: message.status }
+      );
     }
 
     // الرسالة الواردة (صورة/فيديو/صوت/مستند) بتظهر فورًا من غير صورة (mediaUrl=null)
@@ -337,6 +360,7 @@ export default function ChatsPage() {
     }
 
     socket.on('new_message', onNewMessage);
+    socket.on('message_status_updated', onMessageStatusUpdated);
     socket.on('message_media_ready', onMessageMediaReady);
     socket.on('new_note', onNewNote);
     socket.on('message_failed', onMessageFailed);
@@ -354,6 +378,7 @@ export default function ChatsPage() {
     return () => {
       socket.off('connect', onReconnectResync);
       socket.off('new_message', onNewMessage);
+      socket.off('message_status_updated', onMessageStatusUpdated);
       socket.off('new_note', onNewNote);
       socket.off('message_media_ready', onMessageMediaReady);
       socket.off('message_failed', onMessageFailed);

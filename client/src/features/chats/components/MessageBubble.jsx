@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Lock, RotateCw, X } from 'lucide-react';
 import { findPhoneLabel } from '../utils/mappers';
 import MediaBubbleContent from './MediaBubbleContent';
+import MessageTicks from './MessageTicks';
 
 const MEDIA_TYPES = ['image', 'video', 'audio', 'document', 'sticker'];
 
@@ -104,7 +105,7 @@ export default function MessageBubble({ m, c, searchQuery, onOpenLightbox, onRet
         {senderLabel && <div className="msg-sender-name">{senderLabel}</div>}
         <div className={`msg-bubble${m.failed ? ' msg-failed' : ''}`}>
           <HighlightedText text={m.text} query={searchQuery} isActiveMatch={false} />
-          <div className="msg-time">{m.time}</div>
+          <div className="msg-time">{m.time}<MessageTicks m={m} /></div>
         </div>
         <MessageStatusRow m={m} t={t} onRetry={onRetry} onCancel={onCancel} />
       </div>

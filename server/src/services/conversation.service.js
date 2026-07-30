@@ -594,15 +594,22 @@ async function applyContractExpiryReplyForMessage(conversationId, contactId, con
 }
 
 // تحديثات حالة الرسائل اللي بعتناها (sent/delivered/read/failed) — بنسجلها في
-// عمود status بس عشان الأرشفة/الداتا، من غير ما نبعتها لايف على الـ socket
-// (مفيش تيك بيتعرض في الواجهة يستخدمها أصلًا بعد ما اتشالت فكرة الصح/الصحين)
-async function processStatusUpdates(value) {
+// عمود status، وكمان بنبعتها لايف على الـ socket ('message_status_updated')
+// عشان تيك الرسالة (واحد/اتنين/اتنين ملوّنين) يتحدّث في الواجهة أول ما ميتا
+// ترجع الحالة الجديدة، من غير ما الإيجنت يحتاج يعمل ريفريش
+async function processStatusUpdates(value, io) {
   for (const st of value.statuses) {
     const updated = await conversationRepo.updateMessageStatusByWaId(st.id, st.status);
 
     // حدث "رسالة اتحدثت": بيحصل هنا فعليًا لما ميتا ترجع حالة تسليم/قراءة/فشل
     // لرسالة بعتناها قبل كده (sent/delivered/read/failed)
     if (updated) {
+      if (io && updated.conversation_id) {
+        socketService.emitToConversationRoom(io, updated.conversation_id, 'message_status_updated', {
+          conversationId: updated.conversation_id,
+          message: { id: updated.id, status: updated.status },
+        });
+      }
       webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.MESSAGE_UPDATED, {
         conversation_id: updated.conversation_id || null,
         message: { id: updated.id, wa_message_id: st.id, status: st.status },

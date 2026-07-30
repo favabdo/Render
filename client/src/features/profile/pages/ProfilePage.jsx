@@ -186,7 +186,7 @@ export default function ProfilePage() {
 
         <div className="settings-section">
           <h3>{t('profilePicture.title')}</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 4, flexWrap: 'wrap', minWidth: 0 }}>
             <div
               style={{ position: 'relative', cursor: 'pointer' }}
               title={t('profilePicture.changeTitle')}
@@ -223,9 +223,9 @@ export default function ProfilePage() {
                 <Camera size={12} />
               </div>
             </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>{displayName}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{user.email}</div>
+            <div style={{ minWidth: 0, flex: '1 1 auto', overflowWrap: 'anywhere' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, overflowWrap: 'anywhere' }}>{displayName}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', overflowWrap: 'anywhere' }}>{user.email}</div>
               <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                 <button
                   className="st-icon-btn"

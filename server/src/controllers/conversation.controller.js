@@ -388,6 +388,15 @@ async function reply(req, res) {
       // بيتنادى لما مرحلة التسليم الفعلية لواتساب (Graph API) + finalize في
       // الداتابيز يخلصوا — ده بيحصل بعد الاستجابة بوقت (ثانية أو أكتر أحيانًا)
       reportTiming(req, 'reply:background_finalized');
+      // بنبعت تحديث الحالة لايف على الـ socket (sent/failed) عشان تيك الرسالة
+      // يتحدّث في الواجهة — الفقاعة كانت ظاهرة فعلاً بتيك واحد optimistic من
+      // new_message، وده بس بيأكدها (sent) أو يقلبها فشل (failed)
+      if (io && finalRow) {
+        socketService.emitToConversationRoom(io, conversation.id, 'message_status_updated', {
+          conversationId: conversation.id,
+          message: { id: finalRow.id, status: finalRow.status },
+        });
+      }
     }, req.timing)
     .then((message) => {
       req.timing?.mark('background:message_persisted');
@@ -487,8 +496,14 @@ async function replyMedia(req, res) {
         publicUrl,
       },
       senderInfo,
-      () => {
+      (finalRow) => {
         reportTiming(req, 'reply_media:background_finalized');
+        if (io && finalRow) {
+          socketService.emitToConversationRoom(io, conversation.id, 'message_status_updated', {
+            conversationId: conversation.id,
+            message: { id: finalRow.id, status: finalRow.status },
+          });
+        }
       },
       req.timing
     )
@@ -567,7 +582,7 @@ async function receiveWebhook(req, res) {
     // الداتابيز في نفس اللحظة)، فبنشغلهم مع بعض بدل الواحد بعد التاني
     await Promise.all([
       Array.isArray(value.messages) ? conversationService.processIncomingMessages(value, io, wabaId) : Promise.resolve(),
-      Array.isArray(value.statuses) ? conversationService.processStatusUpdates(value) : Promise.resolve(),
+      Array.isArray(value.statuses) ? conversationService.processStatusUpdates(value, io) : Promise.resolve(),
     ]);
   } catch (err) {
     logger.error('❌ خطأ أثناء معالجة الـ webhook:', err);

@@ -83,6 +83,8 @@ export function mapApiMessage(m) {
     mediaUrl: m.media_url || null,
     mediaMime: m.media_mime || null,
     fileName: m.media_filename || null,
+    status: m.status || null,
+    failed: m.status === 'failed',
   };
 }
 

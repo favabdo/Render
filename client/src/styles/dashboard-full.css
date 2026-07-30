@@ -271,9 +271,12 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .msg-text{white-space:pre-wrap;word-wrap:break-word}
 .msg-row.sent .msg-bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
 .msg-row.received .msg-bubble{background:var(--chat-bubble-received,#fff);color:var(--text);border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
-.msg-time{font-size:10px;margin-top:4px;opacity:.7}
-.msg-row.sent .msg-time{text-align:right;color:rgba(255,255,255,0.85)}
-.msg-row.received .msg-time{text-align:left;color:var(--text-secondary)}
+.msg-time{font-size:10px;margin-top:4px;opacity:.7;display:flex;align-items:center;gap:3px}
+.msg-row.sent .msg-time{text-align:right;color:rgba(255,255,255,0.85);justify-content:flex-end}
+.msg-row.received .msg-time{text-align:left;color:var(--text-secondary);justify-content:flex-start}
+.msg-ticks{display:inline-flex;align-items:center;line-height:0;color:inherit;opacity:.9}
+.msg-ticks svg{display:block}
+.msg-ticks.msg-ticks-read{color:#53bdeb;opacity:1}
 .msg-bubble.media-bubble{padding:6px}
 .msg-bubble.media-bubble .msg-time{padding:0 6px}
 .msg-media-image{display:block;max-width:260px;max-height:320px;width:100%;border-radius:12px;cursor:zoom-in;object-fit:cover}
@@ -663,12 +666,21 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .template-card h4{font-size:15px;font-weight:700;margin-bottom:8px}
 .template-card p{font-size:13px;color:var(--text-secondary);line-height:1.5}
 
-.settings-section{background:var(--surface);border-radius:16px;padding:24px;border:1px solid var(--border);margin-bottom:20px}
+.settings-section{background:var(--surface);border-radius:16px;padding:24px;border:1px solid var(--border);margin-bottom:20px;max-width:100%;overflow:hidden}
 .settings-section h3{font-size:16px;font-weight:700;margin-bottom:16px}
-.setting-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap}
 .setting-row:last-child{border-bottom:none}
-.setting-label{font-size:14px;font-weight:500}
-.setting-desc{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.setting-row>*{min-width:0}
+.setting-row>div:first-child{flex:1 1 160px}
+.setting-label{font-size:14px;font-weight:500;overflow-wrap:anywhere}
+.setting-desc{font-size:12px;color:var(--text-secondary);margin-top:2px;overflow-wrap:anywhere}
+/* أي قيمة نص (إيميل، اسم، توكن...) جوه setting-row لازم تلف بدل ما توسّع
+   الكارت — أطول قيمة ممكنة (إيميل من غير مسافات مثلًا) لازم تتكسر داخل عرضها */
+.setting-row span{overflow-wrap:anywhere;word-break:break-word}
+@media (max-width:480px){
+  .setting-row{justify-content:flex-start}
+  .setting-row>div:first-child{flex-basis:100%}
+}
 .toggle{width:44px;min-width:44px;height:24px;border-radius:12px;background:var(--border);cursor:pointer;position:relative;transition:background .2s;border:none;flex-shrink:0}
 .toggle.on{background:var(--primary)}
 .toggle::after{content:'';width:20px;height:20px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
