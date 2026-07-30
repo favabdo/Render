@@ -938,3 +938,17 @@ input[type="date"].iw-input,input[type="time"].iw-input{min-width:0;max-width:10
 .tpl-save-btn{padding:6px 14px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px}
 .tpl-cancel-btn{padding:6px 14px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
 
+/* مودال ضبط صورة البروفايل (Zoom + Pan) قبل الرفع */
+.crop-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px;animation:crop-fade-in .15s ease-out}
+@keyframes crop-fade-in{from{opacity:0}to{opacity:1}}
+.crop-modal{background:var(--surface);border-radius:20px;padding:24px;width:340px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,0.3);border:1px solid var(--border);display:flex;flex-direction:column;align-items:center}
+.crop-modal-title{font-size:16px;font-weight:700;margin-bottom:16px;align-self:flex-start}
+.crop-viewport{position:relative;overflow:hidden;border-radius:50%;background:var(--bg);cursor:grab;touch-action:none;flex-shrink:0}
+.crop-viewport:active{cursor:grabbing}
+.crop-viewport-ring{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(255,255,255,0.6),0 0 0 9999px rgba(0,0,0,0.001);pointer-events:none}
+.crop-hint{font-size:11.5px;color:var(--text-secondary);text-align:center;margin-top:12px;max-width:280px;line-height:1.5}
+.crop-zoom-row{display:flex;align-items:center;gap:10px;width:100%;margin-top:14px}
+.crop-zoom-slider{flex:1;accent-color:var(--primary)}
+.crop-modal-actions{display:flex;gap:10px;width:100%;margin-top:20px}
+.crop-modal-actions .resolve-cancel-btn,.crop-modal-actions .resolve-confirm-btn{padding:10px}
+

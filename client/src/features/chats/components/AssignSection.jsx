@@ -94,7 +94,7 @@ export default function AssignSection({ conversation, agents, currentAgentName, 
                   onClick={() => assignAgent(a)}
                 >
                   <div className="agent-option-avatar">
-                    <Avatar name={agentName(a)} seed={a.id} size={32} />
+                    <Avatar name={agentName(a)} seed={a.id} size={32} imageSrc={a.avatar_url || null} />
                   </div>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{agentName(a)}</div>

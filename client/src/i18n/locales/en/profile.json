@@ -44,7 +44,13 @@
     "uploadPhoto": "Upload photo",
     "removePhoto": "Remove photo",
     "remove": "Remove",
-    "formatsHint": "JPG, PNG, GIF or WEBP. Max 5MB."
+    "formatsHint": "JPG, PNG, GIF or WEBP. Max 5MB.",
+    "cropTitle": "Adjust your photo",
+    "cropHint": "Drag to reposition, use the slider to zoom in/out",
+    "zoom": "Zoom",
+    "cropSave": "Save",
+    "cropCancel": "Cancel",
+    "cropSaving": "Saving…"
   },
   "personalInfo": {
     "title": "Personal Information",

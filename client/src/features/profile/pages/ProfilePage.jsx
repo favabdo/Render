@@ -8,6 +8,7 @@ import { roleLabel } from '../../../utils/roles';
 import { meApi } from '../services/profile.service';
 import EditableFieldRow from '../components/EditableFieldRow';
 import NotifPrefsTable from '../components/NotifPrefsTable';
+import ImageCropModal from '../components/ImageCropModal';
 
 export default function ProfilePage() {
   const { t } = useTranslation('profile');
@@ -27,6 +28,7 @@ export default function ProfilePage() {
   const [tokenVisible, setTokenVisible] = useState(false);
   const [pushState, setPushState] = useState(getPushButtonState());
   const [notifPrefs, setNotifPrefs] = useState({});
+  const [cropSrc, setCropSrc] = useState(null);
 
   useEffect(() => {
     meApi
@@ -72,7 +74,21 @@ export default function ProfilePage() {
     if (!file) return;
     if (!file.type.startsWith('image/')) return showToast(t('errors.invalidImage'), 'error');
     if (file.size > 5 * 1024 * 1024) return showToast(t('errors.imageTooLarge'), 'error');
+    // بدل ما نرفع الملف زي ما هو، بنفتح مودال القص أولًا عشان الإيجنت يقدر
+    // يتحكم في أبعاد وحجم الصورة (تكبير/تصغير وتحريك) قبل ما ترفع فعليًا
+    setCropSrc(URL.createObjectURL(file));
+  }
+
+  function handleCropCancel() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+  }
+
+  async function handleCropSave(blob) {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
     try {
+      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
       const data = await meApi.uploadAvatar(file);
       patchUser({ avatar_url: data.avatar_url });
       showToast(t('success.avatarUpdated'), 'success');
@@ -394,6 +410,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+      {cropSrc && <ImageCropModal imageSrc={cropSrc} onCancel={handleCropCancel} onSave={handleCropSave} />}
     </div>
   );
 }

@@ -61,7 +61,7 @@ async function listUsers() {
     const pool = await getPool();
     const result = await pool
       .request()
-      .query(`SELECT id, email, role, status, company_id, company_code, display_name FROM [dbo].[NileChat_Users_byA] ORDER BY id`);
+      .query(`SELECT id, email, role, status, company_id, company_code, display_name, avatar_url FROM [dbo].[NileChat_Users_byA] ORDER BY id`);
     return result.recordset;
   });
 }
@@ -236,6 +236,7 @@ async function updateAvatar(id, avatarUrl) {
       OUTPUT INSERTED.id, INSERTED.avatar_url
       WHERE id = @id
     `);
+  await cache.del(AGENTS_LIST_KEY);
   return result.recordset[0] || null;
 }
 

@@ -44,7 +44,13 @@
     "uploadPhoto": "رفع صورة",
     "removePhoto": "حذف الصورة",
     "remove": "حذف",
-    "formatsHint": "JPG أو PNG أو GIF أو WEBP. الحد الأقصى 5 ميجابايت."
+    "formatsHint": "JPG أو PNG أو GIF أو WEBP. الحد الأقصى 5 ميجابايت.",
+    "cropTitle": "اضبط صورتك",
+    "cropHint": "اسحب الصورة لتحريكها، واستخدم الشريط للتكبير/التصغير",
+    "zoom": "التكبير",
+    "cropSave": "حفظ",
+    "cropCancel": "إلغاء",
+    "cropSaving": "جارٍ الحفظ…"
   },
   "personalInfo": {
     "title": "المعلومات الشخصية",
