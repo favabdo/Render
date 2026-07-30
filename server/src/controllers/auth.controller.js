@@ -305,7 +305,7 @@ async function createUserAccount(req, res) {
   // وده كان بيخلي لينك الإيميل واللوجو على دومين مختلف عن دومين الإرسال في Resend
   // (السبب الأساسي في إن الإيميل كان بيروح السبام والصورة متظهرش)
   const baseUrl = env.APP_URL || `${req.protocol}://${req.get('host')}`;
-  const inviteUrl = `${baseUrl}/set-password.html?token=${inviteToken}`;
+  const inviteUrl = `${baseUrl}/set-password?token=${inviteToken}`;
   const logoUrl = `${baseUrl}/assets/logo.png`;
 
   const mailResult = await mailer.sendInviteEmail({ to: email, inviteUrl, logoUrl });

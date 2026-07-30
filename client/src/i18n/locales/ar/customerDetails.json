@@ -86,8 +86,11 @@
     "errors": {
       "dateRequired": "تاريخ الزيارة مطلوب",
       "workRequired": "يُرجى كتابة الأعمال المنفذة خلال الزيارة",
-      "genericError": "فشل إضافة الزيارة"
-    }
+      "genericError": "فشل إضافة الزيارة",
+      "agentRequired": "لازم تختار الإيجنت اللي عمل الزيارة"
+    },
+    "performedBy": "مين اللي عمل الزيارة",
+    "performedByPlaceholder": "اختر الإيجنت اللي عمل الزيارة"
   },
   "addContractModal": {
     "title": "إضافة عقد صيانة",

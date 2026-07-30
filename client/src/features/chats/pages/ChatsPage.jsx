@@ -41,8 +41,19 @@ export default function ChatsPage() {
         useChatsStore.setState((s) => ({
           conversations: mapped.map((m) => {
             const prev = s.conversations.find((x) => x.id === m.id);
+            // بنحافظ على phones (فيها الاسم الثانوي) و_contactLoaded زي ما هما —
+            // لو مسحناهم هيرجعوا للقيمة الافتراضية (رقم من غير ليبل) وده كان بيخلي
+            // الاسم الثانوي يختفي من الكارت ومن فوق رسايل العميل مع كل poll
             return prev
-              ? { ...m, messages: prev.messages, _messagesLoaded: prev._messagesLoaded, labels: prev.labels, teams: prev.teams }
+              ? {
+                  ...m,
+                  messages: prev.messages,
+                  _messagesLoaded: prev._messagesLoaded,
+                  labels: prev.labels,
+                  teams: prev.teams,
+                  phones: prev._contactLoaded ? prev.phones : m.phones,
+                  _contactLoaded: prev._contactLoaded,
+                }
               : m;
           }),
         }));
@@ -291,8 +302,20 @@ export default function ChatsPage() {
         useChatsStore.setState((s) => ({
           conversations: mapped.map((m) => {
             const prev = s.conversations.find((x) => x.id === m.id);
+            // بنحافظ على phones (فيها الاسم الثانوي اللي الإيجنت عدّله) و_contactLoaded
+            // زي ما هما — لو مسحناهم هنا هيرجعوا للقيمة الافتراضية (رقم من غير ليبل)
+            // وده كان بيخلي الاسم الثانوي يختفي من الكارت ومن فوق رسايل العميل بعد
+            // أي إعادة اتصال للسوكيت (شبكة اتقطعت، التاب رجع من الباكجراوند، إلخ)
             return prev
-              ? { ...m, messages: prev.messages, _messagesLoaded: prev._messagesLoaded, labels: prev.labels, teams: prev.teams }
+              ? {
+                  ...m,
+                  messages: prev.messages,
+                  _messagesLoaded: prev._messagesLoaded,
+                  labels: prev.labels,
+                  teams: prev.teams,
+                  phones: prev._contactLoaded ? prev.phones : m.phones,
+                  _contactLoaded: prev._contactLoaded,
+                }
               : m;
           }),
         }));

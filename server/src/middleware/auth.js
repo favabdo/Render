@@ -4,10 +4,13 @@ const env = require('../config/env');
 const userRepo = require('../repositories/user.repo');
 
 // رول 3 = "CRM Agent": إيجنت بيشوف بس قسم العملاء (Contacts) في الداشبورد،
-// ومش بيقدر يعدّل أو يضيف أي حاجة (لا اسم، لا رقم تليفون، لا زيارة، لا عقد
-// صيانة، ولا يمسح عميل) — قراءة بس. أي راوت تاني في السيرفر (محادثات، إنبوكسز،
-// إعدادات، يوزرز...) ممنوع عليه خالص. القايمة دي هي مصدر الحقيقة الوحيد لصلاحياته
-// (الإخفاء في الفرونت في dashboard.html شكل بس — الحماية الحقيقية من هنا)
+// وبالقراءة بس، ما عدا استثناء واحد: يقدر يضيف "زيارة" (مش عقد صيانة)، لكن
+// لازم يختار مين من الإيجنتس العاديين اللي عمل الزيارة فعليًا (بدل ما تتسجل
+// باسمه هو) — الفاليديشن ده في visit.controller.js. عشان يقدر يختار، لازم
+// كمان يقدر يجيب قايمة الإيجنتس (GET /api/agents-list، للقراءة بس). أي حاجة
+// تانية (تعديل اسم/رقم تليفون، عقد صيانة، مسح عميل، محادثات، إنبوكسز،
+// إعدادات، يوزرز...) ممنوعة عليه خالص. القايمة دي هي مصدر الحقيقة الوحيد
+// لصلاحياته (الإخفاء في الفرونت شكل بس — الحماية الحقيقية من هنا)
 const CRM_AGENT_ROLE = 3;
 const CRM_AGENT_ALLOWED_ROUTES = [
   { method: null, pattern: /^\/api\/me(\/.*)?$/ }, // إدارة حسابه الشخصي (بروفايل/أفتار/كلمة سر) — مش جزء من "قسم العملاء" لكن أساسي لأي يوزر مسجل دخول
@@ -16,6 +19,9 @@ const CRM_AGENT_ALLOWED_ROUTES = [
   { method: 'GET', pattern: /^\/api\/contacts\/\d+$/ },
   { method: 'GET', pattern: /^\/api\/contacts\/\d+\/visits$/ },
   { method: 'GET', pattern: /^\/api\/contacts\/\d+\/maintenance-contracts$/ },
+  { method: 'GET', pattern: /^\/api\/agents-list$/ }, // عشان يعمل populate لقايمة "مين عمل الزيارة" وقت إضافة زيارة
+  { method: 'POST', pattern: /^\/api\/contacts\/\d+\/visits$/ }, // إضافة زيارة — لازم يحدد performedByAgentId (إيجنت عادي)
+  { method: 'POST', pattern: /^\/api\/visits$/ },
 ];
 
 function isCrmAgentRequestAllowed(req) {

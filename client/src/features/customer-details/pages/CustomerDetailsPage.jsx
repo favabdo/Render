@@ -276,9 +276,11 @@ export default function CustomerDetailsPage() {
 
         {tab === 'contracts' && (
           <div>
-            <button className="page-btn" style={{ marginBottom: 12 }} onClick={() => setAddContractOpen(true)}>
-              <FilePlus2 size={16} /> {t('contracts.add')}
-            </button>
+            {canManage && (
+              <button className="page-btn" style={{ marginBottom: 12 }} onClick={() => setAddContractOpen(true)}>
+                <FilePlus2 size={16} /> {t('contracts.add')}
+              </button>
+            )}
             <div className="sched-tasks-grid">
               {contractsLoading ? (
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('contracts.loading')}</div>

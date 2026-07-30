@@ -25,12 +25,19 @@ export default function Sidebar({ openChatsCount = 0, dueTasksCount = 0 }) {
   const { user, logout } = useAuthStore();
   const { unreadCount, openPanel } = useNotificationsStore();
   const crmOnly = isCrmAgentOnly(user);
+  // الإعدادات مقصورة على الأدمن/الأونر (role 0 أو 1) — الإيجنت العادي (role 2)
+  // مش المفروض يشوفها خالص في السايدبار
+  const isRegularAgent = user?.role === 2;
 
   const badgeCounts = { chats: openChatsCount, sched: dueTasksCount };
   // رول "CRM Agent" (role 3): مش بيشوف في السايدبار غير Contacts + تسجيل
   // الخروج، ومش بيشوف زرار الإشعارات. الحماية الحقيقية من السيرفر
   // (middleware/auth.js -> enforceCrmAgentAccess)، وده بس شكل الواجهة
-  const visibleNavItems = crmOnly ? NAV_ITEMS.filter((item) => item.to === '/dashboard/contacts') : NAV_ITEMS;
+  const visibleNavItems = crmOnly
+    ? NAV_ITEMS.filter((item) => item.to === '/dashboard/contacts')
+    : isRegularAgent
+      ? NAV_ITEMS.filter((item) => item.to !== '/dashboard/settings')
+      : NAV_ITEMS;
 
   function handleLogout() {
     logout();

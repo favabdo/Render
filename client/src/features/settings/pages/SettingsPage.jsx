@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 import { ArrowLeft, Settings2, Users, UsersRound, Inbox, Tag, Workflow, Plug } from 'lucide-react';
 import GeneralSection from '../sections/GeneralSection';
 import AgentsSection from '../sections/AgentsSection';
@@ -8,6 +9,7 @@ import InboxesSection from '../sections/InboxesSection';
 import LabelsSettingsSection from '../sections/LabelsSettingsSection';
 import AutomationSection from '../sections/AutomationSection';
 import IntegrationsSection from '../sections/IntegrationsSection';
+import useAuthStore from '../../../store/authStore';
 
 const NAV_ITEMS = [
   { key: 'general', labelKey: 'nav.general', icon: Settings2 },
@@ -21,8 +23,15 @@ const NAV_ITEMS = [
 
 export default function SettingsPage() {
   const { t } = useTranslation('settings');
+  const { user } = useAuthStore();
   const [section, setSection] = useState('general');
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // الإعدادات مقصورة على الأدمن/الأونر (role 0 أو 1) بس — الإيجنت العادي (role 2)
+  // والـ CRM Agent (role 3) ميشوفوهاش خالص، حتى لو دخلوا اللينك مباشرة
+  if (user?.role > 1) {
+    return <Navigate to="/dashboard/chats" replace />;
+  }
 
   function navigate(key) {
     setSection(key);

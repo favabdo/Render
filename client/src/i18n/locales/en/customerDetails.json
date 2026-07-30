@@ -86,8 +86,11 @@
     "errors": {
       "dateRequired": "Visit date is required",
       "workRequired": "Please describe the work done during the visit",
-      "genericError": "Failed to add the visit"
-    }
+      "genericError": "Failed to add the visit",
+      "agentRequired": "Please select the agent who performed the visit"
+    },
+    "performedBy": "Performed by",
+    "performedByPlaceholder": "Select the agent who did the visit"
   },
   "addContractModal": {
     "title": "Add Maintenance Contract",
