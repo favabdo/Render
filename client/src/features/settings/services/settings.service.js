@@ -47,3 +47,25 @@ export const webhooksApi = {
   remove: (id) => apiClient.delete(`/api/webhooks/${id}`).then((r) => r.data),
   test: (id) => apiClient.post(`/api/webhooks/${id}/test`).then((r) => r.data),
 };
+
+// اتصالات شات ووت (External_Provider_byA)
+export const chatwootApi = {
+  list: () => apiClient.get('/api/external-providers').then((r) => r.data),
+  create: (payload) => apiClient.post('/api/external-providers', payload).then((r) => r.data),
+  update: (id, payload) => apiClient.patch(`/api/external-providers/${id}`, payload).then((r) => r.data),
+  setActive: (id, isActive) => apiClient.patch(`/api/external-providers/${id}/active`, { isActive }).then((r) => r.data),
+  regenerateSecret: (id) => apiClient.post(`/api/external-providers/${id}/regenerate-secret`).then((r) => r.data),
+};
+
+// ربط كونتاكتس/إيجنتس شات ووت بكونتاكتس/إيجنتس نايل شات
+export const chatwootMergeApi = {
+  unmergedContacts: (providerId) => apiClient.get(`/api/external-providers/${providerId}/unmerged-contacts`).then((r) => r.data),
+  mergeContact: (id, nileContactId) => apiClient.post(`/api/external-contacts/${id}/merge`, { nileContactId }).then((r) => r.data),
+  unmergeContact: (id) => apiClient.post(`/api/external-contacts/${id}/unmerge`).then((r) => r.data),
+  unmergedAgents: (providerId) => apiClient.get(`/api/external-providers/${providerId}/unmerged-agents`).then((r) => r.data),
+  syncAgents: (providerId) => apiClient.post(`/api/external-providers/${providerId}/sync-agents`).then((r) => r.data),
+  mergeAgent: (id, nileUserId, agentApiAccessToken) =>
+    apiClient.post(`/api/external-agents/${id}/merge`, { nileUserId, agentApiAccessToken }).then((r) => r.data),
+  unmergeAgent: (id) => apiClient.post(`/api/external-agents/${id}/unmerge`).then((r) => r.data),
+  setAgentToken: (id, agentApiAccessToken) => apiClient.patch(`/api/external-agents/${id}/token`, { agentApiAccessToken }).then((r) => r.data),
+};

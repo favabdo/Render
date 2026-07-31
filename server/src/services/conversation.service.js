@@ -10,6 +10,8 @@ const maintenanceContractRepo = require('../repositories/maintenanceContract.rep
 const webhookDispatchService = require('./webhookDispatch.service');
 const contactService = require('./contact.service');
 const whatsappService = require('./whatsapp.service');
+const chatwootService = require('./chatwoot.service');
+const externalConversationRepo = require('../repositories/externalConversation.repo');
 const notificationService = require('./notification.service');
 const ratingRepo = require('../repositories/rating.repo');
 const ratingFlowService = require('./ratingFlow.service');
@@ -36,6 +38,43 @@ async function sendReply(conversation, text, sender) {
 // بالحالة النهائية (sent/failed) أول ما توصل — عشان الكنترولر يقدر يبعت
 // حدثين منفصلين على الـ socket: واحد فوري ("بيتبعت")، وواحد لما فعلاً يتبعت/يفشل
 async function sendReplyLive(conversation, text, sender, onFinalized, timer) {
+  // المحادثة دي جاية من مزود خارجي (شات ووت) ولا Inbox ميتا مباشر؟ — بيتحدد
+  // بوجود صف External_Conversation_byA مربوط بيها (nile_conversation_id).
+  // لو موجود، لازم نرد عن طريق Chatwoot API مش ميتا مباشرة (لإن شات ووت هو
+  // اللي بيكلم ميتا نيابة عننا في الحالة دي). لو مش موجود، المسار القديم زي
+  // ما هو بالظبط من غير أي تغيير.
+  const externalConversation = await externalConversationRepo
+    .findByNileConversationId(conversation.id)
+    .catch(() => null);
+
+  if (externalConversation) {
+    const insertPromise = chatwootService.createOutgoingMessage(conversation.contact_number, text, conversation.id, sender);
+    const touchPromise = conversationRepo.touchConversation(conversation.id);
+    const [savedMessage] = await Promise.all([
+      timer ? timer.time('sql:insert_outgoing_message', insertPromise) : insertPromise,
+      timer ? timer.time('sql:touch_conversation', touchPromise) : touchPromise,
+    ]);
+
+    chatwootService
+      .deliverOutgoingMessage(
+        savedMessage,
+        { conversationId: conversation.id, text, sender },
+        async (finalRow) => {
+          if (finalRow) {
+            const p = conversationRepo.touchConversation(conversation.id);
+            await (timer ? timer.time('sql:touch_conversation_after_deliver', p) : p);
+          }
+          if (onFinalized) onFinalized(finalRow);
+        },
+        timer
+      )
+      .catch(() => {
+        /* أي استثناء غير متوقع اتلقط واتسجل جوه deliverOutgoingMessage نفسها بالفعل */
+      });
+
+    return savedMessage;
+  }
+
   // بنسجل الرسالة وبنحدّث آخر وقت للمحادثة في نفس الوقت (مش الواحدة بعد التانية)
   // — الاتنين مش معتمدين على نتيجة بعض، والفرق ده بيوفر رحلة كاملة (round trip) للداتابيز
   const insertPromise = whatsappService.createOutgoingMessage(
@@ -78,6 +117,43 @@ async function sendReplyLive(conversation, text, sender, onFinalized, timer) {
 // بالنتيجة النهائية (sent/failed) عشان الكنترولر يبعتها لايف على الـ socket
 async function sendMediaReplyLive(conversation, fileInfo, sender, onFinalized, timer) {
   const { buffer, mimeType, fileName, messageType, caption } = fileInfo;
+
+  const externalConversation = await externalConversationRepo
+    .findByNileConversationId(conversation.id)
+    .catch(() => null);
+
+  if (externalConversation) {
+    const insertPromise = chatwootService.createOutgoingMediaMessage(
+      conversation.contact_number,
+      { messageType, mediaUrl: fileInfo.publicUrl, mimeType, fileName, caption },
+      conversation.id,
+      sender
+    );
+    const touchPromise = conversationRepo.touchConversation(conversation.id);
+    const [savedMessage] = await Promise.all([
+      timer ? timer.time('sql:insert_outgoing_media_message', insertPromise) : insertPromise,
+      timer ? timer.time('sql:touch_conversation', touchPromise) : touchPromise,
+    ]);
+
+    chatwootService
+      .deliverOutgoingMediaMessage(
+        savedMessage,
+        { conversationId: conversation.id, buffer, mimeType, fileName, caption, sender },
+        async (finalRow) => {
+          if (finalRow) {
+            const p = conversationRepo.touchConversation(conversation.id);
+            await (timer ? timer.time('sql:touch_conversation_after_deliver', p) : p);
+          }
+          if (onFinalized) onFinalized(finalRow);
+        },
+        timer
+      )
+      .catch(() => {
+        /* أي استثناء غير متوقع اتلقط واتسجل جوه deliverOutgoingMediaMessage نفسها بالفعل */
+      });
+
+    return savedMessage;
+  }
 
   const insertPromise = whatsappService.createOutgoingMediaMessage(
     conversation.contact_number,
@@ -618,4 +694,11 @@ async function processStatusUpdates(value, io) {
   }
 }
 
-module.exports = { sendReply, sendReplyLive, sendMediaReplyLive, processIncomingMessages, processStatusUpdates };
+module.exports = {
+  sendReply,
+  sendReplyLive,
+  sendMediaReplyLive,
+  processIncomingMessages,
+  processStatusUpdates,
+  notifyAgentsAboutIncomingMessage,
+};

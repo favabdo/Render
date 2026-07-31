@@ -3,8 +3,23 @@
 
 const contactRepo = require('../repositories/contact.repo');
 const conversationRepo = require('../repositories/conversation.repo');
+const externalContactRepo = require('../repositories/externalContact.repo');
 const webhookDispatchService = require('./webhookDispatch.service');
 const logger = require('../utils/logger');
+
+// لو الكونتاكت القديم (اللي هيتشال بعد الدمج) كان أصلًا مربوط (ميرج) بصف
+// External_Contacts_byA (كونتاكت جاي من شات ووت مثلًا)، لازم الصف ده يتبع
+// الكونتاكت الجديد بعد الدمج بدل ما يفضل واقف على كونتاكت هيتمسح بعد شوية
+async function reassignExternalLinksAfterMerge(sourceContactId, targetContactId) {
+  try {
+    const linkedRows = await externalContactRepo.findByNileContactId(sourceContactId);
+    for (const row of linkedRows) {
+      await externalContactRepo.mergeContactToNileContact(row.id, targetContactId);
+    }
+  } catch (err) {
+    logger.error('❌ فشل نقل ربط الكونتاكت الخارجي بعد الدمج:', err.message);
+  }
+}
 
 // بيدور على الكونتاكت الحقيقي بتاع الرقم ده، ولو مش موجود بينشئه تلقائيًا باسمه اللي ظاهر
 // على واتساب (الإيجنت يقدر يغيّره بعدين براحته). بتُستخدم لما رسالة واتساب جديدة توصل.
@@ -51,6 +66,10 @@ async function linkContactToConversation(conversation, { mode, contactId, name }
 
     // لو الكونتاكت القديم بقى من غير أرقام خالص بعد النقل، امسحه عشان مايفضلش فاضي
     if (sourceContact && String(sourceContact.id) !== String(contactId)) {
+      // قبل المسح: أي صف External_Contacts_byA مرتبط بالكونتاكت القديم ده
+      // (ميرج سابق من شات ووت مثلًا) لازم يتبع الكونتاكت الجديد بدل القديم
+      await reassignExternalLinksAfterMerge(sourceContact.id, contactId);
+
       await contactRepo.deletePhonelessContact(sourceContact.id).catch((err) => {
         logger.error('❌ خطأ أثناء تنظيف الكونتاكت الفاضي:', err.message);
       });

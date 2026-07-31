@@ -13,9 +13,10 @@ import {
   Hash,
   Key,
   MessageCircle,
+  Copy,
 } from 'lucide-react';
 import { iconKeyToComponent } from '../../../utils/iconMap';
-import { inboxesApi } from '../services/settings.service';
+import { inboxesApi, chatwootApi } from '../services/settings.service';
 import useToastStore from '../../../store/toastStore';
 import { roleLabel } from '../../../utils/roles';
 
@@ -45,6 +46,13 @@ export default function InboxWizard({ onClose, onCreated }) {
   const [creating, setCreating] = useState(false);
   const [createdInbox, setCreatedInbox] = useState(null);
 
+  // حقول شات ووت (Chatwoot) — مختلفة عن حقول واتساب فوق
+  const [cwBaseUrl, setCwBaseUrl] = useState('');
+  const [cwAccountId, setCwAccountId] = useState('');
+  const [cwInboxId, setCwInboxId] = useState('');
+  const [cwToken, setCwToken] = useState('');
+  const [createdProvider, setCreatedProvider] = useState(null);
+
   const [agents, setAgents] = useState([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgentIds, setSelectedAgentIds] = useState(new Set());
@@ -61,7 +69,7 @@ export default function InboxWizard({ onClose, onCreated }) {
   }, []);
 
   useEffect(() => {
-    if (step === 3) {
+    if (step === 3 && selectedChannel !== 'chatwoot') {
       setAgentsLoading(true);
       inboxesApi
         .availableAgents()
@@ -69,7 +77,7 @@ export default function InboxWizard({ onClose, onCreated }) {
         .catch(() => setAgents([]))
         .finally(() => setAgentsLoading(false));
     }
-  }, [step]);
+  }, [step, selectedChannel]);
 
   const phoneValid = !phoneNumber || IW_PHONE_REGEX.test(phoneNumber);
 
@@ -134,16 +142,31 @@ export default function InboxWizard({ onClose, onCreated }) {
     if (step === 2) {
       setCreating(true);
       try {
-        const data = await inboxesApi.create({
-          name: inboxName.trim(),
-          channelType: 'whatsapp',
-          phoneNumber: authenticated.phoneNumber,
-          phoneNumberId: authenticated.phoneNumberId,
-          accessToken: authenticated.accessToken,
-        });
-        setCreatedInbox(data.inbox);
-        showToast(t('inboxWizard.inboxCreatedSuccess'), 'success');
-        setStep(3);
+        if (selectedChannel === 'chatwoot') {
+          const data = await chatwootApi.create({
+            name: inboxName.trim() || 'chatwoot',
+            baseUrl: cwBaseUrl.trim(),
+            accountId: cwAccountId.trim(),
+            inboxIdOnProvider: cwInboxId.trim() || undefined,
+            apiAccessToken: cwToken.trim(),
+          });
+          setCreatedProvider(data);
+          showToast(t('inboxWizard.inboxCreatedSuccess'), 'success');
+          // شات ووت مالوش مفهوم "تعيين إيجنتس على الإنبوكس" زي واتساب — بنعدي
+          // على طول لشاشة النجاح اللي فيها رابط الـ Webhook الجاهز للنسخ
+          setStep(4);
+        } else {
+          const data = await inboxesApi.create({
+            name: inboxName.trim(),
+            channelType: 'whatsapp',
+            phoneNumber: authenticated.phoneNumber,
+            phoneNumberId: authenticated.phoneNumberId,
+            accessToken: authenticated.accessToken,
+          });
+          setCreatedInbox(data.inbox);
+          showToast(t('inboxWizard.inboxCreatedSuccess'), 'success');
+          setStep(3);
+        }
       } catch (err) {
         showToast(err.response?.data?.error || t('inboxWizard.inboxCreateFailed'), 'error');
       } finally {
@@ -168,7 +191,10 @@ export default function InboxWizard({ onClose, onCreated }) {
     }
   }
 
-  const step2Valid = inboxName.trim() && phoneNumber && phoneValid && authenticated;
+  const step2Valid =
+    selectedChannel === 'chatwoot'
+      ? cwBaseUrl.trim() && cwAccountId.trim() && cwToken.trim()
+      : inboxName.trim() && phoneNumber && phoneValid && authenticated;
 
   const groupedChannels = channels.reduce((acc, c) => {
     (acc[c.group] = acc[c.group] || []).push(c);
@@ -236,7 +262,69 @@ export default function InboxWizard({ onClose, onCreated }) {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 2 && selectedChannel === 'chatwoot' && (
+            <div className="iw-panel active">
+              <div className="iw-form-row">
+                <div className="iw-form-label">{t('inboxWizard.inboxName')}</div>
+                <input
+                  type="text"
+                  className="iw-input"
+                  placeholder={t('chatwootFields.namePlaceholder')}
+                  value={inboxName}
+                  onChange={(e) => setInboxName(e.target.value)}
+                />
+              </div>
+              <div className="iw-form-row">
+                <div className="iw-form-label">{t('chatwootFields.baseUrl')}</div>
+                <input
+                  type="text"
+                  className="iw-input"
+                  placeholder={t('chatwootFields.baseUrlPlaceholder')}
+                  value={cwBaseUrl}
+                  onChange={(e) => setCwBaseUrl(e.target.value)}
+                />
+              </div>
+              <div className="iw-form-row">
+                <div className="iw-form-label">
+                  <Hash size={13} /> {t('chatwootFields.accountId')}
+                </div>
+                <input
+                  type="text"
+                  className="iw-input"
+                  placeholder={t('chatwootFields.accountIdPlaceholder')}
+                  value={cwAccountId}
+                  onChange={(e) => setCwAccountId(e.target.value)}
+                />
+              </div>
+              <div className="iw-form-row">
+                <div className="iw-form-label">
+                  <Hash size={13} /> {t('chatwootFields.inboxId')}
+                </div>
+                <input
+                  type="text"
+                  className="iw-input"
+                  placeholder={t('chatwootFields.inboxIdPlaceholder')}
+                  value={cwInboxId}
+                  onChange={(e) => setCwInboxId(e.target.value)}
+                />
+              </div>
+              <div className="iw-form-row">
+                <div className="iw-form-label">
+                  <Key size={13} /> {t('chatwootFields.token')}
+                </div>
+                <input
+                  type="password"
+                  className="iw-input"
+                  placeholder={t('chatwootFields.tokenPlaceholder')}
+                  value={cwToken}
+                  onChange={(e) => setCwToken(e.target.value)}
+                />
+                <div className="iw-form-hint">{t('chatwootFields.tokenHint')}</div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && selectedChannel !== 'chatwoot' && (
             <div className="iw-panel active">
               <div className="iw-form-row">
                 <div className="iw-form-label">{t('inboxWizard.apiProvider')}</div>
@@ -355,7 +443,9 @@ export default function InboxWizard({ onClose, onCreated }) {
                   <PartyPopper size={34} />
                 </div>
                 <div className="iw-success-title">{t('inboxWizard.successTitle')}</div>
-                <div className="iw-success-desc">{t('inboxWizard.successDesc')}</div>
+                <div className="iw-success-desc">
+                  {selectedChannel === 'chatwoot' ? t('chatwootFields.successDesc') : t('inboxWizard.successDesc')}
+                </div>
                 {createdInbox && (
                   <div className="iw-success-card">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -369,16 +459,52 @@ export default function InboxWizard({ onClose, onCreated }) {
                     <div>{t('inboxWizard.agentsAdded')} {selectedAgentIds.size}</div>
                   </div>
                 )}
+                {createdProvider && (
+                  <div className="iw-success-card" style={{ textAlign: 'start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                      <MessageCircle size={16} color="var(--success)" />
+                      <b>{createdProvider.provider?.name}</b>
+                    </div>
+                    <div className="iw-form-label" style={{ marginBottom: 6 }}>{t('chatwootFields.webhookUrlLabel')}</div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 11.5,
+                        background: 'rgba(0,0,0,0.05)',
+                        borderRadius: 8,
+                        padding: '8px 10px',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      <span style={{ flex: 1 }}>{createdProvider.webhookUrl}</span>
+                      <button
+                        className="st-icon-btn"
+                        title={t('chatwootFields.copyUrl')}
+                        onClick={() =>
+                          navigator.clipboard
+                            .writeText(createdProvider.webhookUrl)
+                            .then(() => showToast(t('chatwootFields.urlCopied'), 'success'))
+                        }
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                    <div className="iw-form-hint" style={{ marginTop: 8 }}>{t('chatwootFields.pasteHint')}</div>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
+
         <div className="iw-foot">
           <button
             className="iw-btn iw-btn-ghost"
             style={{ visibility: step === 1 ? 'hidden' : 'visible' }}
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
+            onClick={() => setStep((s) => (selectedChannel === 'chatwoot' && s === 4 ? 2 : Math.max(1, s - 1)))}
           >
             <ArrowRight size={14} /> {t('inboxWizard.back')}
           </button>

@@ -1331,6 +1331,201 @@ async function ensureNotificationsTableExists() {
   logger.info('✅ جدول الإشعارات (Notifications) جاهز.');
 }
 
+// ===== External Provider Bridge (تكامل شات ووت وأي مصدر خارجي مستقبلًا) =====
+// كل الجداول دي جديدة بالكامل، صفر تعديل على أي جدول أو عمود موجود في نايل
+// شات. الربط بالموجود بيتم بس عن طريق FK بيقرا (REFERENCES) من الجداول القديمة،
+// مفيش ولا ALTER TABLE واحد على حاجة قديمة. عمود nile_contact_id/nile_user_id/
+// nile_conversation_id بيفضل NULL افتراضيًا لكل صف جديد جاي من الخارج — وبيتحدد
+// بس لما حد يعمل "ميرج" صريح (لعميل أو لإيجنت) لحد موجود بالفعل في نايل شات
+// (شوف mergeContactToNileContact/mergeAgentToNileUser في الـ repos بتاعتهم).
+async function ensureExternalProviderTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'External_Provider_byA')
+    BEGIN
+      CREATE TABLE [dbo].[External_Provider_byA] (
+        id                     BIGINT IDENTITY(1,1) PRIMARY KEY,
+        name                   NVARCHAR(100)  NOT NULL,
+        company_id             BIGINT         NOT NULL,
+        base_url               NVARCHAR(500)  NOT NULL,
+        account_id             NVARCHAR(100)  NOT NULL,
+        inbox_id_on_provider   NVARCHAR(100)  NULL,
+        api_access_token       NVARCHAR(500)  NOT NULL,
+        webhook_secret         NVARCHAR(200)  NULL,
+        is_active              BIT            NOT NULL DEFAULT 1,
+        created_at             DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+
+        CONSTRAINT FK_ExternalProvider_Company
+          FOREIGN KEY (company_id) REFERENCES [dbo].[NileChat_Companies_byA](id)
+      );
+      CREATE INDEX IX_ExternalProvider_byA_company_id
+        ON [dbo].[External_Provider_byA](company_id);
+    END
+  `);
+  logger.info('✅ جدول External_Provider_byA جاهز.');
+}
+
+async function ensureExternalAgentTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'External_Agent_byA')
+    BEGIN
+      CREATE TABLE [dbo].[External_Agent_byA] (
+        id                   BIGINT IDENTITY(1,1) PRIMARY KEY,
+        provider_id          BIGINT         NOT NULL,
+        external_agent_id    NVARCHAR(100)  NOT NULL,
+        nile_user_id         BIGINT         NULL,
+        name                 NVARCHAR(200)  NULL,
+        created_at           DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+
+        CONSTRAINT FK_ExternalAgent_Provider
+          FOREIGN KEY (provider_id) REFERENCES [dbo].[External_Provider_byA](id),
+        CONSTRAINT FK_ExternalAgent_NileUser
+          FOREIGN KEY (nile_user_id) REFERENCES [dbo].[NileChat_Users_byA](id),
+        CONSTRAINT UQ_ExternalAgent_ProviderExternalId
+          UNIQUE (provider_id, external_agent_id)
+      );
+    END
+  `);
+  logger.info('✅ جدول External_Agent_byA جاهز.');
+}
+
+async function ensureExternalAgentTokenColumn() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.External_Agent_byA') AND name = 'agent_api_access_token'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[External_Agent_byA] ADD agent_api_access_token NVARCHAR(500) NULL;
+    END
+  `);
+  logger.info('✅ عمود agent_api_access_token على External_Agent_byA جاهز.');
+}
+
+async function ensureExternalContactsTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'External_Contacts_byA')
+    BEGIN
+      CREATE TABLE [dbo].[External_Contacts_byA] (
+        id                     BIGINT IDENTITY(1,1) PRIMARY KEY,
+        provider_id            BIGINT         NOT NULL,
+        external_contact_id    NVARCHAR(100)  NOT NULL,
+        nile_contact_id        BIGINT         NULL,
+        name                   NVARCHAR(200)  NULL,
+        phone                  NVARCHAR(50)   NULL,
+        raw_json               NVARCHAR(MAX)  NULL,
+        created_at             DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+        updated_at             DATETIME2      NULL,
+
+        CONSTRAINT FK_ExternalContacts_Provider
+          FOREIGN KEY (provider_id) REFERENCES [dbo].[External_Provider_byA](id),
+        CONSTRAINT FK_ExternalContacts_NileContact
+          FOREIGN KEY (nile_contact_id) REFERENCES [dbo].[NileChat_Contacts_byA](id),
+        CONSTRAINT UQ_ExternalContacts_ProviderExternalId
+          UNIQUE (provider_id, external_contact_id)
+      );
+      CREATE INDEX IX_ExternalContacts_byA_phone
+        ON [dbo].[External_Contacts_byA](phone);
+    END
+  `);
+  logger.info('✅ جدول External_Contacts_byA جاهز.');
+}
+
+async function ensureExternalConversationTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'External_Conversation_byA')
+    BEGIN
+      CREATE TABLE [dbo].[External_Conversation_byA] (
+        id                         BIGINT IDENTITY(1,1) PRIMARY KEY,
+        provider_id                BIGINT         NOT NULL,
+        external_conversation_id   NVARCHAR(100)  NOT NULL,
+        nile_conversation_id       BIGINT         NULL,
+        external_contact_row_id    BIGINT         NULL,
+        status                     NVARCHAR(50)   NULL,
+        raw_json                   NVARCHAR(MAX)  NULL,
+        created_at                 DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+        updated_at                 DATETIME2      NULL,
+
+        CONSTRAINT FK_ExternalConversation_Provider
+          FOREIGN KEY (provider_id) REFERENCES [dbo].[External_Provider_byA](id),
+        CONSTRAINT FK_ExternalConversation_NileConversation
+          FOREIGN KEY (nile_conversation_id) REFERENCES [dbo].[NileChat_Conversations_byA](id),
+        CONSTRAINT FK_ExternalConversation_ExternalContact
+          FOREIGN KEY (external_contact_row_id) REFERENCES [dbo].[External_Contacts_byA](id),
+        CONSTRAINT UQ_ExternalConversation_ProviderExternalId
+          UNIQUE (provider_id, external_conversation_id)
+      );
+    END
+  `);
+  logger.info('✅ جدول External_Conversation_byA جاهز.');
+}
+
+async function ensureExternalEventTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'External_Event_byA')
+    BEGIN
+      CREATE TABLE [dbo].[External_Event_byA] (
+        id                   BIGINT IDENTITY(1,1) PRIMARY KEY,
+        provider_id          BIGINT         NOT NULL,
+        event_type           NVARCHAR(100)  NOT NULL,
+        external_event_id    NVARCHAR(200)  NULL,
+        payload              NVARCHAR(MAX)  NOT NULL,
+        status               NVARCHAR(20)   NOT NULL DEFAULT 'pending',
+        retry_count          INT            NOT NULL DEFAULT 0,
+        error_message        NVARCHAR(MAX)  NULL,
+        created_at           DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
+        processed_at         DATETIME2      NULL,
+
+        CONSTRAINT FK_ExternalEvent_Provider
+          FOREIGN KEY (provider_id) REFERENCES [dbo].[External_Provider_byA](id)
+      );
+      CREATE UNIQUE INDEX UQ_ExternalEvent_ProviderExternalId
+        ON [dbo].[External_Event_byA](provider_id, external_event_id)
+        WHERE external_event_id IS NOT NULL;
+      CREATE INDEX IX_ExternalEvent_byA_status
+        ON [dbo].[External_Event_byA](status);
+    END
+  `);
+  logger.info('✅ جدول External_Event_byA جاهز.');
+}
+
+async function ensureExternalMessagesTableExists() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'External_Messages_byA')
+    BEGIN
+      CREATE TABLE [dbo].[External_Messages_byA] (
+        id                            BIGINT IDENTITY(1,1) PRIMARY KEY,
+        provider_id                    BIGINT         NOT NULL,
+        external_message_id            NVARCHAR(100)  NOT NULL,
+        external_conversation_row_id   BIGINT         NOT NULL,
+        nile_message_id                 BIGINT        NULL,
+        direction                       NVARCHAR(10)  NOT NULL,
+        message_type                    NVARCHAR(30)  NULL,
+        raw_json                        NVARCHAR(MAX) NULL,
+        created_at                      DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+
+        CONSTRAINT FK_ExternalMessages_Provider
+          FOREIGN KEY (provider_id) REFERENCES [dbo].[External_Provider_byA](id),
+        CONSTRAINT FK_ExternalMessages_ExternalConversation
+          FOREIGN KEY (external_conversation_row_id) REFERENCES [dbo].[External_Conversation_byA](id),
+        CONSTRAINT UQ_ExternalMessages_ProviderExternalId
+          UNIQUE (provider_id, external_message_id)
+        -- مفيش FK على nile_message_id لإن اسم جدول الرسايل نفسه ديناميكي (من
+        -- env.DB_TABLE_NAME)، الربط بيتعمل على مستوى الـ repository في الكود
+      );
+      CREATE INDEX IX_ExternalMessages_byA_nile_message_id
+        ON [dbo].[External_Messages_byA](nile_message_id);
+    END
+  `);
+  logger.info('✅ جدول External_Messages_byA جاهز.');
+}
+
 // ===== Multi-company: كل جدول بيانات رئيسي بيتربط بـ company_id بتاع الشركة
 // اللي بيمتلك الصف ده. الهدف: كل بيانات كل شركة تفضل معزولة تمامًا عن أي
 // شركة تانية بمجرد ما كل استعلام (SELECT/INSERT/UPDATE) في الـ repositories
@@ -1493,6 +1688,17 @@ async function ensureSchema() {
   // من غير باك فيل تلقائي بطلب المستخدم — العمود بيتضاف بس فاضي (NULL)، وهو
   // اللي هيملاه بنفسه يدوي. الدالة ensureExistingRowsHaveCompanyAssigned لسه
   // موجودة تحت ومصدّرة لو حبيت تستخدمها بنفسك بعدين وقت ما تحب.
+
+  // External Provider Bridge (شات ووت وأي مصدر خارجي مستقبلًا) — جداول جديدة
+  // بالكامل، بيتم إنشاؤها مرة واحدة بس (أول ديبلوي)؛ أي ديبلوي بعد كده الـ
+  // IF NOT EXISTS بيلاقيها موجودة خلاص فمش بيعمل حاجة، نفس فلسفة باقي الجداول فوق
+  await ensureExternalProviderTableExists();
+  await ensureExternalAgentTableExists();
+  await ensureExternalAgentTokenColumn();
+  await ensureExternalContactsTableExists();
+  await ensureExternalConversationTableExists();
+  await ensureExternalEventTableExists();
+  await ensureExternalMessagesTableExists();
 }
 
 module.exports = {
@@ -1543,6 +1749,13 @@ module.exports = {
   ensureNotificationsTableExists,
   ensureCompanyIdColumns,
   ensureExistingRowsHaveCompanyAssigned,
+  ensureExternalProviderTableExists,
+  ensureExternalAgentTableExists,
+  ensureExternalAgentTokenColumn,
+  ensureExternalContactsTableExists,
+  ensureExternalConversationTableExists,
+  ensureExternalEventTableExists,
+  ensureExternalMessagesTableExists,
   ensureSchema,
   TABLE_NAME,
 };

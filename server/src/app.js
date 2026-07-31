@@ -8,6 +8,7 @@ const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 
 const webhookRoutes = require('./routes/webhook.routes');
+const chatwootWebhookRoutes = require('./routes/chatwootWebhook.routes');
 const authRoutes = require('./routes/auth.routes');
 const conversationsRoutes = require('./routes/conversations.routes');
 const inboxesRoutes = require('./routes/inboxes.routes');
@@ -23,6 +24,7 @@ const companyRoutes = require('./routes/company.routes');
 const teamsRoutes = require('./routes/teams.routes');
 const webhookConfigRoutes = require('./routes/webhookConfig.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const externalProviderRoutes = require('./routes/externalProvider.routes');
 
 const app = express();
 
@@ -89,6 +91,8 @@ app.use(async (req, res, next) => {
 
 // الـ webhook بتاع واتساب (من غير auth - بتاع ميتا)
 app.use('/', webhookRoutes);
+// الـ webhook بتاع شات ووت (من غير auth برضه - الحماية بالـ providerId+secret في الـ path)
+app.use('/', chatwootWebhookRoutes);
 
 // تسجيل الدخول + إنشاء أول موظف + البروفايل الشخصي + إدارة المستخدمين
 app.use('/', authRoutes);
@@ -122,6 +126,7 @@ app.use('/', companyRoutes);
 app.use('/', teamsRoutes);
 app.use('/', webhookConfigRoutes);
 app.use('/', notificationRoutes);
+app.use('/', externalProviderRoutes);
 
 // أي Error يوصل هنا (عن طريق asyncHandler أو next(err)) بيتحول لرد JSON موحد
 app.use(errorHandler);
