@@ -41,18 +41,25 @@ async function findOrCreateAgent(providerId, externalAgentId, name) {
 // إجراء واعي (زرار "ربط بإيجنت موجود" في الواجهة)، مش بيحصل تلقائي أبدًا.
 // agentApiAccessToken اختياري: التوكن الشخصي بتاع الإيجنت نفسه في شات ووت —
 // من غيره، أي رد يتبعت من نايل شات هيظهر في شات ووت باسم صاحب توكن الاتصال
-// العام (Provider)، مش باسم الإيجنت الحقيقي اللي رد فعليًا
-async function mergeAgentToNileUser(externalAgentRowId, nileUserId, agentApiAccessToken) {
+// العام (Provider)، مش باسم الإيجنت الحقيقي اللي رد فعليًا.
+// agentEmail/agentPassword اختياريين برضه: بديل التوكن — إيميل وباسورد
+// الإيجنت في شات ووت، عشان نظام الإرسال يقدر يجيب/يجدد التوكن الشخصي
+// تلقائيًا من غيرهم (chatwoot.service.js -> loginAndFetchToken)
+async function mergeAgentToNileUser(externalAgentRowId, nileUserId, agentApiAccessToken, agentEmail, agentPassword) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('id', sql.BigInt, externalAgentRowId)
     .input('nileUserId', sql.BigInt, nileUserId)
     .input('token', sql.NVarChar(500), agentApiAccessToken || null)
+    .input('email', sql.NVarChar(200), agentEmail || null)
+    .input('password', sql.NVarChar(500), agentPassword || null)
     .query(`
       UPDATE [dbo].[External_Agent_byA]
       SET nile_user_id = @nileUserId,
-          agent_api_access_token = COALESCE(@token, agent_api_access_token)
+          agent_api_access_token = COALESCE(@token, agent_api_access_token),
+          agent_email = COALESCE(@email, agent_email),
+          agent_password = COALESCE(@password, agent_password)
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
@@ -68,6 +75,25 @@ async function setAgentPersonalToken(externalAgentRowId, agentApiAccessToken) {
     .input('token', sql.NVarChar(500), agentApiAccessToken || null)
     .query(`
       UPDATE [dbo].[External_Agent_byA] SET agent_api_access_token = @token
+      OUTPUT INSERTED.*
+      WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+// بيحدّث إيميل/باسورد الإيجنت الشخصيين (بديل التوكن) — من غير ما يمسح
+// التوكن الحالي (لو موجود) ولا يمس الميرج نفسه
+async function setAgentCredentials(externalAgentRowId, agentEmail, agentPassword) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, externalAgentRowId)
+    .input('email', sql.NVarChar(200), agentEmail || null)
+    .input('password', sql.NVarChar(500), agentPassword || null)
+    .query(`
+      UPDATE [dbo].[External_Agent_byA]
+      SET agent_email = COALESCE(@email, agent_email),
+          agent_password = COALESCE(@password, agent_password)
       OUTPUT INSERTED.*
       WHERE id = @id
     `);
@@ -179,6 +205,7 @@ module.exports = {
   listUnmerged,
   listAll,
   setAgentPersonalToken,
+  setAgentCredentials,
   findByNileUserId,
   syncAgentsFromList,
 };

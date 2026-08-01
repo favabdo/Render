@@ -9,6 +9,7 @@ const externalAgentRepo = require('../repositories/externalAgent.repo');
 const chatwootService = require('../services/chatwoot.service');
 const contactRepo = require('../repositories/contact.repo');
 const userRepo = require('../repositories/user.repo');
+const logger = require('../utils/logger');
 
 // بيتأكد إن المزود بتاع الصف ده هو فعلاً مزود شركة الإداري الحالي
 async function assertProviderOwnedByCompany(providerId, companyId) {
@@ -80,7 +81,7 @@ async function listAllAgents(req, res) {
 }
 
 async function mergeAgent(req, res) {
-  const { nileUserId, agentApiAccessToken } = req.body || {};
+  const { nileUserId, agentApiAccessToken, agentEmail, agentPassword } = req.body || {};
   if (!nileUserId) return res.status(400).json({ error: 'لازم تبعت nileUserId' });
 
   const row = await externalAgentRepo.getById(req.params.id);
@@ -95,21 +96,53 @@ async function mergeAgent(req, res) {
     return res.status(403).json({ error: 'اليوزر ده تابع شركة تانية' });
   }
 
-  const updated = await externalAgentRepo.mergeAgentToNileUser(row.id, nileUserId, agentApiAccessToken);
+  // لو الإداري بعت إيميل وباسورد الإيجنت في شات ووت بدل التوكن، نجيب التوكن
+  // الدائم بتاعه دلوقتي تلقائيًا (بدل ما يحتاج يفتح شات ووت وينسخه يدويًا).
+  // لو التسجيل فشل (بيانات غلط)، الميرج نفسه بيكمل عادي — بس هيتبعت بتوكن
+  // الاتصال العام لحد ما الإيميل/الباسورد يتصلحوا (نظام الإرسال هيحاول يجدد
+  // تلقائيًا في كل مرة بعدين برضه، شوف chatwoot.service.js)
+  let finalToken = agentApiAccessToken || null;
+  if (!finalToken && agentEmail && agentPassword) {
+    try {
+      finalToken = await chatwootService.loginAndFetchToken(provider.base_url, agentEmail, agentPassword);
+    } catch (err) {
+      logger.error(`❌ فشل تسجيل دخول الإيجنت بالإيميل/الباسورد وقت الميرج: ${err.message}`);
+    }
+  }
+
+  const updated = await externalAgentRepo.mergeAgentToNileUser(row.id, nileUserId, finalToken, agentEmail, agentPassword);
   res.json({ ok: true, externalAgent: updated });
 }
 
 // بيحدّث/يمسح توكن الإيجنت الشخصي لوحده من غير ما يمس الميرج نفسه — لو حصل
 // الميرج قبل كده من غير توكن، أو الإيجنت غيّر التوكن بتاعه في شات ووت
 async function setAgentToken(req, res) {
-  const { agentApiAccessToken } = req.body || {};
+  const { agentApiAccessToken, agentEmail, agentPassword, refreshTokenNow } = req.body || {};
   const row = await externalAgentRepo.getById(req.params.id);
   if (!row) return res.status(404).json({ error: 'الإيجنت الخارجي ده مش موجود' });
 
   const provider = await assertProviderOwnedByCompany(row.provider_id, req.companyId);
   if (!provider) return res.status(403).json({ error: 'مالكش صلاحية على المزود ده' });
 
-  const updated = await externalAgentRepo.setAgentPersonalToken(row.id, agentApiAccessToken || null);
+  // لو الإداري بعت إيميل وباسورد الإيجنت (أو ضغط "جدد التوكن دلوقتي")، نجيب
+  // توكن دائم جديد بتسجيل الدخول بيهم بدل النسخ اليدوي
+  let finalToken = agentApiAccessToken || null;
+  if (!finalToken && (refreshTokenNow || (agentEmail && agentPassword))) {
+    const emailToUse = agentEmail || row.agent_email;
+    const passwordToUse = agentPassword || row.agent_password;
+    if (emailToUse && passwordToUse) {
+      try {
+        finalToken = await chatwootService.loginAndFetchToken(provider.base_url, emailToUse, passwordToUse);
+      } catch (err) {
+        return res.status(400).json({ error: `فشل تسجيل الدخول بالإيميل والباسورد: ${err.message}` });
+      }
+    }
+  }
+
+  if (agentEmail || agentPassword) {
+    await externalAgentRepo.setAgentCredentials(row.id, agentEmail, agentPassword);
+  }
+  const updated = await externalAgentRepo.setAgentPersonalToken(row.id, finalToken);
   res.json({ ok: true, externalAgent: updated });
 }
 

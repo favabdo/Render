@@ -43,7 +43,9 @@ async function findByNileConversationIdWithProvider(nileConversationId) {
         p.account_id AS provider_account_id,
         p.api_access_token AS provider_api_access_token,
         p.is_active AS provider_is_active,
-        p.name AS provider_name
+        p.name AS provider_name,
+        p.login_email AS provider_login_email,
+        p.login_password AS provider_login_password
       FROM [dbo].[External_Conversation_byA] ec
       JOIN [dbo].[External_Provider_byA] p ON p.id = ec.provider_id
       WHERE ec.nile_conversation_id = @nileConversationId

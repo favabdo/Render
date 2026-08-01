@@ -125,7 +125,10 @@ function AgentRow({ row, agents, onChanged }) {
   const { t } = useTranslation('settings');
   const showToast = useToastStore((s) => s.showToast);
   const [selected, setSelected] = useState('');
+  const [credMode, setCredMode] = useState('login'); // 'login' (إيميل/باسورد) أو 'token' (توكن يدوي)
   const [personalToken, setPersonalToken] = useState('');
+  const [agentEmail, setAgentEmail] = useState('');
+  const [agentPassword, setAgentPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   const linkedAgent = row.nile_user_id ? agents.find((a) => String(a.id) === String(row.nile_user_id)) : null;
@@ -134,7 +137,13 @@ function AgentRow({ row, agents, onChanged }) {
     if (!selected) return;
     setBusy(true);
     try {
-      const data = await chatwootMergeApi.mergeAgent(row.id, selected, personalToken.trim() || undefined);
+      const data = await chatwootMergeApi.mergeAgent(
+        row.id,
+        selected,
+        credMode === 'token' ? personalToken.trim() || undefined : undefined,
+        credMode === 'login' ? agentEmail.trim() || undefined : undefined,
+        credMode === 'login' ? agentPassword || undefined : undefined
+      );
       showToast(t('chatwootModal.mergeSuccess', { name: agents.find((a) => String(a.id) === String(selected))?.display_name || '' }), 'success');
       onChanged(data.externalAgent || { ...row, nile_user_id: selected });
     } catch (err) {
@@ -186,15 +195,59 @@ function AgentRow({ row, agents, onChanged }) {
           </option>
         ))}
       </select>
-      <input
-        className="iw-input"
-        type="password"
-        placeholder={t('chatwootModal.agentTokenPlaceholder')}
-        value={personalToken}
-        onChange={(e) => setPersonalToken(e.target.value)}
-        style={{ marginBottom: 4 }}
-      />
-      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>{t('chatwootModal.agentTokenHint')}</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <button
+          type="button"
+          className={`resolve-cancel-btn${credMode === 'login' ? ' active' : ''}`}
+          style={{ flex: 1, fontSize: 11.5, padding: '5px 8px', fontWeight: credMode === 'login' ? 700 : 400 }}
+          onClick={() => setCredMode('login')}
+        >
+          {t('chatwootModal.credModeLogin')}
+        </button>
+        <button
+          type="button"
+          className={`resolve-cancel-btn${credMode === 'token' ? ' active' : ''}`}
+          style={{ flex: 1, fontSize: 11.5, padding: '5px 8px', fontWeight: credMode === 'token' ? 700 : 400 }}
+          onClick={() => setCredMode('token')}
+        >
+          {t('chatwootModal.credModeToken')}
+        </button>
+      </div>
+
+      {credMode === 'login' ? (
+        <>
+          <input
+            className="iw-input"
+            type="email"
+            placeholder={t('chatwootModal.agentEmailPlaceholder')}
+            value={agentEmail}
+            onChange={(e) => setAgentEmail(e.target.value)}
+            style={{ marginBottom: 6 }}
+          />
+          <input
+            className="iw-input"
+            type="password"
+            placeholder={t('chatwootModal.agentPasswordPlaceholder')}
+            value={agentPassword}
+            onChange={(e) => setAgentPassword(e.target.value)}
+            style={{ marginBottom: 4 }}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>{t('chatwootModal.agentLoginHint')}</div>
+        </>
+      ) : (
+        <>
+          <input
+            className="iw-input"
+            type="password"
+            placeholder={t('chatwootModal.agentTokenPlaceholder')}
+            value={personalToken}
+            onChange={(e) => setPersonalToken(e.target.value)}
+            style={{ marginBottom: 4 }}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>{t('chatwootModal.agentTokenHint')}</div>
+        </>
+      )}
+
       <button className="resolve-confirm-btn" style={{ width: '100%' }} disabled={!selected || busy} onClick={confirm}>
         <Link2 size={13} /> {t('chatwootModal.linkAction')}
       </button>

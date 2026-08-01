@@ -9,25 +9,107 @@ const conversationRepo = require('../repositories/conversation.repo');
 const externalConversationRepo = require('../repositories/externalConversation.repo');
 const externalMessageRepo = require('../repositories/externalMessage.repo');
 const externalAgentRepo = require('../repositories/externalAgent.repo');
+const externalProviderRepo = require('../repositories/externalProvider.repo');
 const mediaStorage = require('../utils/mediaStorage');
 const logger = require('../utils/logger');
 
+// بتسجل دخول شات ووت بالإيميل والباسورد (نفس صفحة تسجيل الدخول العادية)
+// وترجع توكن الـ API الدائم بتاع صاحب الحساب ده (access_token في صفحة
+// البروفايل — بالظبط نفس التوكن اللي كان المفروض الإداري/الإيجنت ينسخه يدويًا
+// من Profile Settings). بنستخدمها بديل النسخ اليدوي للتوكن، وكمان لتجديده
+// تلقائيًا لو باظ أو اتغيّر من غير ما حد يعرف
+async function loginAndFetchToken(baseUrl, email, password) {
+  if (!baseUrl || !email || !password) {
+    throw new Error('لازم رابط شات ووت والإيميل والباسورد الثلاثة عشان نجيب التوكن');
+  }
+  const root = baseUrl.replace(/\/+$/, '');
+
+  let signInRes;
+  try {
+    signInRes = await axios.post(
+      `${root}/auth/sign_in`,
+      { email, password },
+      { timeout: 15000, validateStatus: () => true }
+    );
+  } catch (err) {
+    throw new Error(`فشل الاتصال بشات ووت لتسجيل الدخول (${root}): ${err.message}`);
+  }
+
+  const authToken = signInRes.headers?.['access-token'];
+  if (signInRes.status !== 200 || !authToken) {
+    throw new Error(
+      signInRes.data?.message || signInRes.data?.errors?.[0] || 'فشل تسجيل الدخول بالإيميل والباسورد — تأكد إنهم صح'
+    );
+  }
+
+  const sessionHeaders = {
+    'access-token': authToken,
+    client: signInRes.headers['client'],
+    uid: signInRes.headers['uid'],
+  };
+
+  const profileRes = await axios.get(`${root}/api/v1/profile`, {
+    headers: sessionHeaders,
+    timeout: 15000,
+  });
+
+  const permanentToken = profileRes.data?.access_token;
+  if (!permanentToken) {
+    throw new Error('اتسجل الدخول بنجاح بس مفيش access_token في بيانات البروفايل — راجع نسخة شات ووت');
+  }
+  return permanentToken;
+}
+
 // بيدوّر على توكن شخصي بتاع الإيجنت اللي بعت الرد ده (لو نايل شات عارف مين
-// بعت، ولو الإيجنت ده اتعمله ميرج بتوكن شخصي). لو مفيش، بيرجع توكن الاتصال
-// العام بتاع الـ Provider بدل ما يفشل — عشان الرد يتبعت في كل الأحوال، بس
-// الاسم اللي هيظهر في شات ووت هيبقى صاحب التوكن العام مش الإيجنت الحقيقي
-async function resolveSendingToken(providerId, fallbackToken, senderId) {
+// بعت، ولو الإيجنت ده اتعمله ميرج بتوكن شخصي أو بإيميل/باسورد). لو مفيش،
+// بيرجع توكن الاتصال العام بتاع الـ Provider بدل ما يفشل — عشان الرد يتبعت
+// في كل الأحوال، بس الاسم اللي هيظهر في شات ووت هيبقى صاحب التوكن العام مش
+// الإيجنت الحقيقي.
+// كل نتيجة بترجع معاها refreshToken(): دالة لو التوكن الحالي باظ (401)،
+// ممكن نستخدمها عشان نسجل دخول بالإيميل/الباسورد المخزنين ونجيب توكن جديد
+// ونحفظه، بدل ما نسيب الرسالة تفشل نهائي
+async function resolveSendingToken(provider, senderId) {
+  let agentRow = null;
   if (senderId) {
     try {
-      const agentRow = await externalAgentRepo.findByNileUserId(providerId, senderId);
-      if (agentRow?.agent_api_access_token) {
-        return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})` };
-      }
+      agentRow = await externalAgentRepo.findByNileUserId(provider.id, senderId);
     } catch (err) {
-      logger.error('❌ فشل تحديد توكن الإيجنت الشخصي، هيتبعت بتوكن الاتصال العام:', err.message);
+      logger.error('❌ فشل تحديد الإيجنت الشخصي، هيتبعت بتوكن الاتصال العام:', err.message);
     }
   }
-  return { token: fallbackToken, source: 'provider-default' };
+
+  if (agentRow?.agent_email && agentRow?.agent_password) {
+    const refreshToken = async () => {
+      const fresh = await loginAndFetchToken(provider.base_url, agentRow.agent_email, agentRow.agent_password);
+      await externalAgentRepo.setAgentPersonalToken(agentRow.id, fresh);
+      return fresh;
+    };
+    if (agentRow.agent_api_access_token) {
+      return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})`, refreshToken };
+    }
+    // مفيش توكن مخزن لسه (أول مرة) — نجيبه دلوقتي بالإيميل والباسورد
+    try {
+      const fresh = await refreshToken();
+      return { token: fresh, source: `agent-personal-auto (#${agentRow.id})`, refreshToken };
+    } catch (err) {
+      logger.error(`❌ فشل جلب توكن الإيجنت #${agentRow.id} بالإيميل/الباسورد:`, err.message);
+    }
+  }
+
+  if (agentRow?.agent_api_access_token) {
+    return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})`, refreshToken: null };
+  }
+
+  const providerRefresh =
+    provider.login_email && provider.login_password
+      ? async () => {
+          const fresh = await loginAndFetchToken(provider.base_url, provider.login_email, provider.login_password);
+          await externalProviderRepo.updateProvider(provider.id, { apiAccessToken: fresh });
+          return fresh;
+        }
+      : null;
+
+  return { token: provider.api_access_token, source: 'provider-default', refreshToken: providerRefresh };
 }
 
 // بيجيب قايمة إيجنتس الحساب كلها من شات ووت — مستخدمة في "مزامنة الإيجنتس"
@@ -40,6 +122,28 @@ async function fetchAgents(provider) {
     timeout: 15000,
   });
   return Array.isArray(response.data?.payload) ? response.data.payload : response.data || [];
+}
+
+// بتحاول تبعت الطلب بالتوكن الحالي، ولو شات ووت رفضه بـ 401/403 (توكن باظ
+// أو اتغيّر) وعندنا طريقة نجدده بيها (تسجيل دخول بالإيميل/الباسورد المخزنين
+// من resolveSendingToken)، بتجدده تلقائيًا وتحاول تبعت تاني مرة واحدة بس —
+// عشان الرد يوصل من غير ما حد يحتاج يدخل يحدّث التوكن يدويًا
+async function sendWithAutoRefresh(sendFn, tokenInfo) {
+  try {
+    return await sendFn(tokenInfo.token);
+  } catch (err) {
+    const status = err.response?.status;
+    if ((status === 401 || status === 403) && tokenInfo.refreshToken) {
+      logger.error(
+        `⚠️ توكن شات ووت (${tokenInfo.source}) مرفوض (HTTP ${status}) — جارٍ تجديده تلقائيًا بالإيميل/الباسورد المخزنين...`
+      );
+      const freshToken = await tokenInfo.refreshToken();
+      tokenInfo.token = freshToken;
+      tokenInfo.source = `${tokenInfo.source} (متجدد تلقائيًا)`;
+      return await sendFn(freshToken);
+    }
+    throw err;
+  }
 }
 
 // مرحلة 1: تسجيل الرسالة فورًا في جدول الرسايل العادي (بتظهر للإيجنت على طول
@@ -74,15 +178,25 @@ async function deliverOutgoingMessage(savedMessage, { conversationId, text, send
     }
 
     url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
-    tokenInfo = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
-
-    const sendPromise = axios.post(
-      url,
-      { content: text, message_type: 'outgoing', private: false },
-      { headers: { api_access_token: tokenInfo.token }, timeout: 15000 }
+    tokenInfo = await resolveSendingToken(
+      {
+        id: externalConversation.provider_id,
+        base_url: externalConversation.provider_base_url,
+        api_access_token: externalConversation.provider_api_access_token,
+        login_email: externalConversation.provider_login_email,
+        login_password: externalConversation.provider_login_password,
+      },
+      sender?.id
     );
 
-    const response = await (timer ? timer.time('http:chatwoot_send_message', sendPromise) : sendPromise);
+    const response = await sendWithAutoRefresh((token) => {
+      const sendPromise = axios.post(
+        url,
+        { content: text, message_type: 'outgoing', private: false },
+        { headers: { api_access_token: token }, timeout: 15000 }
+      );
+      return timer ? timer.time('http:chatwoot_send_message', sendPromise) : sendPromise;
+    }, tokenInfo);
     const chatwootMessageId = response.data?.id;
 
     finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, {
@@ -181,14 +295,36 @@ async function deliverOutgoingMediaMessage(savedMessage, { conversationId, buffe
     if (caption) form.append('content', caption);
     form.append('attachments[]', new Blob([buffer], { type: mimeType || 'application/octet-stream' }), fileName || 'file');
 
-    const tokenInfo = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
-    const sendPromise = fetch(url, {
-      method: 'POST',
-      headers: { api_access_token: tokenInfo.token },
-      body: form,
-    });
+    const tokenInfo = await resolveSendingToken(
+      {
+        id: externalConversation.provider_id,
+        base_url: externalConversation.provider_base_url,
+        api_access_token: externalConversation.provider_api_access_token,
+        login_email: externalConversation.provider_login_email,
+        login_password: externalConversation.provider_login_password,
+      },
+      sender?.id
+    );
 
-    const response = await (timer ? timer.time('http:chatwoot_send_media', sendPromise) : sendPromise);
+    const doUpload = (token) => {
+      const sendPromise = fetch(url, {
+        method: 'POST',
+        headers: { api_access_token: token },
+        body: form,
+      });
+      return timer ? timer.time('http:chatwoot_send_media', sendPromise) : sendPromise;
+    };
+
+    let response = await doUpload(tokenInfo.token);
+    if ((response.status === 401 || response.status === 403) && tokenInfo.refreshToken) {
+      logger.error(
+        `⚠️ توكن شات ووت (${tokenInfo.source}) مرفوض (HTTP ${response.status}) — جارٍ تجديده تلقائيًا بالإيميل/الباسورد المخزنين...`
+      );
+      const freshToken = await tokenInfo.refreshToken();
+      tokenInfo.token = freshToken;
+      tokenInfo.source = `${tokenInfo.source} (متجدد تلقائيًا)`;
+      response = await doUpload(freshToken);
+    }
     if (!response.ok) {
       throw new Error(`Chatwoot رفض رفع الملف — HTTP ${response.status} — التوكن المستخدم: ${tokenInfo.source}`);
     }
@@ -224,4 +360,5 @@ module.exports = {
   createOutgoingMediaMessage,
   deliverOutgoingMediaMessage,
   fetchAgents,
+  loginAndFetchToken,
 };

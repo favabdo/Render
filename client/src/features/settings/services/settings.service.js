@@ -66,8 +66,13 @@ export const chatwootMergeApi = {
   unmergedAgents: (providerId) => apiClient.get(`/api/external-providers/${providerId}/unmerged-agents`).then((r) => r.data),
   allAgents: (providerId) => apiClient.get(`/api/external-providers/${providerId}/agents`).then((r) => r.data),
   syncAgents: (providerId) => apiClient.post(`/api/external-providers/${providerId}/sync-agents`).then((r) => r.data),
-  mergeAgent: (id, nileUserId, agentApiAccessToken) =>
-    apiClient.post(`/api/external-agents/${id}/merge`, { nileUserId, agentApiAccessToken }).then((r) => r.data),
+  mergeAgent: (id, nileUserId, agentApiAccessToken, agentEmail, agentPassword) =>
+    apiClient
+      .post(`/api/external-agents/${id}/merge`, { nileUserId, agentApiAccessToken, agentEmail, agentPassword })
+      .then((r) => r.data),
   unmergeAgent: (id) => apiClient.post(`/api/external-agents/${id}/unmerge`).then((r) => r.data),
-  setAgentToken: (id, agentApiAccessToken) => apiClient.patch(`/api/external-agents/${id}/token`, { agentApiAccessToken }).then((r) => r.data),
+  setAgentToken: (id, { agentApiAccessToken, agentEmail, agentPassword, refreshTokenNow } = {}) =>
+    apiClient
+      .patch(`/api/external-agents/${id}/token`, { agentApiAccessToken, agentEmail, agentPassword, refreshTokenNow })
+      .then((r) => r.data),
 };

@@ -16,7 +16,10 @@ function ChatwootEditModal({ provider, onClose, onSaved }) {
   const [accountId, setAccountId] = useState(provider.account_id || '');
   const [inboxIdOnProvider, setInboxIdOnProvider] = useState(provider.inbox_id_on_provider || '');
   const [apiAccessToken, setApiAccessToken] = useState('');
+  const [loginEmail, setLoginEmail] = useState(provider.login_email || '');
+  const [loginPassword, setLoginPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function save() {
     setSaving(true);
@@ -26,6 +29,8 @@ function ChatwootEditModal({ provider, onClose, onSaved }) {
         accountId: accountId.trim() || undefined,
         inboxIdOnProvider: inboxIdOnProvider.trim() || undefined,
         apiAccessToken: apiAccessToken.trim() || undefined,
+        loginEmail: loginEmail.trim() || undefined,
+        loginPassword: loginPassword || undefined,
       });
       showToast(t('chatwootModal.updateSuccess'), 'success');
       onSaved(data.provider);
@@ -34,6 +39,29 @@ function ChatwootEditModal({ provider, onClose, onSaved }) {
       showToast(err.response?.data?.error || t('chatwootModal.updateFailed'), 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // زرار "جدد التوكن دلوقتي" — بيسجل دخول شات ووت بالإيميل والباسورد
+  // (الجداد لو كتبتهم، وإلا المخزنين خلاص) ويجيب توكن جديد فورًا، من غير
+  // ما نستنى أول رسالة تفشل عشان النظام يجدده لوحده
+  async function refreshNow() {
+    setRefreshing(true);
+    try {
+      const data = await chatwootApi.update(provider.id, {
+        baseUrl: baseUrl.trim() || undefined,
+        accountId: accountId.trim() || undefined,
+        inboxIdOnProvider: inboxIdOnProvider.trim() || undefined,
+        loginEmail: loginEmail.trim() || undefined,
+        loginPassword: loginPassword || undefined,
+        refreshTokenNow: true,
+      });
+      showToast(t('chatwootModal.tokenRefreshed'), 'success');
+      onSaved(data.provider);
+    } catch (err) {
+      showToast(err.response?.data?.error || t('chatwootModal.tokenRefreshFailed'), 'error');
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -69,6 +97,32 @@ function ChatwootEditModal({ provider, onClose, onSaved }) {
           value={apiAccessToken}
           onChange={(e) => setApiAccessToken(e.target.value)}
         />
+
+        <div className="iw-form-label" style={{ marginTop: 10 }}>{t('chatwootFields.loginEmail')}</div>
+        <input
+          className="iw-input"
+          type="email"
+          placeholder={t('chatwootFields.loginEmailPlaceholder')}
+          value={loginEmail}
+          onChange={(e) => setLoginEmail(e.target.value)}
+        />
+        <div className="iw-form-label" style={{ marginTop: 6 }}>{t('chatwootFields.loginPassword')}</div>
+        <input
+          className="iw-input"
+          type="password"
+          placeholder={t('chatwootModal.tokenPlaceholderEdit')}
+          value={loginPassword}
+          onChange={(e) => setLoginPassword(e.target.value)}
+        />
+        <div className="iw-form-hint">{t('chatwootFields.loginHint')}</div>
+        <button
+          className="resolve-cancel-btn"
+          style={{ marginTop: 4 }}
+          disabled={refreshing || (!loginEmail.trim() && !provider.login_email) || (!loginPassword && !provider.login_password)}
+          onClick={refreshNow}
+        >
+          <RefreshCw size={13} /> {refreshing ? t('chatwootModal.refreshingToken') : t('chatwootModal.refreshTokenNow')}
+        </button>
       </div>
       <div className="resolve-modal-actions">
         <button className="resolve-cancel-btn" onClick={onClose}>

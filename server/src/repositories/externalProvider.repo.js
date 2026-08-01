@@ -4,7 +4,17 @@
 
 const { getPool, sql } = require('../database/connection');
 
-async function createProvider({ name, companyId, baseUrl, accountId, inboxIdOnProvider, apiAccessToken, webhookSecret }) {
+async function createProvider({
+  name,
+  companyId,
+  baseUrl,
+  accountId,
+  inboxIdOnProvider,
+  apiAccessToken,
+  webhookSecret,
+  loginEmail,
+  loginPassword,
+}) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -13,13 +23,15 @@ async function createProvider({ name, companyId, baseUrl, accountId, inboxIdOnPr
     .input('baseUrl', sql.NVarChar(500), baseUrl)
     .input('accountId', sql.NVarChar(100), accountId)
     .input('inboxId', sql.NVarChar(100), inboxIdOnProvider || null)
-    .input('token', sql.NVarChar(500), apiAccessToken)
+    .input('token', sql.NVarChar(500), apiAccessToken || null)
     .input('secret', sql.NVarChar(200), webhookSecret || null)
+    .input('loginEmail', sql.NVarChar(200), loginEmail || null)
+    .input('loginPassword', sql.NVarChar(500), loginPassword || null)
     .query(`
       INSERT INTO [dbo].[External_Provider_byA]
-        (name, company_id, base_url, account_id, inbox_id_on_provider, api_access_token, webhook_secret)
+        (name, company_id, base_url, account_id, inbox_id_on_provider, api_access_token, webhook_secret, login_email, login_password)
       OUTPUT INSERTED.*
-      VALUES (@name, @companyId, @baseUrl, @accountId, @inboxId, @token, @secret)
+      VALUES (@name, @companyId, @baseUrl, @accountId, @inboxId, @token, @secret, @loginEmail, @loginPassword)
     `);
   return result.recordset[0];
 }
@@ -53,7 +65,10 @@ async function setActive(id, isActive) {
 
 // تحديث جزئي — أي حقل مبعتوش (undefined) بيفضل زي ما هو من غير تغيير
 // (COALESCE بياخد القيمة القديمة لو الجديدة NULL)
-async function updateProvider(id, { name, baseUrl, accountId, inboxIdOnProvider, apiAccessToken, webhookSecret }) {
+async function updateProvider(
+  id,
+  { name, baseUrl, accountId, inboxIdOnProvider, apiAccessToken, webhookSecret, loginEmail, loginPassword }
+) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -64,6 +79,8 @@ async function updateProvider(id, { name, baseUrl, accountId, inboxIdOnProvider,
     .input('inboxId', sql.NVarChar(100), inboxIdOnProvider ?? null)
     .input('token', sql.NVarChar(500), apiAccessToken ?? null)
     .input('secret', sql.NVarChar(200), webhookSecret ?? null)
+    .input('loginEmail', sql.NVarChar(200), loginEmail ?? null)
+    .input('loginPassword', sql.NVarChar(500), loginPassword ?? null)
     .query(`
       UPDATE [dbo].[External_Provider_byA]
       SET name = COALESCE(@name, name),
@@ -71,7 +88,9 @@ async function updateProvider(id, { name, baseUrl, accountId, inboxIdOnProvider,
           account_id = COALESCE(@accountId, account_id),
           inbox_id_on_provider = COALESCE(@inboxId, inbox_id_on_provider),
           api_access_token = COALESCE(@token, api_access_token),
-          webhook_secret = COALESCE(@secret, webhook_secret)
+          webhook_secret = COALESCE(@secret, webhook_secret),
+          login_email = COALESCE(@loginEmail, login_email),
+          login_password = COALESCE(@loginPassword, login_password)
       OUTPUT INSERTED.*
       WHERE id = @id
     `);

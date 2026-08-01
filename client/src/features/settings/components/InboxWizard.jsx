@@ -50,7 +50,10 @@ export default function InboxWizard({ onClose, onCreated }) {
   const [cwBaseUrl, setCwBaseUrl] = useState('');
   const [cwAccountId, setCwAccountId] = useState('');
   const [cwInboxId, setCwInboxId] = useState('');
+  const [cwCredMode, setCwCredMode] = useState('login'); // 'login' (إيميل/باسورد، الافتراضي) أو 'token' (توكن يدوي)
   const [cwToken, setCwToken] = useState('');
+  const [cwEmail, setCwEmail] = useState('');
+  const [cwPassword, setCwPassword] = useState('');
   const [createdProvider, setCreatedProvider] = useState(null);
 
   const [agents, setAgents] = useState([]);
@@ -148,7 +151,9 @@ export default function InboxWizard({ onClose, onCreated }) {
             baseUrl: cwBaseUrl.trim(),
             accountId: cwAccountId.trim(),
             inboxIdOnProvider: cwInboxId.trim() || undefined,
-            apiAccessToken: cwToken.trim(),
+            apiAccessToken: cwCredMode === 'token' ? cwToken.trim() : undefined,
+            loginEmail: cwCredMode === 'login' ? cwEmail.trim() : undefined,
+            loginPassword: cwCredMode === 'login' ? cwPassword : undefined,
           });
           setCreatedProvider(data);
           showToast(t('inboxWizard.inboxCreatedSuccess'), 'success');
@@ -193,7 +198,9 @@ export default function InboxWizard({ onClose, onCreated }) {
 
   const step2Valid =
     selectedChannel === 'chatwoot'
-      ? cwBaseUrl.trim() && cwAccountId.trim() && cwToken.trim()
+      ? cwBaseUrl.trim() &&
+        cwAccountId.trim() &&
+        (cwCredMode === 'token' ? cwToken.trim() : cwEmail.trim() && cwPassword)
       : inboxName.trim() && phoneNumber && phoneValid && authenticated;
 
   const groupedChannels = channels.reduce((acc, c) => {
@@ -310,17 +317,61 @@ export default function InboxWizard({ onClose, onCreated }) {
                 />
               </div>
               <div className="iw-form-row">
-                <div className="iw-form-label">
-                  <Key size={13} /> {t('chatwootFields.token')}
+                <div className="iw-verify-row" style={{ marginBottom: 10 }}>
+                  <button
+                    type="button"
+                    className={`iw-btn ${cwCredMode === 'login' ? 'iw-btn-primary' : 'iw-btn-ghost'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => setCwCredMode('login')}
+                  >
+                    {t('chatwootFields.credModeLogin')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`iw-btn ${cwCredMode === 'token' ? 'iw-btn-primary' : 'iw-btn-ghost'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => setCwCredMode('token')}
+                  >
+                    {t('chatwootFields.credModeToken')}
+                  </button>
                 </div>
-                <input
-                  type="password"
-                  className="iw-input"
-                  placeholder={t('chatwootFields.tokenPlaceholder')}
-                  value={cwToken}
-                  onChange={(e) => setCwToken(e.target.value)}
-                />
-                <div className="iw-form-hint">{t('chatwootFields.tokenHint')}</div>
+
+                {cwCredMode === 'login' ? (
+                  <>
+                    <div className="iw-form-label">{t('chatwootFields.loginEmail')}</div>
+                    <input
+                      type="email"
+                      className="iw-input"
+                      placeholder={t('chatwootFields.loginEmailPlaceholder')}
+                      value={cwEmail}
+                      onChange={(e) => setCwEmail(e.target.value)}
+                      style={{ marginBottom: 10 }}
+                    />
+                    <div className="iw-form-label">{t('chatwootFields.loginPassword')}</div>
+                    <input
+                      type="password"
+                      className="iw-input"
+                      placeholder={t('chatwootFields.loginPasswordPlaceholder')}
+                      value={cwPassword}
+                      onChange={(e) => setCwPassword(e.target.value)}
+                    />
+                    <div className="iw-form-hint">{t('chatwootFields.loginHint')}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="iw-form-label">
+                      <Key size={13} /> {t('chatwootFields.token')}
+                    </div>
+                    <input
+                      type="password"
+                      className="iw-input"
+                      placeholder={t('chatwootFields.tokenPlaceholder')}
+                      value={cwToken}
+                      onChange={(e) => setCwToken(e.target.value)}
+                    />
+                    <div className="iw-form-hint">{t('chatwootFields.tokenHint')}</div>
+                  </>
+                )}
               </div>
             </div>
           )}
