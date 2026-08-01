@@ -495,6 +495,7 @@
     "webhookUrlLabel": "Webhook URL (paste this into Chatwoot)",
     "copyUrl": "Copy URL",
     "urlCopied": "URL copied",
-    "pasteHint": "Go to Chatwoot → Settings → Integrations → Webhooks → Add new webhook, paste this URL, and enable at least the Message Created event"
+    "pasteHint": "Go to Chatwoot → Settings → Integrations → Webhooks → Add new webhook, paste this URL, and enable at least the Message Created event",
+    "baseUrlEditHint": "Enter just the domain (e.g. https://support.niletechno.com) — no extra path like /app/accounts/1/dashboard"
   }
 }

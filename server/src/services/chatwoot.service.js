@@ -63,13 +63,14 @@ async function createOutgoingMessage(toNumber, text, conversationId, sender) {
 // لينا بنفس الرسالة دي تاني، هنلاقيها مسجلة خلاص ونتجاهلها بدل ما نكررها)
 async function deliverOutgoingMessage(savedMessage, { conversationId, text, sender }, onFinalized, timer) {
   let finalRow;
+  let url;
   try {
     const externalConversation = await externalConversationRepo.findByNileConversationIdWithProvider(conversationId);
     if (!externalConversation || !externalConversation.provider_is_active) {
       throw new Error('المحادثة دي مش مربوطة بمزود خارجي نشط (External_Conversation_byA)');
     }
 
-    const url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
+    url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
     const sendingToken = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
 
     const sendPromise = axios.post(
@@ -103,7 +104,10 @@ async function deliverOutgoingMessage(savedMessage, { conversationId, text, send
         });
     }
   } catch (err) {
-    logger.error('❌ فشل إرسال رسالة لشات ووت:', err.response?.data || err.message);
+    logger.error(
+      `❌ فشل إرسال رسالة لشات ووت — URL: ${url || 'غير معروف (فشل قبل تكوين الرابط)'} — HTTP ${err.response?.status || 'N/A'}:`,
+      typeof err.response?.data === 'string' ? err.response.data.slice(0, 300) : err.response?.data || err.message
+    );
     finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, {
       waMessageId: null,
       status: 'failed',
@@ -159,13 +163,14 @@ async function createOutgoingMediaMessage(toNumber, { messageType, mediaUrl, mim
 // لإن الإرسال Multipart لشات ووت أبسط وأضمن بيهم من غير أي مكتبة إضافية
 async function deliverOutgoingMediaMessage(savedMessage, { conversationId, buffer, mimeType, fileName, caption, sender }, onFinalized, timer) {
   let finalRow;
+  let url;
   try {
     const externalConversation = await externalConversationRepo.findByNileConversationIdWithProvider(conversationId);
     if (!externalConversation || !externalConversation.provider_is_active) {
       throw new Error('المحادثة دي مش مربوطة بمزود خارجي نشط (External_Conversation_byA)');
     }
 
-    const url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
+    url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
 
     const form = new FormData();
     form.append('message_type', 'outgoing');
@@ -201,7 +206,7 @@ async function deliverOutgoingMediaMessage(savedMessage, { conversationId, buffe
         .catch((err) => logger.error('❌ فشل تسجيل External_Messages_byA بعد رفع الملف بنجاح:', err.message));
     }
   } catch (err) {
-    logger.error('❌ فشل إرسال وسائط لشات ووت:', err.message);
+    logger.error(`❌ فشل إرسال وسائط لشات ووت — URL: ${url || 'غير معروف'}:`, err.message);
     finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, { waMessageId: null, status: 'failed' });
   }
 

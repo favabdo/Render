@@ -283,6 +283,7 @@ export default function InboxWizard({ onClose, onCreated }) {
                   value={cwBaseUrl}
                   onChange={(e) => setCwBaseUrl(e.target.value)}
                 />
+                <div className="iw-form-hint">{t('chatwootFields.baseUrlEditHint')}</div>
               </div>
               <div className="iw-form-row">
                 <div className="iw-form-label">

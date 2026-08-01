@@ -1,10 +1,86 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, MessageCircle, MessagesSquare, Trash2, Inbox as InboxIcon, Copy, RefreshCw, Link2 } from 'lucide-react';
+import { Plus, MessageCircle, MessagesSquare, Trash2, Inbox as InboxIcon, Copy, RefreshCw, Link2, Pencil } from 'lucide-react';
 import { inboxesApi, chatwootApi } from '../services/settings.service';
 import useToastStore from '../../../store/toastStore';
 import InboxWizard from '../components/InboxWizard';
 import ChatwootMergeModal from '../components/ChatwootMergeModal';
+import Modal from '../../../components/ui/Modal';
+
+// مودال تعديل اتصال شات ووت (Base URL / Account ID / Inbox ID / Token) —
+// نفس الحقول اللي في الويزارد، بس هنا للتعديل بعد الإنشاء
+function ChatwootEditModal({ provider, onClose, onSaved }) {
+  const { t } = useTranslation('settings');
+  const showToast = useToastStore((s) => s.showToast);
+  const [baseUrl, setBaseUrl] = useState(provider.base_url || '');
+  const [accountId, setAccountId] = useState(provider.account_id || '');
+  const [inboxIdOnProvider, setInboxIdOnProvider] = useState(provider.inbox_id_on_provider || '');
+  const [apiAccessToken, setApiAccessToken] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const data = await chatwootApi.update(provider.id, {
+        baseUrl: baseUrl.trim() || undefined,
+        accountId: accountId.trim() || undefined,
+        inboxIdOnProvider: inboxIdOnProvider.trim() || undefined,
+        apiAccessToken: apiAccessToken.trim() || undefined,
+      });
+      showToast(t('chatwootModal.updateSuccess'), 'success');
+      onSaved(data.provider);
+      onClose();
+    } catch (err) {
+      showToast(err.response?.data?.error || t('chatwootModal.updateFailed'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} width={480}>
+      <div className="resolve-modal-header">
+        <div className="resolve-modal-icon" style={{ background: 'rgba(31,147,255,0.12)', color: '#1F93FF' }}>
+          <MessagesSquare size={22} />
+        </div>
+        <div className="resolve-modal-title">{provider.name}</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+        <div className="iw-form-label">{t('chatwootFields.baseUrl')}</div>
+        <input className="iw-input" placeholder={t('chatwootFields.baseUrlPlaceholder')} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+        <div className="iw-form-hint">{t('chatwootFields.baseUrlEditHint')}</div>
+
+        <div className="iw-form-label" style={{ marginTop: 6 }}>{t('chatwootFields.accountId')}</div>
+        <input className="iw-input" placeholder={t('chatwootFields.accountIdPlaceholder')} value={accountId} onChange={(e) => setAccountId(e.target.value)} />
+
+        <div className="iw-form-label" style={{ marginTop: 6 }}>{t('chatwootFields.inboxId')}</div>
+        <input
+          className="iw-input"
+          placeholder={t('chatwootFields.inboxIdPlaceholder')}
+          value={inboxIdOnProvider}
+          onChange={(e) => setInboxIdOnProvider(e.target.value)}
+        />
+
+        <div className="iw-form-label" style={{ marginTop: 6 }}>{t('chatwootFields.token')}</div>
+        <input
+          className="iw-input"
+          type="password"
+          placeholder={t('chatwootModal.tokenPlaceholderEdit')}
+          value={apiAccessToken}
+          onChange={(e) => setApiAccessToken(e.target.value)}
+        />
+      </div>
+      <div className="resolve-modal-actions">
+        <button className="resolve-cancel-btn" onClick={onClose}>
+          {t('chatwootModal.cancel')}
+        </button>
+        <button className="resolve-confirm-btn" disabled={saving} onClick={save}>
+          {t('chatwootModal.save')}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 export default function InboxesSection() {
   const { t } = useTranslation('settings');
@@ -15,6 +91,7 @@ export default function InboxesSection() {
   const [failed, setFailed] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [mergeProvider, setMergeProvider] = useState(null);
+  const [editingProvider, setEditingProvider] = useState(null);
 
   function load() {
     setLoading(true);
@@ -186,6 +263,9 @@ export default function InboxesSection() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="st-icon-btn" title={t('chatwootModal.edit')} onClick={() => setEditingProvider(p)}>
+                        <Pencil size={13} />
+                      </button>
                       <button className="st-icon-btn" title={t('chatwootModal.copyUrl')} onClick={() => copyWebhookUrl(p.webhookUrl)}>
                         <Copy size={13} />
                       </button>
@@ -214,6 +294,14 @@ export default function InboxesSection() {
       )}
 
       {mergeProvider && <ChatwootMergeModal provider={mergeProvider} onClose={() => setMergeProvider(null)} />}
+
+      {editingProvider && (
+        <ChatwootEditModal
+          provider={editingProvider}
+          onClose={() => setEditingProvider(null)}
+          onSaved={(updated) => setProviders((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))}
+        />
+      )}
     </div>
   );
 }
