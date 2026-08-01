@@ -25,6 +25,7 @@ const externalAgentRepo = require('../repositories/externalAgent.repo');
 const contactService = require('./contact.service');
 const conversationService = require('./conversation.service');
 const chatwootService = require('./chatwoot.service');
+const ratingFlowService = require('./ratingFlow.service');
 const webhookDispatchService = require('./webhookDispatch.service');
 const socketService = require('../sockets/socket');
 const logger = require('../utils/logger');
@@ -39,7 +40,7 @@ async function processChatwootEvent(provider, eventType, payload, io) {
       return handleContactEvent(provider, payload);
     case 'conversation_status_changed':
     case 'conversation_updated':
-      return handleConversationStatusEvent(provider, payload);
+      return handleConversationStatusEvent(provider, payload, io);
     default:
       logger.info(`ℹ️ حدث شات ووت مش متعامل معاه دلوقتي: ${eventType}`);
   }
@@ -87,13 +88,60 @@ async function handleContactEvent(provider, payload) {
   await upsertContactFromPayload(provider, payload);
 }
 
-// ===== Conversation status (خفيف الوزن، بس تتبع الحالة الخارجية) =====
-async function handleConversationStatusEvent(provider, payload) {
+// ===== Conversation status =====
+// المزامنة هنا اتجاه واحد بس عمدًا: شات ووت "Resolved" → نايل شات "Resolved".
+// أي حالة تانية (open/pending من شات ووت) مبتتزامنش، عشان منتدخلش في قرار
+// الإيجنت لو هو Reopen المحادثة يدوي من نايل شات نفسه
+async function handleConversationStatusEvent(provider, payload, io) {
   const externalConversationId = payload?.id;
   if (!externalConversationId) return;
+
   const row = await externalConversationRepo.findByProviderAndExternalId(provider.id, externalConversationId);
-  if (row) {
-    await externalConversationRepo.updateStatus(row.id, payload.status || null);
+  if (!row) return;
+
+  await externalConversationRepo.updateStatus(row.id, payload.status || null);
+
+  if (payload.status !== 'resolved' || !row.nile_conversation_id) return;
+
+  const conversation = await conversationRepo.getConversationById(row.nile_conversation_id);
+  if (!conversation || conversation.status === 'closed') return; // اتحل خلاص، مفيش داعي نكرر
+
+  // نفس منطق isFirstResolve بتاع الـ Resolve اليدوي بالظبط — لو locked_at
+  // متسجل قبل كده، يبقى دي مش أول مرة (بعد Reopen)، فأتمتة الـ CSAT متتبعتش تاني
+  const isFirstResolve = !conversation.locked_at;
+  const actingName = 'شات ووت (مزامنة تلقائية)';
+
+  const [, systemMessage] = await Promise.all([
+    conversationRepo.resolveConversation(row.nile_conversation_id, {
+      category: null,
+      notes: 'اتقفلت تلقائيًا لإن المحادثة اتحلت في شات ووت',
+      resolvedBy: null,
+    }),
+    conversationRepo.addSystemMessage(row.nile_conversation_id, `Conversation was marked resolved from Chatwoot`),
+    conversationRepo.touchConversation(row.nile_conversation_id),
+  ]);
+
+  const updated = await conversationRepo.getConversationById(row.nile_conversation_id);
+
+  if (io) {
+    socketService.emitToCompany(io, provider.company_id, 'conversation_updated', updated);
+    socketService.emitToConversationRoom(io, updated.id, 'new_message', { conversationId: updated.id, message: systemMessage });
+  }
+
+  webhookDispatchService
+    .dispatchEvent(webhookDispatchService.EVENT_TYPES.CONVERSATION_STATUS_CHANGED, {
+      conversation_id: updated.id,
+      status: updated.status,
+      resolved_by: actingName,
+      category: null,
+      notes: null,
+    })
+    .catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed (شات ووت):', err.message));
+
+  if (isFirstResolve) {
+    ratingFlowService.runPostResolveAutomation(updated, io).catch((err) => {
+      logger.error('❌ فشل تنفيذ أتمتة ما بعد الحل (شات ووت):', err.message);
+    });
   }
 }
 
@@ -105,11 +153,30 @@ async function ensureExternalConversation(provider, rawConversation, externalCon
   let row = await externalConversationRepo.findByProviderAndExternalId(provider.id, externalConversationId);
   if (row) return { row, isNewNileConversation: false };
 
-  row = await externalConversationRepo.createExternalConversation(provider.id, externalConversationId, {
-    externalContactRowId: externalContactRow?.id || null,
-    status: rawConversation?.status || null,
-    rawJson: JSON.stringify(rawConversation || {}),
-  });
+  try {
+    row = await externalConversationRepo.createExternalConversation(provider.id, externalConversationId, {
+      externalContactRowId: externalContactRow?.id || null,
+      status: rawConversation?.status || null,
+      rawJson: JSON.stringify(rawConversation || {}),
+    });
+  } catch (err) {
+    // نفس فكرة الـ race في upsertExternalContact بالظبط: لو حدثين وصلوا سوا
+    // لأول مرة لنفس المحادثة الجديدة، ممكن الاتنين يشوفوا "مش موجودة" قبل ما
+    // أي واحد يخلّص الإنشاء. اللي يخسر السباق يجيب الصف اللي الطرف التاني
+    // عمله بدل ما يرمي استثناء يضيع بيه الرسالة اللي جايه مع الحدث ده
+    if (String(err.message || '').includes('UQ_ExternalConversation_ProviderExternalId')) {
+      let winner = await externalConversationRepo.findByProviderAndExternalId(provider.id, externalConversationId);
+      // اللي كسب السباق ممكن يكون لسه في نص عملية الربط بـ NileChat_Conversations_byA
+      // (بين الـ INSERT والـ linkNileConversation) — بنستنى شوية صغير ونعيد المحاولة
+      // بدل ما نستسلم على طول ونضيع الرسالة
+      for (let attempt = 0; attempt < 5 && winner && !winner.nile_conversation_id; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        winner = await externalConversationRepo.findByProviderAndExternalId(provider.id, externalConversationId);
+      }
+      if (winner) return { row: winner, isNewNileConversation: false };
+    }
+    throw err;
+  }
 
   // لو مفيش رقم فعلي (نادر لقناة واتساب، بس دفاعيًا)، بنعمل رقم صناعي ثابت
   // مبني على external_contact_id عشان يفضل نفس المحادثة تتلاقى في المرات الجاية
@@ -185,6 +252,27 @@ async function handleMessageEvent(provider, payload, io) {
   const messageType = mappedType || 'text';
   const mediaFileName = attachment?.data_url ? decodeURIComponent(attachment.data_url.split('/').pop() || '') || null : null;
 
+  // "حجز" الرسالة أولًا — INSERT في External_Messages_byA بـ nile_message_id
+  // فاضي، قبل أي حاجة تانية. ده اللي بيمنع التكرار فعليًا (مش فحص findByProviderAndExternalId
+  // فوق لوحده، لإنه check-then-act ومش atomic): لو حدثين متطابقين وصلوا سوا،
+  // الاتنين ممكن يعدّوا من الفحص فوق قبل ما أي واحد يسجل، لكن الـ UNIQUE
+  // constraint هنا في الداتابيز نفسها هو الحكم النهائي — واحد بس هيعدي
+  let reservedMessage;
+  try {
+    reservedMessage = await externalMessageRepo.createExternalMessage(provider.id, externalMessageId, {
+      externalConversationRowId: externalConversationRow.id,
+      nileMessageId: null,
+      direction,
+      messageType,
+      rawJson: JSON.stringify(payload),
+    });
+  } catch (err) {
+    if (String(err.message || '').includes('UQ_ExternalMessages_ProviderExternalId')) {
+      return; // حدث تاني كسب السباق وسجّل نفس الرسالة، مفيش داعي نكررها
+    }
+    throw err;
+  }
+
   // لو إيجنت كتب الرد مباشرة من واجهة شات ووت (مش من نايل شات)، بنسجله كمتابعة
   // بسيطة في External_Agent_byA — nile_user_id بيفضل NULL لحد ما يتعمله ميرج
   if (direction === 'out' && rawSender?.type === 'user' && rawSender?.id) {
@@ -208,13 +296,7 @@ async function handleMessageEvent(provider, payload, io) {
     }),
   ]);
 
-  await externalMessageRepo.createExternalMessage(provider.id, externalMessageId, {
-    externalConversationRowId: externalConversationRow.id,
-    nileMessageId: saved.id,
-    direction,
-    messageType,
-    rawJson: JSON.stringify(payload),
-  });
+  await externalMessageRepo.linkNileMessage(reservedMessage.id, saved.id);
 
   if (io) {
     socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message: saved });

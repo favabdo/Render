@@ -19,7 +19,15 @@ async function findByProviderAndExternalId(providerId, externalContactId) {
 }
 
 // بينشئ صف جديد لو مش موجود (nile_contact_id = NULL افتراضيًا)، أو بيحدّث
-// name/phone/raw_json لو الصف موجود خلاص (من غير ما يلمس nile_contact_id إطلاقًا)
+// name/phone/raw_json لو الصف موجود خلاص (من غير ما يلمس nile_contact_id إطلاقًا).
+//
+// ملحوظة مهمة عن الـ race condition: شات ووت أحيانًا بيبعت أكتر من webhook
+// event (contact_created + message_created) لنفس الكونتاكت الجديد في نفس
+// اللحظة تقريبًا. لو الاتنين وصلوا سوا، ممكن الاتنين يشوفوا "الصف مش موجود"
+// قبل ما أي واحد فيهم يخلّص الـ INSERT، فيحصل تعارض على الـ UNIQUE constraint.
+// عشان كده الـ INSERT هنا متلفوف في try/catch: لو حصل تعارض، معناها صف
+// اتعمل فعلاً من الطلب التاني في نفس اللحظة — بنجيبه ونحدّثه بدل ما نرمي
+// الخطأ (لو رمينا الخطأ، الرسالة اللي جايه مع الحدث ده كانت بتضيع بصمت)
 async function upsertExternalContact(providerId, externalContactId, { name, phone, rawJson }) {
   const existing = await findByProviderAndExternalId(providerId, externalContactId);
   const pool = await getPool();
@@ -40,20 +48,28 @@ async function upsertExternalContact(providerId, externalContactId, { name, phon
     return result.recordset[0];
   }
 
-  const result = await pool
-    .request()
-    .input('providerId', sql.BigInt, providerId)
-    .input('externalContactId', sql.NVarChar(100), String(externalContactId))
-    .input('name', sql.NVarChar(200), name || null)
-    .input('phone', sql.NVarChar(50), phone || null)
-    .input('rawJson', sql.NVarChar(sql.MAX), rawJson || null)
-    .query(`
-      INSERT INTO [dbo].[External_Contacts_byA]
-        (provider_id, external_contact_id, nile_contact_id, name, phone, raw_json)
-      OUTPUT INSERTED.*
-      VALUES (@providerId, @externalContactId, NULL, @name, @phone, @rawJson)
-    `);
-  return result.recordset[0];
+  try {
+    const result = await pool
+      .request()
+      .input('providerId', sql.BigInt, providerId)
+      .input('externalContactId', sql.NVarChar(100), String(externalContactId))
+      .input('name', sql.NVarChar(200), name || null)
+      .input('phone', sql.NVarChar(50), phone || null)
+      .input('rawJson', sql.NVarChar(sql.MAX), rawJson || null)
+      .query(`
+        INSERT INTO [dbo].[External_Contacts_byA]
+          (provider_id, external_contact_id, nile_contact_id, name, phone, raw_json)
+        OUTPUT INSERTED.*
+        VALUES (@providerId, @externalContactId, NULL, @name, @phone, @rawJson)
+      `);
+    return result.recordset[0];
+  } catch (err) {
+    if (String(err.message || '').includes('UQ_ExternalContacts_ProviderExternalId')) {
+      const winner = await findByProviderAndExternalId(providerId, externalContactId);
+      if (winner) return winner;
+    }
+    throw err;
+  }
 }
 
 // الميرج الصريح الوحيد اللي ممكن يحط قيمة في nile_contact_id — بيتنادى من

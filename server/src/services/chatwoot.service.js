@@ -20,12 +20,14 @@ async function resolveSendingToken(providerId, fallbackToken, senderId) {
   if (senderId) {
     try {
       const agentRow = await externalAgentRepo.findByNileUserId(providerId, senderId);
-      if (agentRow?.agent_api_access_token) return agentRow.agent_api_access_token;
+      if (agentRow?.agent_api_access_token) {
+        return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})` };
+      }
     } catch (err) {
       logger.error('❌ فشل تحديد توكن الإيجنت الشخصي، هيتبعت بتوكن الاتصال العام:', err.message);
     }
   }
-  return fallbackToken;
+  return { token: fallbackToken, source: 'provider-default' };
 }
 
 // بيجيب قايمة إيجنتس الحساب كلها من شات ووت — مستخدمة في "مزامنة الإيجنتس"
@@ -64,6 +66,7 @@ async function createOutgoingMessage(toNumber, text, conversationId, sender) {
 async function deliverOutgoingMessage(savedMessage, { conversationId, text, sender }, onFinalized, timer) {
   let finalRow;
   let url;
+  let tokenInfo;
   try {
     const externalConversation = await externalConversationRepo.findByNileConversationIdWithProvider(conversationId);
     if (!externalConversation || !externalConversation.provider_is_active) {
@@ -71,12 +74,12 @@ async function deliverOutgoingMessage(savedMessage, { conversationId, text, send
     }
 
     url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
-    const sendingToken = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
+    tokenInfo = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
 
     const sendPromise = axios.post(
       url,
       { content: text, message_type: 'outgoing', private: false },
-      { headers: { api_access_token: sendingToken }, timeout: 15000 }
+      { headers: { api_access_token: tokenInfo.token }, timeout: 15000 }
     );
 
     const response = await (timer ? timer.time('http:chatwoot_send_message', sendPromise) : sendPromise);
@@ -105,7 +108,7 @@ async function deliverOutgoingMessage(savedMessage, { conversationId, text, send
     }
   } catch (err) {
     logger.error(
-      `❌ فشل إرسال رسالة لشات ووت — URL: ${url || 'غير معروف (فشل قبل تكوين الرابط)'} — HTTP ${err.response?.status || 'N/A'}:`,
+      `❌ فشل إرسال رسالة لشات ووت — URL: ${url || 'غير معروف (فشل قبل تكوين الرابط)'} — HTTP ${err.response?.status || 'N/A'} — التوكن المستخدم: ${tokenInfo?.source || 'غير معروف'} (آخر 4 حروف: ...${(tokenInfo?.token || '').slice(-4)}):`,
       typeof err.response?.data === 'string' ? err.response.data.slice(0, 300) : err.response?.data || err.message
     );
     finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, {
@@ -178,16 +181,16 @@ async function deliverOutgoingMediaMessage(savedMessage, { conversationId, buffe
     if (caption) form.append('content', caption);
     form.append('attachments[]', new Blob([buffer], { type: mimeType || 'application/octet-stream' }), fileName || 'file');
 
-    const sendingToken = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
+    const tokenInfo = await resolveSendingToken(externalConversation.provider_id, externalConversation.provider_api_access_token, sender?.id);
     const sendPromise = fetch(url, {
       method: 'POST',
-      headers: { api_access_token: sendingToken },
+      headers: { api_access_token: tokenInfo.token },
       body: form,
     });
 
     const response = await (timer ? timer.time('http:chatwoot_send_media', sendPromise) : sendPromise);
     if (!response.ok) {
-      throw new Error(`Chatwoot رفض رفع الملف — HTTP ${response.status}`);
+      throw new Error(`Chatwoot رفض رفع الملف — HTTP ${response.status} — التوكن المستخدم: ${tokenInfo.source}`);
     }
     const data = await response.json();
     const chatwootMessageId = data?.id;
