@@ -158,6 +158,17 @@ async function listUnmerged(providerId) {
   return result.recordset;
 }
 
+// كل إيجنتس الحساب (مربوطين أو لأ) — للعرض في الإعدادات عشان الإداري يشوف
+// حالة الربط كاملة، مش بس اللي لسه مش مربوطين
+async function listAll(providerId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('providerId', sql.BigInt, providerId)
+    .query(`SELECT * FROM [dbo].[External_Agent_byA] WHERE provider_id = @providerId ORDER BY name`);
+  return result.recordset;
+}
+
 module.exports = {
   findByProviderAndExternalId,
   findOrCreateAgent,
@@ -166,6 +177,7 @@ module.exports = {
   listByProvider,
   getById,
   listUnmerged,
+  listAll,
   setAgentPersonalToken,
   findByNileUserId,
   syncAgentsFromList,

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link2, Search, X, RefreshCw } from 'lucide-react';
+import { Link2, Search, X, RefreshCw, Unlink, CheckCircle2 } from 'lucide-react';
 import { chatwootMergeApi, agentsSettingsApi } from '../services/settings.service';
 import { contactsApi } from '../../contacts/services/contacts.service';
 import useToastStore from '../../../store/toastStore';
@@ -118,27 +118,61 @@ function UnmergedContactRow({ row, onMerged }) {
   );
 }
 
-// نفس فكرة الصف اللي فوق، بس للإيجنتس — بدروب داون بسيط (عدد الإيجنتس صغير
-// غالبًا، فمحتاجينش بحث زي الكونتاكتس)
-function UnmergedAgentRow({ row, agents, onMerged }) {
+// صف إيجنت واحد — بيعرض كل الإيجنتس (مش بس اللي لسه مش مربوطين). لو الإيجنت
+// مربوط خلاص، بيظهر اسم اللي مربوط بيه + زرار "إلغاء الربط". لو لسه مش
+// مربوط، بيظهر فورم الربط (اختيار إيجنت نايل شات + توكن شخصي اختياري)
+function AgentRow({ row, agents, onChanged }) {
   const { t } = useTranslation('settings');
   const showToast = useToastStore((s) => s.showToast);
   const [selected, setSelected] = useState('');
   const [personalToken, setPersonalToken] = useState('');
-  const [merging, setMerging] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const linkedAgent = row.nile_user_id ? agents.find((a) => String(a.id) === String(row.nile_user_id)) : null;
 
   async function confirm() {
     if (!selected) return;
-    setMerging(true);
+    setBusy(true);
     try {
-      await chatwootMergeApi.mergeAgent(row.id, selected, personalToken.trim() || undefined);
+      const data = await chatwootMergeApi.mergeAgent(row.id, selected, personalToken.trim() || undefined);
       showToast(t('chatwootModal.mergeSuccess', { name: agents.find((a) => String(a.id) === String(selected))?.display_name || '' }), 'success');
-      onMerged(row.id);
+      onChanged(data.externalAgent || { ...row, nile_user_id: selected });
     } catch (err) {
       showToast(err.response?.data?.error || t('chatwootModal.mergeFailed'), 'error');
     } finally {
-      setMerging(false);
+      setBusy(false);
     }
+  }
+
+  async function unmerge() {
+    setBusy(true);
+    try {
+      await chatwootMergeApi.unmergeAgent(row.id);
+      showToast(t('chatwootModal.unmergeSuccess'), 'success');
+      onChanged({ ...row, nile_user_id: null, agent_api_access_token: null });
+    } catch (err) {
+      showToast(err.response?.data?.error || t('chatwootModal.mergeFailed'), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (row.nile_user_id) {
+    return (
+      <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{row.name || `#${row.external_agent_id}`}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <CheckCircle2 size={12} /> {t('chatwootModal.linkedTo', { name: linkedAgent?.display_name || linkedAgent?.email || '—' })}
+            </div>
+          </div>
+          <button className="resolve-cancel-btn" style={{ padding: '6px 10px', fontSize: 12 }} disabled={busy} onClick={unmerge}>
+            <Unlink size={13} /> {t('chatwootModal.unlinkAction')}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -161,7 +195,7 @@ function UnmergedAgentRow({ row, agents, onMerged }) {
         style={{ marginBottom: 4 }}
       />
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>{t('chatwootModal.agentTokenHint')}</div>
-      <button className="resolve-confirm-btn" style={{ width: '100%' }} disabled={!selected || merging} onClick={confirm}>
+      <button className="resolve-confirm-btn" style={{ width: '100%' }} disabled={!selected || busy} onClick={confirm}>
         <Link2 size={13} /> {t('chatwootModal.linkAction')}
       </button>
     </div>
@@ -179,7 +213,7 @@ export default function ChatwootMergeModal({ provider, onClose }) {
   const showToast = useToastStore((s) => s.showToast);
 
   function loadAgents() {
-    return chatwootMergeApi.unmergedAgents(provider.id).catch(() => []);
+    return chatwootMergeApi.allAgents(provider.id).catch(() => []);
   }
 
   async function syncAgents() {
@@ -198,18 +232,17 @@ export default function ChatwootMergeModal({ provider, onClose }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      chatwootMergeApi.unmergedContacts(provider.id).catch(() => []),
-      chatwootMergeApi.unmergedAgents(provider.id).catch(() => []),
-      agentsSettingsApi.list().catch(() => []),
-    ])
+    Promise.all([chatwootMergeApi.unmergedContacts(provider.id).catch(() => []), loadAgents(), agentsSettingsApi.list().catch(() => [])])
       .then(([c, a, na]) => {
         setContacts(c);
         setAgents(a);
         setNileAgents(na);
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider.id]);
+
+  const linkedAgentsCount = agents.filter((a) => a.nile_user_id).length;
 
   return (
     <Modal onClose={onClose} width={560}>
@@ -236,7 +269,7 @@ export default function ChatwootMergeModal({ provider, onClose }) {
           style={{ flex: 1, fontWeight: tab === 'agents' ? 700 : 400 }}
           onClick={() => setTab('agents')}
         >
-          {t('chatwootModal.tabAgents', { count: agents.length })}
+          {t('chatwootModal.tabAgentsWithLinked', { count: agents.length, linked: linkedAgentsCount })}
         </button>
       </div>
 
@@ -259,14 +292,14 @@ export default function ChatwootMergeModal({ provider, onClose }) {
             <RefreshCw size={13} /> {syncing ? t('chatwootModal.syncing') : t('chatwootModal.syncAgents')}
           </button>
           {agents.length === 0 && (
-            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', padding: '8px 0' }}>{t('chatwootModal.noUnmergedAgents')}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', padding: '8px 0' }}>{t('chatwootModal.noAgentsAtAll')}</div>
           )}
           {agents.map((row) => (
-            <UnmergedAgentRow
+            <AgentRow
               key={row.id}
               row={row}
               agents={nileAgents}
-              onMerged={(id) => setAgents((prev) => prev.filter((r) => r.id !== id))}
+              onChanged={(updatedRow) => setAgents((prev) => prev.map((r) => (r.id === updatedRow.id ? updatedRow : r)))}
             />
           ))}
         </div>

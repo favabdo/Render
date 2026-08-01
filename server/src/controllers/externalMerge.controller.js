@@ -70,6 +70,15 @@ async function listUnmergedAgents(req, res) {
   res.json(agents);
 }
 
+// كل الإيجنتس (مربوطين أو لأ) — مستخدمة في شاشة "كل الإيجنتس" بالإعدادات
+async function listAllAgents(req, res) {
+  const provider = await assertProviderOwnedByCompany(req.params.providerId, req.companyId);
+  if (!provider) return res.status(404).json({ error: 'المزود ده مش موجود' });
+
+  const agents = await externalAgentRepo.listAll(provider.id);
+  res.json(agents);
+}
+
 async function mergeAgent(req, res) {
   const { nileUserId, agentApiAccessToken } = req.body || {};
   if (!nileUserId) return res.status(400).json({ error: 'لازم تبعت nileUserId' });
@@ -131,6 +140,7 @@ module.exports = {
   mergeContact,
   unmergeContact,
   listUnmergedAgents,
+  listAllAgents,
   mergeAgent,
   unmergeAgent,
   setAgentToken,

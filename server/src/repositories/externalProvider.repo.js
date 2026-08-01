@@ -78,10 +78,28 @@ async function updateProvider(id, { name, baseUrl, accountId, inboxIdOnProvider,
   return result.recordset[0] || null;
 }
 
+// بيمسح اتصال شات ووت بالكامل — بس الجداول الخاصة بينا (External_*) اللي
+// بترجع لـ provider_id ده. المحادثات/الرسايل/الكونتاكتس الحقيقية في نايل شات
+// (NileChat_Conversations_byA / NileChat_Contacts_byA / جدول الرسايل) متتمسحش
+// خالص، بيفضوا بس من غير ربط بمزود خارجي (زي ما لو كانت محادثات واتساب عادية)
+async function deleteProvider(id) {
+  const pool = await getPool();
+  const request = pool.request().input('id', sql.BigInt, id);
+  await request.query(`
+    DELETE FROM [dbo].[External_Messages_byA] WHERE provider_id = @id;
+    DELETE FROM [dbo].[External_Event_byA] WHERE provider_id = @id;
+    DELETE FROM [dbo].[External_Conversation_byA] WHERE provider_id = @id;
+    DELETE FROM [dbo].[External_Contacts_byA] WHERE provider_id = @id;
+    DELETE FROM [dbo].[External_Agent_byA] WHERE provider_id = @id;
+    DELETE FROM [dbo].[External_Provider_byA] WHERE id = @id;
+  `);
+}
+
 module.exports = {
   createProvider,
   getProviderById,
   listProvidersByCompany,
   setActive,
   updateProvider,
+  deleteProvider,
 };

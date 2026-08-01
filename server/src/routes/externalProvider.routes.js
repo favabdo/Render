@@ -19,6 +19,7 @@ router.post(
   requireAdmin,
   asyncHandler(externalProviderController.regenerateSecret)
 );
+router.delete('/api/external-providers/:id', requireAdmin, asyncHandler(externalProviderController.deleteProvider));
 
 // ===== الميرج (أدمن بس) =====
 router.get(
@@ -33,6 +34,11 @@ router.get(
   '/api/external-providers/:providerId/unmerged-agents',
   requireAdmin,
   asyncHandler(externalMergeController.listUnmergedAgents)
+);
+router.get(
+  '/api/external-providers/:providerId/agents',
+  requireAdmin,
+  asyncHandler(externalMergeController.listAllAgents)
 );
 router.post(
   '/api/external-providers/:providerId/sync-agents',

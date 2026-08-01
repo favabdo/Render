@@ -18,6 +18,7 @@
 // تلقائية، لإن ربط حساب إيجنت حساس أمنيًا عكس كونتاكت عميل عادي.
 
 const conversationRepo = require('../repositories/conversation.repo');
+const userRepo = require('../repositories/user.repo');
 const externalContactRepo = require('../repositories/externalContact.repo');
 const externalConversationRepo = require('../repositories/externalConversation.repo');
 const externalMessageRepo = require('../repositories/externalMessage.repo');
@@ -100,6 +101,12 @@ async function handleConversationStatusEvent(provider, payload, io) {
   if (!row) return;
 
   await externalConversationRepo.updateStatus(row.id, payload.status || null);
+
+  if (row.nile_conversation_id) {
+    await syncAssigneeFromPayload(provider, payload, row.nile_conversation_id, io).catch((err) =>
+      logger.error('❌ فشل مزامنة تعيين الإيجنت (شات ووت):', err.message)
+    );
+  }
 
   if (payload.status !== 'resolved' || !row.nile_conversation_id) return;
 
@@ -206,11 +213,42 @@ function mapAttachmentType(fileType) {
   return null;
 }
 
+// شات ووت → نايل شات بس (نفس فلسفة اتجاه الـ Resolve). بتاخد الـ assignee
+// الحالي من أي payload فيه بيانات محادثة (رسالة عادية أو تحديث حالة)، ولو
+// الإيجنت ده متربط (ميرج) بإيجنت نايل شات، بتعيّن المحادثة له تلقائيًا —
+// لكن بس لو التعيين اتغيّر فعلًا (مش بتكرر نفس التعيين كل رسالة جايه)
+async function syncAssigneeFromPayload(provider, rawConversationOrPayload, nileConversationId, io) {
+  const rawAssignee = rawConversationOrPayload?.meta?.assignee;
+  if (!rawAssignee?.id) return;
+
+  const agentRow = await externalAgentRepo.findByProviderAndExternalId(provider.id, rawAssignee.id);
+  if (!agentRow?.nile_user_id) return; // الإيجنت ده لسه مش مربوط بحد عندنا
+
+  const conversation = await conversationRepo.getConversationById(nileConversationId);
+  if (!conversation || String(conversation.assigned_agent_id) === String(agentRow.nile_user_id)) return;
+
+  await conversationRepo.assignConversation(nileConversationId, agentRow.nile_user_id);
+
+  const nileUser = await userRepo.findUserById(agentRow.nile_user_id);
+  const agentName = nileUser ? userRepo.resolveDisplayName(nileUser) : agentRow.name || 'إيجنت';
+  const systemMessage = await conversationRepo.addSystemMessage(
+    nileConversationId,
+    `Conversation was assigned to ${agentName} (synced from Chatwoot)`
+  );
+  await conversationRepo.touchConversation(nileConversationId);
+
+  if (io) {
+    socketService.emitToConversationRoom(io, nileConversationId, 'new_message', {
+      conversationId: nileConversationId,
+      message: systemMessage,
+    });
+    const updated = await conversationRepo.getConversationById(nileConversationId);
+    socketService.emitToCompany(io, provider.company_id, 'conversation_updated', updated);
+  }
+}
+
 // ===== Message (المسار الأساسي) =====
 async function handleMessageEvent(provider, payload, io) {
-  // ملاحظات خاصة جوه شات ووت (private notes) مش رسايل عميل — العميل مايشوفهاش
-  if (payload?.private) return;
-
   const externalMessageId = payload?.id;
   if (!externalMessageId) return;
 
@@ -221,9 +259,13 @@ async function handleMessageEvent(provider, payload, io) {
 
   const rawConversation = payload.conversation || null;
   const rawSender = payload.sender || rawConversation?.meta?.sender || null;
-  // شات ووت: 'incoming' = من العميل، 'outgoing' = من الإيجنت (سواء كتبها في
-  // شات ووت مباشرة أو رد من نايل شات ورجعلنا الـ webhook بتاعها — بس دي الحالة
-  // التانية بتتوقف عند فحص الـ idempotency فوق قبل ما توصل هنا أصلًا)
+
+  // شات ووت بيبعت message_type كـ: 'incoming' (من العميل) / 'outgoing' (من
+  // الإيجنت) / 'activity' (رسالة نظام تلقائية من شات ووت زي "X عيّن المحادثة
+  // لـ Y") / 'template'. وبيبعت private=true منفصل للملاحظات الخاصة بين
+  // الإيجنتس (مش نوع رسالة، فلاج مستقل)
+  const isPrivateNote = Boolean(payload.private);
+  const isActivity = payload.message_type === 'activity';
   const direction = payload.message_type === 'incoming' ? 'in' : 'out';
 
   // الكونتاكت (العميل) بياخد دايمًا من meta.sender بتاع المحادثة نفسها، سواء
@@ -242,28 +284,35 @@ async function handleMessageEvent(provider, payload, io) {
   }
 
   const conversationId = externalConversationRow.nile_conversation_id;
+
+  // مزامنة تعيين الإيجنت لو اتغيّر — بغض النظر عن نوع الرسالة، لإن شات ووت
+  // بيحط الـ assignee الحالي جوه meta بتاع أي محادثة مع أي رسالة
+  await syncAssigneeFromPayload(provider, rawConversation, conversationId, io).catch((err) =>
+    logger.error('❌ فشل مزامنة تعيين الإيجنت (شات ووت):', err.message)
+  );
+
   const contactName = externalContactRow?.name || null;
   const messageText = payload.content || null;
 
-  // مرفقات (صور/فيديو/صوت/مستندات) — بنسجل الرسالة فورًا من غير ما نستنى
-  // التنزيل (بالظبط زي تعامل ميتا)، وبنكمل التنزيل في الخلفية تحت
-  const attachment = Array.isArray(payload.attachments) && payload.attachments.length > 0 ? payload.attachments[0] : null;
-  const mappedType = attachment ? mapAttachmentType(attachment.file_type) : null;
-  const messageType = mappedType || 'text';
-  const mediaFileName = attachment?.data_url ? decodeURIComponent(attachment.data_url.split('/').pop() || '') || null : null;
+  // لو إيجنت كتب الرد/الملاحظة/الأكتيفيتي مباشرة من واجهة شات ووت، بنسجله
+  // كمتابعة بسيطة في External_Agent_byA — nile_user_id بيفضل NULL لحد ما يتعمله ميرج
+  if (rawSender?.type === 'user' && rawSender?.id) {
+    externalAgentRepo.findOrCreateAgent(provider.id, rawSender.id, rawSender.name).catch(() => {});
+  }
 
   // "حجز" الرسالة أولًا — INSERT في External_Messages_byA بـ nile_message_id
   // فاضي، قبل أي حاجة تانية. ده اللي بيمنع التكرار فعليًا (مش فحص findByProviderAndExternalId
   // فوق لوحده، لإنه check-then-act ومش atomic): لو حدثين متطابقين وصلوا سوا،
   // الاتنين ممكن يعدّوا من الفحص فوق قبل ما أي واحد يسجل، لكن الـ UNIQUE
   // constraint هنا في الداتابيز نفسها هو الحكم النهائي — واحد بس هيعدي
+  const nileDirection = isPrivateNote ? 'note' : isActivity ? 'system' : direction;
   let reservedMessage;
   try {
     reservedMessage = await externalMessageRepo.createExternalMessage(provider.id, externalMessageId, {
       externalConversationRowId: externalConversationRow.id,
       nileMessageId: null,
-      direction,
-      messageType,
+      direction: nileDirection,
+      messageType: 'text',
       rawJson: JSON.stringify(payload),
     });
   } catch (err) {
@@ -273,11 +322,38 @@ async function handleMessageEvent(provider, payload, io) {
     throw err;
   }
 
-  // لو إيجنت كتب الرد مباشرة من واجهة شات ووت (مش من نايل شات)، بنسجله كمتابعة
-  // بسيطة في External_Agent_byA — nile_user_id بيفضل NULL لحد ما يتعمله ميرج
-  if (direction === 'out' && rawSender?.type === 'user' && rawSender?.id) {
-    externalAgentRepo.findOrCreateAgent(provider.id, rawSender.id, rawSender.name).catch(() => {});
+  // ===== ملاحظة خاصة (Private Note) — بتتسجل كملاحظة داخلية عندنا برضو،
+  // بنفس شكل الملاحظات اللي الإيجنت بيكتبها من جوه نايل شات نفسه =====
+  if (isPrivateNote) {
+    const note = await conversationRepo.addPrivateNote(conversationId, {
+      text: messageText || '',
+      senderId: null,
+      senderName: rawSender?.name || 'شات ووت',
+    });
+    await externalMessageRepo.linkNileMessage(reservedMessage.id, note.id);
+    if (io) socketService.emitToCompany(io, provider.company_id, 'new_note', { conversationId, note });
+    return;
   }
+
+  // ===== رسالة نظام تلقائية من شات ووت (Activity) — زي "X عيّن المحادثة لـ Y"
+  // أو "تم الحل"، بتتسجل كرسالة نظام عندنا بنفس شكل رسايل النظام التانية =====
+  if (isActivity) {
+    const systemMessage = await conversationRepo.addSystemMessage(conversationId, messageText || 'Activity');
+    await conversationRepo.touchConversation(conversationId);
+    await externalMessageRepo.linkNileMessage(reservedMessage.id, systemMessage.id);
+    if (io) {
+      socketService.emitToConversationRoom(io, conversationId, 'new_message', { conversationId, message: systemMessage });
+    }
+    return;
+  }
+
+  // ===== رسالة عادية (من عميل أو رد إيجنت) — المسار الكامل زي قبل كده بالظبط =====
+  // مرفقات (صور/فيديو/صوت/مستندات) — بنسجل الرسالة فورًا من غير ما نستنى
+  // التنزيل (بالظبط زي تعامل ميتا)، وبنكمل التنزيل في الخلفية تحت
+  const attachment = Array.isArray(payload.attachments) && payload.attachments.length > 0 ? payload.attachments[0] : null;
+  const mappedType = attachment ? mapAttachmentType(attachment.file_type) : null;
+  const messageType = mappedType || 'text';
+  const mediaFileName = attachment?.data_url ? decodeURIComponent(attachment.data_url.split('/').pop() || '') || null : null;
 
   const [, saved] = await Promise.all([
     conversationRepo.touchConversation(conversationId),

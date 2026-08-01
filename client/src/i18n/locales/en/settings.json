@@ -478,7 +478,14 @@
     "syncAgents": "Sync agents from Chatwoot",
     "syncing": "Syncing…",
     "syncSuccess": "Agents fetched from Chatwoot",
-    "syncFailed": "Sync failed"
+    "syncFailed": "Sync failed",
+    "confirmDelete": "This connection will be permanently deleted (the bridge data linking it to Chatwoot). Your real conversations and messages won't be deleted, but they'll lose their link to Chatwoot. Are you sure?",
+    "deleteFailed": "Failed to delete the connection",
+    "linkedTo": "Linked to {{name}}",
+    "unlinkAction": "Unlink",
+    "unmergeSuccess": "Unlinked",
+    "tabAgentsWithLinked": "Agents ({{linked}}/{{count}} linked)",
+    "noAgentsAtAll": "No agents yet — click \"Sync\" to fetch them from Chatwoot"
   },
   "chatwootFields": {
     "namePlaceholder": "Connection name (optional, defaults to chatwoot)",

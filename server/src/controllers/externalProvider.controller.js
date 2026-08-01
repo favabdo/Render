@@ -87,6 +87,17 @@ async function regenerateSecret(req, res) {
   res.json({ ok: true, provider: updated, webhookUrl: buildWebhookUrl(req, updated) });
 }
 
+// بيمسح الاتصال بالكامل. المحادثات/الرسايل الحقيقية في نايل شات متتأثرش —
+// بتفضل موجودة، بس من غير ربط بمزود خارجي بعد كده (زي فصل إنبوكس عادي)
+async function deleteProvider(req, res) {
+  const provider = await externalProviderRepo.getProviderById(req.params.id);
+  if (!provider || String(provider.company_id) !== String(req.companyId)) {
+    return res.status(404).json({ error: 'المزود ده مش موجود' });
+  }
+  await externalProviderRepo.deleteProvider(provider.id);
+  res.json({ ok: true });
+}
+
 module.exports = {
   createProvider,
   listProviders,
@@ -94,4 +105,5 @@ module.exports = {
   updateProvider,
   setActive,
   regenerateSecret,
+  deleteProvider,
 };

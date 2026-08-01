@@ -164,6 +164,16 @@ export default function InboxesSection() {
     }
   }
 
+  function deleteProvider(provider) {
+    if (!window.confirm(t('chatwootModal.confirmDelete'))) return;
+    const previous = providers;
+    setProviders((prev) => prev.filter((p) => p.id !== provider.id));
+    chatwootApi.remove(provider.id).catch((err) => {
+      setProviders(previous);
+      showToast(err.response?.data?.error || t('chatwootModal.deleteFailed'), 'error');
+    });
+  }
+
   const isEmpty = inboxes.length === 0 && providers.length === 0;
 
   return (
@@ -274,6 +284,9 @@ export default function InboxesSection() {
                       </button>
                       <button className="st-icon-btn" title={t('chatwootModal.manageMerge')} onClick={() => setMergeProvider(p)}>
                         <Link2 size={13} />
+                      </button>
+                      <button className="st-icon-btn danger" title={t('inboxes.confirmDelete')} onClick={() => deleteProvider(p)}>
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>
