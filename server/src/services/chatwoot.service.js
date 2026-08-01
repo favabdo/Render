@@ -13,6 +13,175 @@ const externalProviderRepo = require('../repositories/externalProvider.repo');
 const mediaStorage = require('../utils/mediaStorage');
 const logger = require('../utils/logger');
 
+// ============================================================================
+// خطة بديلة (Fallback) لمشكلة هيدر api_access_token
+// ----------------------------------------------------------------------------
+// لو سيرفر شات ووت شغال وراء Nginx بإعداد افتراضي، بيتم مسح أي هيدر فيه
+// underscore (زي api_access_token) قبل ما يوصل لشات ووت، فحتى لو التوكن صح
+// 100%، شات ووت هيشوف الريكوست من غير أي مصادقة ويرد 401 "لازم تسجل دخول".
+// الحل الأصلي (المفضّل لو متاح): إضافة `underscores_in_headers on;` في إعداد
+// الدومين في Nginx وعمل reload — ده بيصلح المشكلة نهائيًا بأقل تكلفة.
+// الخطة البديلة هنا (من غير ما نلمس السيرفر): استخدام هيدرز تسجيل الدخول
+// العادية (access-token / client / uid) بدل api_access_token — دي فيها شرطة
+// مش underscore، فـ Nginx الافتراضي مايمسحهاش، وشات ووت بيقبلها بديل كامل
+// لنفس الـ API (devise_token_auth session auth بدل الـ personal access token).
+// ============================================================================
+
+// كاش بالميموري بس (بيتصفر مع أي ريستارت للسيرفر — ده مقصود، عشان لو حد
+// صلح إعداد Nginx بعدين نرجع نجرب api_access_token تاني تلقائيًا من غير ما
+// حد يحتاج يعمل حاجة يدويًا).
+// 1) sessionAuthPreference: بيتذكر "المزود/الإيجنت ده جرّبنا معاه api_access_token
+//    وفشلت، فمن الطلب الجاي روح على طول لهيدرز الجلسة من غير ما تضيّع وقت في
+//    محاولة هتفشل أكيد"
+// 2) sessionHeadersCache: بيحفظ آخر هيدرز جلسة صالحة (access-token/client/uid)
+//    لكل (baseUrl+email) عشان مانسجّلش دخول من الأول في كل رسالة
+const sessionAuthPreference = new Map(); // key -> true (يستخدم هيدرز الجلسة)
+const sessionHeadersCache = new Map(); // key -> { 'access-token', client, uid }
+
+function sessionCacheKey(baseUrl, email) {
+  return `${(baseUrl || '').replace(/\/+$/, '')}::${email || ''}`;
+}
+
+// بتسجل دخول بالإيميل/الباسورد وترجع هيدرز الجلسة (access-token/client/uid)
+// جاهزة للاستخدام المباشر مع أي endpoint في شات ووت — بديل كامل لـ
+// api_access_token، من غير ما نحتاج نمر بصفحة /api/v1/profile أصلاً
+async function fetchSessionHeaders(baseUrl, email, password, { forceRefresh = false } = {}) {
+  if (!baseUrl || !email || !password) {
+    throw new Error('لازم رابط شات ووت والإيميل والباسورد الثلاثة عشان نسجل الدخول');
+  }
+  const root = baseUrl.replace(/\/+$/, '');
+  const cacheKey = sessionCacheKey(root, email);
+
+  if (!forceRefresh && sessionHeadersCache.has(cacheKey)) {
+    return sessionHeadersCache.get(cacheKey);
+  }
+
+  let signInRes;
+  try {
+    signInRes = await axios.post(
+      `${root}/auth/sign_in`,
+      { email, password },
+      { timeout: 15000, validateStatus: () => true }
+    );
+  } catch (err) {
+    throw new Error(`فشل الاتصال بشات ووت لتسجيل الدخول (${root}): ${err.message}`);
+  }
+
+  const authToken = signInRes.headers?.['access-token'];
+  if (signInRes.status !== 200 || !authToken) {
+    throw new Error(
+      signInRes.data?.message || signInRes.data?.errors?.[0] || 'فشل تسجيل الدخول بالإيميل والباسورد — تأكد إنهم صح'
+    );
+  }
+
+  const headers = {
+    'access-token': authToken,
+    client: signInRes.headers['client'],
+    uid: signInRes.headers['uid'],
+  };
+  sessionHeadersCache.set(cacheKey, headers);
+  return headers;
+}
+
+// devise_token_auth (اللي شات ووت مبني عليه) بيجدد access-token/client/uid
+// في كل ريكوست ناجح بيهم (rotation)، ولو ماخدناش الهيدرز الجديدة دي هنلاقي
+// الريكوست اللي بعده فاشل. الدالة دي بتحدّث الكاش بالهيدرز الجديدة من أي رد
+// نجح، عشان الريكوست الجاي يشتغل من غير ما نحتاج نسجل دخول تاني كل مرة
+function updateSessionHeadersFromResponse(baseUrl, email, responseHeaders) {
+  const newAccessToken = responseHeaders?.['access-token'];
+  if (!newAccessToken) return; // مفيش تجديد في الرد ده — سيبها زي ما هي
+  const cacheKey = sessionCacheKey(baseUrl, email);
+  sessionHeadersCache.set(cacheKey, {
+    'access-token': newAccessToken,
+    client: responseHeaders['client'],
+    uid: responseHeaders['uid'],
+  });
+}
+
+// النقطة المركزية اللي بتقرر: نبعت بـ api_access_token ولا بهيدرز الجلسة؟
+// وبتتولى كل التبديل التلقائي بينهم لو واحد فيهم فشل.
+//
+// المعاملات:
+//  - requestFn(headers): دالة بترجع Promise (axios request) وبتاخد الهيدرز
+//    اللي المفروض تتبعت بيها (بتضيفها هي على أي هيدرز تانية عندها)
+//  - creds: { baseUrl, apiAccessToken, email, password, cacheKey } — كل
+//    المعلومات المطلوبة عشان نعرف نجدد أو نبدّل طريقة
+//  - getResponseHeaders(result): دالة بترجع هيدرز الرد (axios: res.headers،
+//    fetch: Object.fromEntries(res.headers.entries()))
+//
+// بترجع نتيجة الريكوست الناجح، أو بترمي الخطأ لو كل المحاولات فشلت
+async function sendToChatwoot(requestFn, creds, getResponseHeaders) {
+  const { baseUrl, apiAccessToken, email, password, cacheKey, refreshToken } = creds;
+  const hasCreds = !!(email && password);
+  const preferSession = cacheKey && sessionAuthPreference.get(cacheKey);
+
+  // -------- الوضع 1: هيدرز الجلسة مباشرة (لو عارفين خلاص إنها اللي بتشتغل) --------
+  if (preferSession && hasCreds) {
+    try {
+      const sessionHeaders = await fetchSessionHeaders(baseUrl, email, password);
+      const result = await requestFn(sessionHeaders);
+      updateSessionHeadersFromResponse(baseUrl, email, getResponseHeaders(result));
+      return result;
+    } catch (err) {
+      const status = err.response?.status || err.status;
+      if (status === 401 || status === 403) {
+        // ممكن الجلسة القديمة انتهت — نجرب تسجيل دخول جديد تمامًا مرة واحدة
+        const sessionHeaders = await fetchSessionHeaders(baseUrl, email, password, { forceRefresh: true });
+        const result = await requestFn(sessionHeaders);
+        updateSessionHeadersFromResponse(baseUrl, email, getResponseHeaders(result));
+        return result;
+      }
+      throw err;
+    }
+  }
+
+  // -------- الوضع 2: نبدأ بـ api_access_token العادي (الوضع الافتراضي) --------
+  let lastErr = null;
+  if (apiAccessToken) {
+    try {
+      return await requestFn({ api_access_token: apiAccessToken });
+    } catch (err) {
+      lastErr = err;
+      const status = err.response?.status || err.status;
+      if (!(status === 401 || status === 403)) throw err;
+
+      // التوكن اترفض — قبل ما نفترض إنها مشكلة Nginx، نجرب أول حاجة نجدد
+      // التوكن نفسه (ممكن يكون باظ أو اتغيّر فعلاً، مش بالضرورة مشكلة هيدرز)
+      if (typeof refreshToken === 'function') {
+        try {
+          const freshToken = await refreshToken();
+          return await requestFn({ api_access_token: freshToken });
+        } catch (refreshErr) {
+          lastErr = refreshErr;
+          const refreshStatus = refreshErr.response?.status || refreshErr.status;
+          if (!(refreshStatus === 401 || refreshStatus === 403)) throw refreshErr;
+        }
+      }
+
+      if (!hasCreds) throw lastErr;
+      logger.error(
+        `⚠️ هيدر api_access_token اترفض (HTTP ${status}) حتى بعد تجديد التوكن — على الأغلب Nginx بيمسح الهيدر ده لإنه فيه underscore. جارٍ التحويل لهيدرز الجلسة (access-token/client/uid)...`
+      );
+    }
+  } else if (!hasCreds) {
+    throw new Error('مفيش لا توكن (api_access_token) ولا إيميل/باسورد لتسجيل الدخول — مفيش طريقة نبعت بيها');
+  }
+
+  // -------- الوضع 3: التحويل لهيدرز الجلسة بعد فشل api_access_token --------
+  if (!hasCreds) throw lastErr || new Error('توكن api_access_token فشل ومفيش إيميل/باسورد لعمل fallback بهيدرز الجلسة');
+
+  const sessionHeaders = await fetchSessionHeaders(baseUrl, email, password);
+  const result = await requestFn(sessionHeaders);
+  updateSessionHeadersFromResponse(baseUrl, email, getResponseHeaders(result));
+  if (cacheKey) {
+    sessionAuthPreference.set(cacheKey, true);
+    logger.info(
+      `✅ هيدرز الجلسة (access-token/client/uid) اشتغلت بديل api_access_token — هيتم استخدامها مباشرة من دلوقتي لـ (${cacheKey})`
+    );
+  }
+  return result;
+}
+
 // بتسجل دخول شات ووت بالإيميل والباسورد (نفس صفحة تسجيل الدخول العادية)
 // وترجع توكن الـ API الدائم بتاع صاحب الحساب ده (access_token في صفحة
 // البروفايل — بالظبط نفس التوكن اللي كان المفروض الإداري/الإيجنت ينسخه يدويًا
@@ -84,13 +253,14 @@ async function resolveSendingToken(provider, senderId) {
       await externalAgentRepo.setAgentPersonalToken(agentRow.id, fresh);
       return fresh;
     };
+    const emailAuth = { email: agentRow.agent_email, password: agentRow.agent_password, cacheKey: `agent:${agentRow.id}` };
     if (agentRow.agent_api_access_token) {
-      return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})`, refreshToken };
+      return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})`, refreshToken, ...emailAuth };
     }
     // مفيش توكن مخزن لسه (أول مرة) — نجيبه دلوقتي بالإيميل والباسورد
     try {
       const fresh = await refreshToken();
-      return { token: fresh, source: `agent-personal-auto (#${agentRow.id})`, refreshToken };
+      return { token: fresh, source: `agent-personal-auto (#${agentRow.id})`, refreshToken, ...emailAuth };
     } catch (err) {
       logger.error(`❌ فشل جلب توكن الإيجنت #${agentRow.id} بالإيميل/الباسورد:`, err.message);
     }
@@ -100,16 +270,23 @@ async function resolveSendingToken(provider, senderId) {
     return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})`, refreshToken: null };
   }
 
-  const providerRefresh =
-    provider.login_email && provider.login_password
-      ? async () => {
-          const fresh = await loginAndFetchToken(provider.base_url, provider.login_email, provider.login_password);
-          await externalProviderRepo.updateProvider(provider.id, { apiAccessToken: fresh });
-          return fresh;
-        }
-      : null;
+  const hasProviderCreds = !!(provider.login_email && provider.login_password);
+  const providerRefresh = hasProviderCreds
+    ? async () => {
+        const fresh = await loginAndFetchToken(provider.base_url, provider.login_email, provider.login_password);
+        await externalProviderRepo.updateProvider(provider.id, { apiAccessToken: fresh });
+        return fresh;
+      }
+    : null;
 
-  return { token: provider.api_access_token, source: 'provider-default', refreshToken: providerRefresh };
+  return {
+    token: provider.api_access_token,
+    source: 'provider-default',
+    refreshToken: providerRefresh,
+    ...(hasProviderCreds
+      ? { email: provider.login_email, password: provider.login_password, cacheKey: `provider:${provider.id}` }
+      : {}),
+  };
 }
 
 // بيجيب قايمة إيجنتس الحساب كلها من شات ووت — مستخدمة في "مزامنة الإيجنتس"
@@ -117,33 +294,18 @@ async function resolveSendingToken(provider, senderId) {
 // كل واحد فيهم يبعت رسالة الأول عشان يظهر عندنا
 async function fetchAgents(provider) {
   const url = `${provider.base_url.replace(/\/+$/, '')}/api/v1/accounts/${provider.account_id}/agents`;
-  const response = await axios.get(url, {
-    headers: { api_access_token: provider.api_access_token },
-    timeout: 15000,
-  });
+  const response = await sendToChatwoot(
+    (headers) => axios.get(url, { headers, timeout: 15000 }),
+    {
+      baseUrl: provider.base_url,
+      apiAccessToken: provider.api_access_token,
+      email: provider.login_email,
+      password: provider.login_password,
+      cacheKey: `provider:${provider.id}`,
+    },
+    (res) => res.headers
+  );
   return Array.isArray(response.data?.payload) ? response.data.payload : response.data || [];
-}
-
-// بتحاول تبعت الطلب بالتوكن الحالي، ولو شات ووت رفضه بـ 401/403 (توكن باظ
-// أو اتغيّر) وعندنا طريقة نجدده بيها (تسجيل دخول بالإيميل/الباسورد المخزنين
-// من resolveSendingToken)، بتجدده تلقائيًا وتحاول تبعت تاني مرة واحدة بس —
-// عشان الرد يوصل من غير ما حد يحتاج يدخل يحدّث التوكن يدويًا
-async function sendWithAutoRefresh(sendFn, tokenInfo) {
-  try {
-    return await sendFn(tokenInfo.token);
-  } catch (err) {
-    const status = err.response?.status;
-    if ((status === 401 || status === 403) && tokenInfo.refreshToken) {
-      logger.error(
-        `⚠️ توكن شات ووت (${tokenInfo.source}) مرفوض (HTTP ${status}) — جارٍ تجديده تلقائيًا بالإيميل/الباسورد المخزنين...`
-      );
-      const freshToken = await tokenInfo.refreshToken();
-      tokenInfo.token = freshToken;
-      tokenInfo.source = `${tokenInfo.source} (متجدد تلقائيًا)`;
-      return await sendFn(freshToken);
-    }
-    throw err;
-  }
 }
 
 // مرحلة 1: تسجيل الرسالة فورًا في جدول الرسايل العادي (بتظهر للإيجنت على طول
@@ -189,14 +351,25 @@ async function deliverOutgoingMessage(savedMessage, { conversationId, text, send
       sender?.id
     );
 
-    const response = await sendWithAutoRefresh((token) => {
-      const sendPromise = axios.post(
-        url,
-        { content: text, message_type: 'outgoing', private: false },
-        { headers: { api_access_token: token }, timeout: 15000 }
-      );
-      return timer ? timer.time('http:chatwoot_send_message', sendPromise) : sendPromise;
-    }, tokenInfo);
+    const response = await sendToChatwoot(
+      (headers) => {
+        const sendPromise = axios.post(
+          url,
+          { content: text, message_type: 'outgoing', private: false },
+          { headers, timeout: 15000 }
+        );
+        return timer ? timer.time('http:chatwoot_send_message', sendPromise) : sendPromise;
+      },
+      {
+        baseUrl: externalConversation.provider_base_url,
+        apiAccessToken: tokenInfo.token,
+        email: tokenInfo.email,
+        password: tokenInfo.password,
+        cacheKey: tokenInfo.cacheKey,
+        refreshToken: tokenInfo.refreshToken,
+      },
+      (res) => res.headers
+    );
     const chatwootMessageId = response.data?.id;
 
     finalRow = await conversationRepo.finalizeOutgoingMessage(savedMessage.id, {
@@ -306,28 +479,32 @@ async function deliverOutgoingMediaMessage(savedMessage, { conversationId, buffe
       sender?.id
     );
 
-    const doUpload = (token) => {
-      const sendPromise = fetch(url, {
-        method: 'POST',
-        headers: { api_access_token: token },
-        body: form,
-      });
-      return timer ? timer.time('http:chatwoot_send_media', sendPromise) : sendPromise;
+    // fetch لا يرمي استثناء تلقائيًا على 401/403 (عكس axios)، فبنحوّلها هنا
+    // لاستثناء بنفس شكل استثناءات axios (err.response.status) عشان
+    // sendToChatwoot تقدر تتعامل معاها بنفس المنطق الموحّد لكل الطلبات
+    const doUpload = async (headers) => {
+      const sendPromise = fetch(url, { method: 'POST', headers, body: form });
+      const res = timer ? await timer.time('http:chatwoot_send_media', sendPromise) : await sendPromise;
+      if (!res.ok) {
+        const err = new Error(`Chatwoot رفض رفع الملف — HTTP ${res.status}`);
+        err.response = { status: res.status };
+        throw err;
+      }
+      return res;
     };
 
-    let response = await doUpload(tokenInfo.token);
-    if ((response.status === 401 || response.status === 403) && tokenInfo.refreshToken) {
-      logger.error(
-        `⚠️ توكن شات ووت (${tokenInfo.source}) مرفوض (HTTP ${response.status}) — جارٍ تجديده تلقائيًا بالإيميل/الباسورد المخزنين...`
-      );
-      const freshToken = await tokenInfo.refreshToken();
-      tokenInfo.token = freshToken;
-      tokenInfo.source = `${tokenInfo.source} (متجدد تلقائيًا)`;
-      response = await doUpload(freshToken);
-    }
-    if (!response.ok) {
-      throw new Error(`Chatwoot رفض رفع الملف — HTTP ${response.status} — التوكن المستخدم: ${tokenInfo.source}`);
-    }
+    const response = await sendToChatwoot(
+      doUpload,
+      {
+        baseUrl: externalConversation.provider_base_url,
+        apiAccessToken: tokenInfo.token,
+        email: tokenInfo.email,
+        password: tokenInfo.password,
+        cacheKey: tokenInfo.cacheKey,
+        refreshToken: tokenInfo.refreshToken,
+      },
+      (res) => Object.fromEntries(res.headers.entries())
+    );
     const data = await response.json();
     const chatwootMessageId = data?.id;
 
