@@ -20,7 +20,10 @@ export function mapApiConversation(row) {
     phone: row.contact_number,
     status: row.status === 'closed' ? 'resolved' : 'open',
     rawStatus: row.status,
-    assignedTo: row.assigned_agent_name || null,
+    // اسم المعيّن له: لو الإيجنت متعمله ميرج بيجيلنا assigned_agent_name عادي،
+    // ولو لسه مش متعمله ميرج بس المحادثة جايه من شات ووت ومعيّنة لحد هناك،
+    // بنعرض اسمه الخام من شات ووت كـ fallback بدل ما يفضل فاضي
+    assignedTo: row.assigned_agent_name || row.external_assignee_name || null,
     lastMsg: row.last_message_text || (row.last_message_type && row.last_message_type !== 'text' ? mediaKindLabel(row.last_message_type) : ''),
     time: row.created_at ? formatTime(row.created_at) : '',
     unread: 0,

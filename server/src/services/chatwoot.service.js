@@ -247,6 +247,22 @@ async function resolveSendingToken(provider, senderId) {
     }
   }
 
+  // بيانات دخول المزود (Provider) — هنستخدمها كخطة احتياطية أخيرة (fallback
+  // لهيدرز الجلسة) في أي حالة الإيجنت نفسه معندوش إيميل/باسورد شخصيين
+  // يعملهم بيها session، عشان الرسالة تتبعت في كل الأحوال بدل ما تفشل
+  // نهائي — حتى لو التوكن الشخصي المخزّن للإيجنت باظ أو Nginx بيمسح الهيدر
+  const hasProviderCreds = !!(provider.login_email && provider.login_password);
+  const providerFallbackAuth = hasProviderCreds
+    ? { email: provider.login_email, password: provider.login_password, cacheKey: `provider:${provider.id}` }
+    : {};
+  const providerRefresh = hasProviderCreds
+    ? async () => {
+        const fresh = await loginAndFetchToken(provider.base_url, provider.login_email, provider.login_password);
+        await externalProviderRepo.updateProvider(provider.id, { apiAccessToken: fresh });
+        return fresh;
+      }
+    : null;
+
   if (agentRow?.agent_email && agentRow?.agent_password) {
     const refreshToken = async () => {
       const fresh = await loginAndFetchToken(provider.base_url, agentRow.agent_email, agentRow.agent_password);
@@ -267,26 +283,20 @@ async function resolveSendingToken(provider, senderId) {
   }
 
   if (agentRow?.agent_api_access_token) {
-    return { token: agentRow.agent_api_access_token, source: `agent-personal (#${agentRow.id})`, refreshToken: null };
+    // الإيجنت عنده توكن شخصي بس من غير إيميل/باسورد خاصين بيه (زي إيجنت #12
+    // في اللوج) — لو التوكن ده باظ أو اترفض بسبب Nginx، مفيش طريقة نسجل
+    // دخول بيها كـ"هو نفسه"، فبنستخدم بيانات دخول المزود كـ fallback أخير
+    // عشان الرد يوصل (هيظهر باسم حساب المزود العام مش الإيجنت، بس أحسن من
+    // فشل الرسالة تمامًا)
+    return {
+      token: agentRow.agent_api_access_token,
+      source: `agent-personal (#${agentRow.id})`,
+      refreshToken: null,
+      ...providerFallbackAuth,
+    };
   }
 
-  const hasProviderCreds = !!(provider.login_email && provider.login_password);
-  const providerRefresh = hasProviderCreds
-    ? async () => {
-        const fresh = await loginAndFetchToken(provider.base_url, provider.login_email, provider.login_password);
-        await externalProviderRepo.updateProvider(provider.id, { apiAccessToken: fresh });
-        return fresh;
-      }
-    : null;
-
-  return {
-    token: provider.api_access_token,
-    source: 'provider-default',
-    refreshToken: providerRefresh,
-    ...(hasProviderCreds
-      ? { email: provider.login_email, password: provider.login_password, cacheKey: `provider:${provider.id}` }
-      : {}),
-  };
+  return { token: provider.api_access_token, source: 'provider-default', refreshToken: providerRefresh, ...providerFallbackAuth };
 }
 
 // بيجيب قايمة إيجنتس الحساب كلها من شات ووت — مستخدمة في "مزامنة الإيجنتس"
@@ -530,6 +540,123 @@ async function deliverOutgoingMediaMessage(savedMessage, { conversationId, buffe
   return finalRow;
 }
 
+// ============================================================================
+// مزامنة عكسية: نايل شات → شات ووت (Assign / Resolve / Private Note)
+// ----------------------------------------------------------------------------
+// عكس كل المزامنة التلقائية الموجودة فوق (اللي كلها شات ووت → نايل شات بس).
+// الدوال الثلاثة دي بتتنادى من conversation.controller.js بعد ما الإجراء
+// يتم فعليًا عندنا، وبتفشل بهدوء (تُسجَّل في اللوج بس) لو المحادثة مش مربوطة
+// بمزود خارجي، أو لو الإجراء مش قابل للمزامنة (زي Assign لإيجنت لسه مالوش ميرج)
+async function getExternalConversationForSync(nileConversationId) {
+  const externalConversation = await externalConversationRepo.findByNileConversationIdWithProvider(nileConversationId);
+  if (!externalConversation || !externalConversation.provider_is_active) return null;
+  return externalConversation;
+}
+
+function buildProviderCreds(externalConversation, tokenInfo) {
+  return {
+    baseUrl: externalConversation.provider_base_url,
+    apiAccessToken: tokenInfo.token,
+    email: tokenInfo.email,
+    password: tokenInfo.password,
+    cacheKey: tokenInfo.cacheKey,
+    refreshToken: tokenInfo.refreshToken,
+  };
+}
+
+// لو عملنا Assign من نايل شات لإيجنت متعمله ميرج مع إيجنت شات ووت، بنبعت
+// نفس التعيين لشات ووت (POST .../assignments)، عشان يظهر هناك إنه اتعمله
+// اساين برضه. لو الإيجنت المستهدف لسه مالوش ميرج، مفيش حاجة نبعتها (مفيش
+// إيجنت شات ووت نعينه له أصلاً)
+async function assignConversationInChatwoot(nileConversationId, targetNileUserId) {
+  const externalConversation = await getExternalConversationForSync(nileConversationId);
+  if (!externalConversation) return;
+
+  const agentRow = await externalAgentRepo.findByNileUserId(externalConversation.provider_id, targetNileUserId);
+  if (!agentRow) return; // الإيجنت ده مش متعمله ميرج — مفيش إيجنت شات ووت نعينه له
+
+  const url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/assignments`;
+
+  const tokenInfo = await resolveSendingToken(
+    {
+      id: externalConversation.provider_id,
+      base_url: externalConversation.provider_base_url,
+      api_access_token: externalConversation.provider_api_access_token,
+      login_email: externalConversation.provider_login_email,
+      login_password: externalConversation.provider_login_password,
+    },
+    null // إجراء إداري (Assign) مش رد على العميل، فبنستخدم توكن الاتصال العام
+  );
+
+  await sendToChatwoot(
+    (headers) => axios.post(url, { assignee_id: agentRow.external_agent_id }, { headers, timeout: 15000 }),
+    buildProviderCreds(externalConversation, tokenInfo),
+    (res) => res.headers
+  );
+}
+
+// لو عملنا Resolve من نايل شات، بنقفل نفس المحادثة في شات ووت (toggle_status)
+async function resolveConversationInChatwoot(nileConversationId) {
+  const externalConversation = await getExternalConversationForSync(nileConversationId);
+  if (!externalConversation) return;
+
+  const url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/toggle_status`;
+
+  const tokenInfo = await resolveSendingToken(
+    {
+      id: externalConversation.provider_id,
+      base_url: externalConversation.provider_base_url,
+      api_access_token: externalConversation.provider_api_access_token,
+      login_email: externalConversation.provider_login_email,
+      login_password: externalConversation.provider_login_password,
+    },
+    null
+  );
+
+  await sendToChatwoot(
+    (headers) => axios.post(url, { status: 'resolved' }, { headers, timeout: 15000 }),
+    buildProviderCreds(externalConversation, tokenInfo),
+    (res) => res.headers
+  );
+}
+
+// لو الإيجنت كتب ملاحظة خاصة من نايل شات، بنبعتها لشات ووت كملاحظة خاصة
+// برضه (private=true) عشان أي حد شغال من شات ووت مباشرة يشوفها. بترجع
+// { externalConversationRowId, providerId, chatwootMessageId } لو نجحت (عشان
+// الكنترولر يسجلها في External_Messages_byA ويمنع تكرارها لما الـ webhook
+// يرجعلنا نفس الرسالة تاني)، أو null لو المحادثة مش مربوطة بمزود خارجي
+async function sendPrivateNoteToChatwoot(nileConversationId, text, senderName) {
+  const externalConversation = await getExternalConversationForSync(nileConversationId);
+  if (!externalConversation) return null;
+
+  const url = `${externalConversation.provider_base_url.replace(/\/+$/, '')}/api/v1/accounts/${externalConversation.provider_account_id}/conversations/${externalConversation.external_conversation_id}/messages`;
+
+  const tokenInfo = await resolveSendingToken(
+    {
+      id: externalConversation.provider_id,
+      base_url: externalConversation.provider_base_url,
+      api_access_token: externalConversation.provider_api_access_token,
+      login_email: externalConversation.provider_login_email,
+      login_password: externalConversation.provider_login_password,
+    },
+    null
+  );
+
+  const content = senderName ? `${senderName}: ${text}` : text;
+
+  const response = await sendToChatwoot(
+    (headers) => axios.post(url, { content, message_type: 'outgoing', private: true }, { headers, timeout: 15000 }),
+    buildProviderCreds(externalConversation, tokenInfo),
+    (res) => res.headers
+  );
+
+  return {
+    externalConversationRowId: externalConversation.id,
+    providerId: externalConversation.provider_id,
+    chatwootMessageId: response.data?.id || null,
+  };
+}
+
 module.exports = {
   createOutgoingMessage,
   deliverOutgoingMessage,
@@ -538,4 +665,7 @@ module.exports = {
   deliverOutgoingMediaMessage,
   fetchAgents,
   loginAndFetchToken,
+  assignConversationInChatwoot,
+  resolveConversationInChatwoot,
+  sendPrivateNoteToChatwoot,
 };

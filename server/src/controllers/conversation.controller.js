@@ -5,6 +5,8 @@ const conversationRepo = require('../repositories/conversation.repo');
 const userRepo = require('../repositories/user.repo');
 const conversationService = require('../services/conversation.service');
 const whatsappService = require('../services/whatsapp.service');
+const chatwootService = require('../services/chatwoot.service');
+const externalMessageRepo = require('../repositories/externalMessage.repo');
 const webhookDispatchService = require('../services/webhookDispatch.service');
 const groqAiService = require('../services/groqAi.service');
 const notificationService = require('../services/notification.service');
@@ -153,6 +155,12 @@ async function assign(req, res) {
     })
     .catch((err) => logger.error('❌ فشل تحديث المحادثة بعد الأسين (broadcast خلفي):', err.message));
 
+  // لو المحادثة دي مربوطة بشات ووت والإيجنت المستهدف متعمله ميرج، بنبعت نفس
+  // التعيين لشات ووت برضه (فشلها هنا مش قاتل — بنسجله بس في اللوج)
+  chatwootService
+    .assignConversationInChatwoot(req.params.id, targetAgentId)
+    .catch((err) => logger.error('❌ فشل مزامنة الأسين لشات ووت:', err.message));
+
   // إشعار "A conversation is assigned to you" — بس لو حد تاني هو اللي عيّنها
   // (مش self-assign)، لصاحب المحادثة الجديد
   if (!isSelfAssign) {
@@ -209,6 +217,11 @@ async function resolve(req, res) {
     notes: notes || null,
   }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
 
+  // لو المحادثة دي مربوطة بشات ووت، بنقفلها هناك برضه (Resolve متزامن)
+  chatwootService
+    .resolveConversationInChatwoot(req.params.id)
+    .catch((err) => logger.error('❌ فشل مزامنة الـ Resolve لشات ووت:', err.message));
+
   // أتمتة "بعد الحل" (رسالة CSAT ثم فلو التقييم ورا بعض) — بس أول مرة تتقفل
   // فيها المحادثة فعليًا. لو ده Resolve تاني بعد Reopen، متبعتش تاني خالص.
   // بتتنفذ بعد ما رجعنا الرد للإيجنت عشان مبتأخرش قفل المحادثة في الواجهة
@@ -255,6 +268,19 @@ async function reopen(req, res) {
   }).catch((err) => logger.error('❌ فشل إرسال Webhook conversation_status_changed:', err.message));
 }
 
+// إلغاء رسالة فشل إرسالها — بتتمسح فعليًا من الداتابيز (مش بس إخفاء في
+// الواجهة)، عشان متفضلش ترجع تاني لو الإيجنت عمل Refresh. بنحمي نفسنا بالتحقق
+// من status='failed' جوه الـ repo نفسه (شوف deleteFailedMessage) — لو الرسالة
+// مش 'failed' فعلاً (اتبعتت بنجاح مثلاً)، الحذف مبيحصلش
+async function deleteMessage(req, res) {
+  const { messageId } = req.params;
+  const deleted = await conversationRepo.deleteFailedMessage(messageId, req.params.id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'مفيش رسالة فشلت بالـ id ده تتلغي' });
+  }
+  res.json({ ok: true });
+}
+
 // ملاحظة خاصة بين الإيجنتس بس — مش بتتبعت لواتساب ومش بتظهر للعميل أبدًا
 async function addNote(req, res) {
   const { text } = req.body || {};
@@ -287,6 +313,24 @@ async function addNote(req, res) {
       // بنبعتها لايف لكل الإيجنتس الفاتحين المحادثة دي عن طريق socket منفصل (new_note)
       // عشان محدش يخلطها بـ 'new_message' (اللي مرتبط بمنطق العميل/واتساب)
       if (io) socketService.emitToCompany(io, req.companyId, 'new_note', { conversationId: conversation.id, note });
+
+      // لو المحادثة دي مربوطة بشات ووت، بنبعت نفس الملاحظة هناك كملاحظة خاصة
+      // برضه. بنسجلها في External_Messages_byA بعد النجاح عشان لو الـ webhook
+      // رجعلنا نفس الرسالة دي تاني (شات ووت بيبعت message_created لأي رسالة
+      // بيستقبلها هو، حتى اللي إحنا بعتناها)، نتجاهلها بدل ما نكرر الملاحظة
+      chatwootService
+        .sendPrivateNoteToChatwoot(req.params.id, trimmedText, senderName)
+        .then((linked) => {
+          if (!linked?.chatwootMessageId) return;
+          return externalMessageRepo.createExternalMessage(linked.providerId, linked.chatwootMessageId, {
+            externalConversationRowId: linked.externalConversationRowId,
+            nileMessageId: note.id,
+            direction: 'note',
+            messageType: 'text',
+            rawJson: null,
+          });
+        })
+        .catch((err) => logger.error('❌ فشل مزامنة الملاحظة الخاصة لشات ووت:', err.message));
     })
     .catch((err) => {
       // حالة نادرة جدًا (مشكلة اتصال لحظية بالداتابيز) — بما إننا رجّعنا "ok" فعلاً،
@@ -598,6 +642,7 @@ module.exports = {
   reply,
   replyMedia,
   addNote,
+  deleteMessage,
   generateReply,
   verifyWebhook,
   receiveWebhook,

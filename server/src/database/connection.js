@@ -1464,6 +1464,34 @@ async function ensureExternalConversationTableExists() {
   logger.info('✅ جدول External_Conversation_byA جاهز.');
 }
 
+// بيضيف عمودين لعرض "المعيّن له" الحقيقي زي ما هو في شات ووت حتى لو الإيجنت
+// ده لسه ماتعملهوش ميرج بحد عندنا (external_assignee_id/name) — الاستخدام:
+// لو معمول ميرج، الواجهة بتفضل تعرض اسم إيجنت نايل شات العادي (assigned_agent_id
+// الموجود أصلاً)، ولو لسه مش متعمله ميرج، بتقع على العمودين دول كـ fallback
+// عشان الإداري يشوف مين المعيّن له فعليًا في شات ووت من غير ما يحتاج يفتحه
+async function ensureExternalConversationAssigneeColumns() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.External_Conversation_byA') AND name = 'external_assignee_id'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[External_Conversation_byA] ADD external_assignee_id NVARCHAR(100) NULL;
+    END
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.External_Conversation_byA') AND name = 'external_assignee_name'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[External_Conversation_byA] ADD external_assignee_name NVARCHAR(200) NULL;
+    END
+  `);
+  logger.info('✅ أعمدة external_assignee_id/name على External_Conversation_byA جاهزة.');
+}
+
 async function ensureExternalEventTableExists() {
   const pool = await getPool();
   await pool.request().query(`
@@ -1697,6 +1725,7 @@ async function ensureSchema() {
   await ensureExternalAgentTokenColumn();
   await ensureExternalContactsTableExists();
   await ensureExternalConversationTableExists();
+  await ensureExternalConversationAssigneeColumns();
   await ensureExternalEventTableExists();
   await ensureExternalMessagesTableExists();
 }
@@ -1754,6 +1783,7 @@ module.exports = {
   ensureExternalAgentTokenColumn,
   ensureExternalContactsTableExists,
   ensureExternalConversationTableExists,
+  ensureExternalConversationAssigneeColumns,
   ensureExternalEventTableExists,
   ensureExternalMessagesTableExists,
   ensureSchema,

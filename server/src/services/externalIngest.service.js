@@ -35,7 +35,7 @@ async function processChatwootEvent(provider, eventType, payload, io) {
   switch (eventType) {
     case 'message_created':
     case 'message_updated':
-      return handleMessageEvent(provider, payload, io);
+      return handleMessageEvent(provider, payload, io, eventType);
     case 'contact_created':
     case 'contact_updated':
       return handleContactEvent(provider, payload);
@@ -103,7 +103,7 @@ async function handleConversationStatusEvent(provider, payload, io) {
   await externalConversationRepo.updateStatus(row.id, payload.status || null);
 
   if (row.nile_conversation_id) {
-    await syncAssigneeFromPayload(provider, payload, row.nile_conversation_id, io).catch((err) =>
+    await syncAssigneeFromPayload(provider, payload, row.nile_conversation_id, io, row.id).catch((err) =>
       logger.error('❌ فشل مزامنة تعيين الإيجنت (شات ووت):', err.message)
     );
   }
@@ -214,15 +214,25 @@ function mapAttachmentType(fileType) {
 }
 
 // شات ووت → نايل شات بس (نفس فلسفة اتجاه الـ Resolve). بتاخد الـ assignee
-// الحالي من أي payload فيه بيانات محادثة (رسالة عادية أو تحديث حالة)، ولو
-// الإيجنت ده متربط (ميرج) بإيجنت نايل شات، بتعيّن المحادثة له تلقائيًا —
+// الحالي من أي payload فيه بيانات محادثة (رسالة عادية أو تحديث حالة).
+// بتسجل اسم/آيدي المعيّن له الخام من شات ووت دايمًا (external_assignee_id/name)
+// حتى لو لسه مش متعمله ميرج، عشان الواجهة تقدر تعرضه كـ fallback. ولو الإيجنت
+// ده متربط (ميرج) بإيجنت نايل شات، بتعيّن المحادثة له فعليًا (assigned_agent_id) —
 // لكن بس لو التعيين اتغيّر فعلًا (مش بتكرر نفس التعيين كل رسالة جايه)
-async function syncAssigneeFromPayload(provider, rawConversationOrPayload, nileConversationId, io) {
+async function syncAssigneeFromPayload(provider, rawConversationOrPayload, nileConversationId, io, externalConversationRowId = null) {
   const rawAssignee = rawConversationOrPayload?.meta?.assignee;
   if (!rawAssignee?.id) return;
 
   const agentRow = await externalAgentRepo.findByProviderAndExternalId(provider.id, rawAssignee.id);
-  if (!agentRow?.nile_user_id) return; // الإيجنت ده لسه مش مربوط بحد عندنا
+
+  // نسجل الاسم الخام من شات ووت دايمًا (fallback للعرض لو لسه مفيش ميرج)
+  if (externalConversationRowId) {
+    externalConversationRepo
+      .updateExternalAssignee(externalConversationRowId, rawAssignee.id, rawAssignee.name || null)
+      .catch((err) => logger.error('❌ فشل تسجيل اسم المعيّن له الخام من شات ووت:', err.message));
+  }
+
+  if (!agentRow?.nile_user_id) return; // الإيجنت ده لسه مش مربوط بحد عندنا — منعيّنش فعليًا
 
   const conversation = await conversationRepo.getConversationById(nileConversationId);
   if (!conversation || String(conversation.assigned_agent_id) === String(agentRow.nile_user_id)) return;
@@ -248,14 +258,35 @@ async function syncAssigneeFromPayload(provider, rawConversationOrPayload, nileC
 }
 
 // ===== Message (المسار الأساسي) =====
-async function handleMessageEvent(provider, payload, io) {
+async function handleMessageEvent(provider, payload, io, eventType) {
   const externalMessageId = payload?.id;
   if (!externalMessageId) return;
 
   // idempotency: لو الرسالة دي مسجلة خلاص (رد بعتناه إحنا عن طريق
-  // chatwoot.service.js، أو retry حقيقي من شات ووت لنفس الحدث)، متعملش حاجة
+  // chatwoot.service.js، أو retry حقيقي من شات ووت لنفس الحدث)، متعملش حاجة —
+  // إلا لو ده تحديث حالة (message_updated) لرسالة صادرة بعتناها إحنا، وقتها
+  // بنزامن حالة التسليم/القراءة (تيكين) بدل ما نتجاهل الحدث بالكامل
   const existing = await externalMessageRepo.findByProviderAndExternalId(provider.id, externalMessageId);
-  if (existing) return;
+  if (existing) {
+    if (eventType === 'message_updated' && existing.direction === 'out' && existing.nile_message_id) {
+      const chatwootStatus = payload.status; // شات ووت بيبعت: sent/delivered/read/failed
+      if (['sent', 'delivered', 'read', 'failed'].includes(chatwootStatus)) {
+        const updated = await conversationRepo
+          .updateMessageStatusByNileId(existing.nile_message_id, chatwootStatus)
+          .catch((err) => {
+            logger.error('❌ فشل مزامنة حالة رسالة (تسليم/قراءة) من شات ووت:', err.message);
+            return null;
+          });
+        if (updated && io) {
+          socketService.emitToConversationRoom(io, updated.conversation_id, 'message_status_updated', {
+            conversationId: updated.conversation_id,
+            message: { id: updated.id, status: updated.status },
+          });
+        }
+      }
+    }
+    return;
+  }
 
   const rawConversation = payload.conversation || null;
   const rawSender = payload.sender || rawConversation?.meta?.sender || null;
@@ -287,18 +318,37 @@ async function handleMessageEvent(provider, payload, io) {
 
   // مزامنة تعيين الإيجنت لو اتغيّر — بغض النظر عن نوع الرسالة، لإن شات ووت
   // بيحط الـ assignee الحالي جوه meta بتاع أي محادثة مع أي رسالة
-  await syncAssigneeFromPayload(provider, rawConversation, conversationId, io).catch((err) =>
+  await syncAssigneeFromPayload(provider, rawConversation, conversationId, io, externalConversationRow.id).catch((err) =>
     logger.error('❌ فشل مزامنة تعيين الإيجنت (شات ووت):', err.message)
   );
 
   const contactName = externalContactRow?.name || null;
   const messageText = payload.content || null;
 
-  // لو إيجنت كتب الرد/الملاحظة/الأكتيفيتي مباشرة من واجهة شات ووت، بنسجله
-  // كمتابعة بسيطة في External_Agent_byA — nile_user_id بيفضل NULL لحد ما يتعمله ميرج
-  if (rawSender?.type === 'user' && rawSender?.id) {
-    externalAgentRepo.findOrCreateAgent(provider.id, rawSender.id, rawSender.name).catch(() => {});
+  // لو إيجنت حقيقي كتب الرد/الأكتيفيتي مباشرة من واجهة شات ووت، بنسجله كمتابعة
+  // بسيطة في External_Agent_byA (nile_user_id بيفضل NULL لحد ما يتعمله ميرج)،
+  // وبنحدد كمان الاسم اللي المفروض يظهر بيه الرد في نايل شات:
+  //  - لو الإيجنت ده متعمله ميرج بحد عندنا -> اسمه في نايل شات
+  //  - لو مش متعمله ميرج -> اسمه الخام في شات ووت
+  //  - لو مفيش إيجنت حقيقي خالص (بوت/رد تلقائي/Automation Rule) -> "Automation"،
+  //    مش اسم العميل زي ما كان بيحصل قبل كده
+  let resolvedSentByName = null;
+  if (direction === 'out') {
+    if (rawSender?.type === 'user' && rawSender?.id) {
+      const agentRow = await externalAgentRepo
+        .findOrCreateAgent(provider.id, rawSender.id, rawSender.name)
+        .catch(() => null);
+      if (agentRow?.nile_user_id) {
+        const nileUser = await userRepo.findUserById(agentRow.nile_user_id).catch(() => null);
+        resolvedSentByName = nileUser ? userRepo.resolveDisplayName(nileUser) : rawSender.name || null;
+      } else {
+        resolvedSentByName = rawSender?.name || null;
+      }
+    } else {
+      resolvedSentByName = 'Automation';
+    }
   }
+
 
   // "حجز" الرسالة أولًا — INSERT في External_Messages_byA بـ nile_message_id
   // فاضي، قبل أي حاجة تانية. ده اللي بيمنع التكرار فعليًا (مش فحص findByProviderAndExternalId
@@ -368,7 +418,7 @@ async function handleMessageEvent(provider, payload, io) {
       messageText,
       mediaFileName,
       rawPayload: JSON.stringify(payload),
-      sentByName: direction === 'out' ? rawSender?.name || null : null,
+      sentByName: direction === 'out' ? resolvedSentByName : null,
     }),
   ]);
 

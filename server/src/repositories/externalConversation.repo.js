@@ -86,6 +86,23 @@ async function linkNileConversation(externalConversationRowId, nileConversationI
   return result.recordset[0] || null;
 }
 
+// بيسجل "المعيّن له" الخام زي ما هو في شات ووت (id + اسم) — بيتحدّث دايمًا بغض
+// النظر عن الميرج، عشان لو الإيجنت لسه مش متعمله ميرج نقدر نعرض اسمه الحقيقي
+// من شات ووت في نايل شات بدل ما يفضل مجهول
+async function updateExternalAssignee(externalConversationRowId, externalAssigneeId, externalAssigneeName) {
+  const pool = await getPool();
+  await pool
+    .request()
+    .input('id', sql.BigInt, externalConversationRowId)
+    .input('externalAssigneeId', sql.NVarChar(100), externalAssigneeId != null ? String(externalAssigneeId) : null)
+    .input('externalAssigneeName', sql.NVarChar(200), externalAssigneeName || null)
+    .query(`
+      UPDATE [dbo].[External_Conversation_byA]
+      SET external_assignee_id = @externalAssigneeId, external_assignee_name = @externalAssigneeName, updated_at = SYSUTCDATETIME()
+      WHERE id = @id
+    `);
+}
+
 async function updateStatus(externalConversationRowId, status) {
   const pool = await getPool();
   await pool
@@ -102,4 +119,5 @@ module.exports = {
   createExternalConversation,
   linkNileConversation,
   updateStatus,
+  updateExternalAssignee,
 };

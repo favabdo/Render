@@ -32,6 +32,7 @@ router.post('/api/conversations/:id/reopen', asyncHandler(conversationController
 router.post('/api/conversations/:id/reply', asyncHandler(conversationController.reply));
 router.post('/api/conversations/:id/reply-media', upload.single('file'), asyncHandler(conversationController.replyMedia));
 router.post('/api/conversations/:id/notes', asyncHandler(conversationController.addNote));
+router.delete('/api/conversations/:id/messages/:messageId', asyncHandler(conversationController.deleteMessage));
 router.post('/api/conversations/:id/generate-reply', asyncHandler(conversationController.generateReply));
 
 module.exports = router;

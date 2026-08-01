@@ -105,6 +105,9 @@ async function listConversations(hideRatingMessages = false, companyId = null) {
     SELECT c.*,
       COALESCE(u.display_name, u.email) AS assigned_agent_name,
       COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
+      -- لو المحادثة جاية من شات ووت ومحدش عمل ميرج للإيجنت المعيّن ليها هناك،
+      -- بيبان اسمه الخام من شات ووت هنا كـ fallback (شوف ec تحت)
+      ec.external_assignee_name AS external_assignee_name,
       i.name AS inbox_name,
       ct.name AS contact_display_name,
       COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
@@ -145,6 +148,7 @@ async function listConversations(hideRatingMessages = false, companyId = null) {
     LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
     LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
     LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
+    LEFT JOIN [dbo].[External_Conversation_byA] ec ON ec.nile_conversation_id = c.id
     OUTER APPLY (
       -- "العقد الحالي" لكونتاكت المحادثة دي: الساري لو موجود، وإلا آخر عقد انتهى
       -- (نفس منطق CURRENT_CONTRACT_APPLY في contact.repo.js) — بيتعرض كبادچ "عميل
@@ -250,6 +254,7 @@ async function getConversationById(id) {
       SELECT c.*,
         COALESCE(u.display_name, u.email) AS assigned_agent_name,
         COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
+        ec.external_assignee_name AS external_assignee_name,
         i.name AS inbox_name,
         ct.name AS contact_display_name,
         COALESCE(ct.name, c.contact_name, c.contact_number) AS contact_resolved_name,
@@ -262,6 +267,7 @@ async function getConversationById(id) {
       LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
       LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
       LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
+      LEFT JOIN [dbo].[External_Conversation_byA] ec ON ec.nile_conversation_id = c.id
       OUTER APPLY (
         SELECT TOP 1 m.start_date, m.end_date
         FROM [dbo].[NileChat_MaintenanceContracts_byA] m
@@ -560,6 +566,39 @@ async function updateMessageStatusByWaId(waMessageId, status) {
 }
 
 /**
+ * زي updateMessageStatusByWaId بالظبط بس بتدور بالـ id الحقيقي عندنا مباشرة
+ * بدل wa_message_id — مستخدمة لرسايل شات ووت (اللي wa_message_id بتاعها فاضي
+ * دايمًا) عشان نقدر نزامن حالة التسليم/القراءة (تيكين) الجاية من شات ووت
+ */
+async function updateMessageStatusByNileId(id, status) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('status', sql.NVarChar(30), status)
+    .query(`
+      UPDATE [dbo].[${TABLE_NAME}]
+      SET status = @status
+      OUTPUT INSERTED.*
+      WHERE id = @id
+        AND direction = 'out'
+        AND (
+          status IS NULL
+          OR (
+            CASE status
+              WHEN 'sending' THEN 0 WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 0
+            END
+            <
+            CASE @status
+              WHEN 'sending' THEN 0 WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 0
+            END
+          )
+        )
+    `);
+  return result.recordset[0] || null;
+}
+
+/**
  * بتقفل دورة حياة رسالة صادرة اتسجلت الأول بحالة 'sending' (قبل ما نستنى رد ميتا).
  * لما ميتا ترد بنجاح: بنسجل الـ wa_message_id الحقيقي ونحوّل الحالة لـ 'sent'.
  * لما ميتا ترفض/الاتصال يفشل: بنحوّل الحالة لـ 'failed' من غير wa_message_id.
@@ -578,6 +617,26 @@ async function finalizeOutgoingMessage(id, { waMessageId = null, status }) {
           wa_message_id = COALESCE(@waMessageId, wa_message_id)
       OUTPUT INSERTED.*
       WHERE id = @id
+    `);
+  return result.recordset[0] || null;
+}
+
+/**
+ * بتمسح رسالة فشل إرسالها فعليًا من الداتابيز (مش بس إخفاء في الواجهة) — بس
+ * لو حالتها 'failed' فعلاً (حماية إضافية عشان محدش يمسح رسالة اتبعتت بنجاح
+ * بالغلط). كده لما الإيجنت يعمل "إلغاء" على رسالة فشلت، متفضلش ترجع تاني حتى
+ * لو عمل Refresh.
+ */
+async function deleteFailedMessage(id, conversationId) {
+  const pool = await getPool();
+  const result = await pool
+    .request()
+    .input('id', sql.BigInt, id)
+    .input('conversationId', sql.BigInt, conversationId)
+    .query(`
+      DELETE FROM [dbo].[${TABLE_NAME}]
+      OUTPUT DELETED.id
+      WHERE id = @id AND conversation_id = @conversationId AND status = 'failed'
     `);
   return result.recordset[0] || null;
 }
@@ -642,6 +701,8 @@ module.exports = {
   addPrivateNote,
   addSystemMessage,
   updateMessageStatusByWaId,
+  updateMessageStatusByNileId,
   updateMessageMedia,
   finalizeOutgoingMessage,
+  deleteFailedMessage,
 };

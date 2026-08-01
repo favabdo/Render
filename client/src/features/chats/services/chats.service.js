@@ -17,6 +17,7 @@ export const conversationsApi = {
     return apiClient.post(`/api/conversations/${id}/reply-media`, formData).then((r) => r.data);
   },
   addNote: (id, text) => apiClient.post(`/api/conversations/${id}/notes`, { text }).then((r) => r.data),
+  deleteMessage: (id, messageId) => apiClient.delete(`/api/conversations/${id}/messages/${messageId}`).then((r) => r.data),
   assign: (id, agentId) => apiClient.post(`/api/conversations/${id}/assign`, agentId ? { agentId } : {}).then((r) => r.data),
   resolve: (id, category, notes) => apiClient.post(`/api/conversations/${id}/resolve`, { category, notes }).then((r) => r.data),
   reopen: (id) => apiClient.post(`/api/conversations/${id}/reopen`).then((r) => r.data),

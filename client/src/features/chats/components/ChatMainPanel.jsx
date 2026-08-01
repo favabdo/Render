@@ -196,10 +196,18 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
     }
   }
 
-  // إلغاء رسالة فشلت — بتتشال من الشات نهائيًا (كانت client-only أصلاً، السيرفر
-  // ماعندوش نسخة منها لأن الإرسال فشل)
+  // إلغاء رسالة فشلت — بتتشال من الشات فورًا (Optimistic)، ولو كانت رسالة نص/ميديا
+  // حقيقية (مش نوت) اتسجلت في الداتابيز فعلاً وقت محاولة الإرسال (مرحلة 1)، بنبعت
+  // طلب حذف فعلي للسيرفر برضه — عشان متفضلش ترجع تاني لو عملنا Refresh. النوت
+  // مختلفة: لو فشلت يبقى معملتش INSERT في الداتابيز أصلاً، فمفيش حاجة نحذفها.
   function handleCancel(m) {
     useChatsStore.getState().removeMessage(c.id, (x) => x === m);
+    if (!m.isNote && m.id) {
+      conversationsApi.deleteMessage(c.id, m.id).catch(() => {
+        // فشل الحذف نادر وغير قاتل — الرسالة اتشالت من واجهة الإيجنت خلاص،
+        // ولو ظهرت تاني بعد Refresh هيقدر يلغيها تاني من غير أي مشكلة
+      });
+    }
   }
 
   function handleTypingChange(hasText) {
