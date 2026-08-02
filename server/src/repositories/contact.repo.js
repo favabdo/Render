@@ -53,30 +53,53 @@ async function findContactByPhone(phoneNumber) {
   return result.recordset[0] || null;
 }
 
-// بينشئ كونتاكت جديد ويربطه فورًا برقم التليفون اللي بعت بيه
+// بينشئ كونتاكت جديد ويربطه فورًا برقم التليفون اللي بعت بيه.
+//
+// ملحوظة مهمة عن الـ race condition (نفس فكرة upsertExternalContact بالظبط):
+// دي بتتنادى من findOrCreateContactForIncoming بعد فحص findContactByPhone،
+// وده فحص مش atomic (check-then-act). لو أكتر من webhook/رسالة وصلوا سوا
+// لنفس الرقم (زي شات ووت بيبعت أكتر من event لنفس الكونتاكت في نفس اللحظة)،
+// كل الطلبات ممكن تعدي من فحص findContactByPhone قبل ما أي واحد فيها يخلّص
+// الـ INSERT، فيتعمل أكتر من كونتاكت مكرر بنفس الاسم. عشان كده الإنشاء هنا
+// لازم يكون جوه ترانزاكشن واحدة، ومحمي بـ UNIQUE constraint حقيقي على
+// phone_number (UQ_ContactPhones_PhoneNumber) هو الحكم النهائي — مش الفحص
+// المسبق. لو حصل تعارض، معناها طلب تاني كسب السباق وعمل الكونتاكت فعلاً؛
+// بنرجع الكونتاكت بتاعه بدل ما نسيب كونتاكت يتيم من غير رقم أو نرمي إيرور
 async function createContactWithPhone(name, phoneNumber, companyId = null) {
   const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('name', sql.NVarChar(200), name || phoneNumber)
-    .input('companyId', sql.BigInt, companyId)
-    .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, company_id)
-      OUTPUT INSERTED.*
-      VALUES (@name, @companyId)
-    `);
-  const contact = result.recordset[0];
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
 
-  await pool
-    .request()
-    .input('contactId', sql.BigInt, contact.id)
-    .input('phone', sql.NVarChar(30), phoneNumber)
-    .query(`
-      INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
-      VALUES (@contactId, @phone)
-    `);
+  try {
+    const contactResult = await new sql.Request(transaction)
+      .input('name', sql.NVarChar(200), name || phoneNumber)
+      .input('companyId', sql.BigInt, companyId)
+      .query(`
+        INSERT INTO [dbo].[NileChat_Contacts_byA] (name, company_id)
+        OUTPUT INSERTED.*
+        VALUES (@name, @companyId)
+      `);
+    const contact = contactResult.recordset[0];
 
-  return contact;
+    await new sql.Request(transaction)
+      .input('contactId', sql.BigInt, contact.id)
+      .input('phone', sql.NVarChar(30), phoneNumber)
+      .query(`
+        INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
+        VALUES (@contactId, @phone)
+      `);
+
+    await transaction.commit();
+    return contact;
+  } catch (err) {
+    await transaction.rollback().catch(() => {});
+
+    if (String(err.message || '').includes('UQ_ContactPhones_PhoneNumber')) {
+      const winner = await findContactByPhone(phoneNumber);
+      if (winner) return winner;
+    }
+    throw err;
+  }
 }
 
 // كاش: contact:{id}:basic (15m)
@@ -195,14 +218,23 @@ async function addPhoneToContact(contactId, phoneNumber) {
     return { error: 'phone_taken' };
   }
 
-  await pool
-    .request()
-    .input('contactId', sql.BigInt, contactId)
-    .input('phone', sql.NVarChar(30), phoneNumber)
-    .query(`
-      INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
-      VALUES (@contactId, @phone)
-    `);
+  try {
+    await pool
+      .request()
+      .input('contactId', sql.BigInt, contactId)
+      .input('phone', sql.NVarChar(30), phoneNumber)
+      .query(`
+        INSERT INTO [dbo].[NileChat_ContactPhones_byA] (contact_id, phone_number)
+        VALUES (@contactId, @phone)
+      `);
+  } catch (err) {
+    // الفحص فوق (existing) مش atomic برضو — لو طلب تاني ضاف نفس الرقم في نفس
+    // اللحظة، الـ UNIQUE constraint هو اللي هيمسك التعارض ده فعليًا
+    if (String(err.message || '').includes('UQ_ContactPhones_PhoneNumber')) {
+      return { error: 'phone_taken' };
+    }
+    throw err;
+  }
 
   await invalidateContactCache(contactId);
   return { contact: await getContactByIdWithPhones(contactId) };
