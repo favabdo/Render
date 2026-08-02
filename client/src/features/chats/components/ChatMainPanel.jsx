@@ -136,14 +136,14 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
   // بدل النص، عشان أكتر من ملف ممكن يتبعتوا بنفس اللحظة. بنحتفظ بالملف الأصلي
   // (_file) جوه الرسالة عشان الـ Retry يقدر يعيد الرفع من غير ما اليوزر يختار
   // الملف تاني
-  async function sendMediaFile(file, clientId) {
+  async function sendMediaFile(file, clientId, caption = '') {
     const kind = detectMediaKind(file.type);
     try {
       // بنصغّر الصورة قبل الرفع (لو محتاجة) — مبيأثرش على الـ preview اللي
       // ظهر فورًا فوق (localUrl) لأنه مبني على الملف الأصلي، بس اللي بيتبعت
       // فعليًا للسيرفر هو النسخة المصغّرة عشان الرفع يخلص أسرع بكتير
       const uploadFile = kind === 'image' ? await compressImageIfNeeded(file) : file;
-      await conversationsApi.replyMedia(c.id, uploadFile, clientId);
+      await conversationsApi.replyMedia(c.id, uploadFile, clientId, caption);
       // زي sendMessage تمامًا: الـ socket هو اللي هيأكد الرسالة فعليًا (new_message)
       // أو يعلّمها فشلت (message_failed) لما الرفع لواتساب يخلص فعليًا في الخلفية
     } catch (err) {
@@ -153,7 +153,7 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
     }
   }
 
-  async function handleSendFile(file) {
+  async function handleSendFile(file, caption = '') {
     if (c.rawStatus === 'closed') {
       showToast(t('mainPanel.conversationClosed'), 'error');
       return;
@@ -166,7 +166,7 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
 
     addMessage(c.id, {
       from: 'agent',
-      text: '',
+      text: caption || '',
       time: formatMessageTimestamp(nowIso),
       rawTime: nowIso,
       senderName: currentAgentName,
@@ -178,8 +178,8 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
       mediaMime: file.type,
       fileName: file.name,
     });
-    patchConversation(c.id, { lastMsg: mediaKindLabel(kind) });
-    await sendMediaFile(file, clientId);
+    patchConversation(c.id, { lastMsg: caption || mediaKindLabel(kind) });
+    await sendMediaFile(file, clientId, caption);
   }
 
   // إعادة محاولة رسالة/نوت/ملف فشل إرساله — بيرجّعها Pending تاني ويبعتها من
@@ -190,7 +190,7 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
     if (m.isNote) {
       sendNote(m.text, clientId);
     } else if (m._file) {
-      sendMediaFile(m._file, clientId);
+      sendMediaFile(m._file, clientId, m.text || '');
     } else {
       sendText(m.text, clientId);
     }

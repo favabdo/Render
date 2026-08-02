@@ -191,6 +191,7 @@
     "generateReply": "Generate Reply",
     "emoji": "Emoji",
     "attach": "Attach",
+    "captionPlaceholder": "Add a caption (optional)...",
     "closedPlaceholder": "Conversation closed — reopen it to send a message",
     "typeMessage": "Type a message...",
     "recordingHint": "Recording voice note…",

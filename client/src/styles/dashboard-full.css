@@ -370,6 +370,26 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .send-btn{width:42px;height:42px;border-radius:50%;border:none;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
 .send-btn:hover{background:var(--primary-dark);transform:scale(1.05);box-shadow:0 4px 15px rgba(108,92,231,0.4)}
 
+/* ===== معاينة الملف/الصورة قبل الإرسال (Media preview bar) ===== */
+.media-preview-bar{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.media-preview-cancel{width:34px;height:34px;border-radius:50%;border:none;background:var(--bg);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.media-preview-cancel:hover{background:var(--danger);color:#fff}
+.media-preview-thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;background:var(--bg);display:flex;align-items:center;justify-content:center;border:1.5px solid var(--border)}
+.media-preview-thumb img,.media-preview-thumb video{width:100%;height:100%;object-fit:cover}
+.media-preview-doc-icon{color:var(--primary);display:flex;align-items:center;justify-content:center}
+.media-preview-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.media-preview-filename{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.media-preview-caption{width:100%;box-sizing:border-box;padding:9px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
+.media-preview-caption:focus{border-color:var(--primary)}
+
+/* ===== Lightbox zoom toolbar ===== */
+.media-lightbox-toolbar{position:absolute;top:16px;inset-inline-end:16px;display:flex;align-items:center;gap:4px;background:rgba(20,20,20,0.75);border-radius:24px;padding:6px;z-index:2;backdrop-filter:blur(6px)}
+.media-lightbox-toolbar button{width:36px;height:36px;border-radius:50%;border:none;background:transparent;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.media-lightbox-toolbar button:hover:not(:disabled){background:rgba(255,255,255,0.15)}
+.media-lightbox-toolbar button:disabled{opacity:.35;cursor:default}
+.media-lightbox-toolbar button.media-lightbox-close:hover{background:var(--danger)}
+.media-lightbox-zoom-level{color:#fff;font-size:12px;font-weight:600;min-width:38px;text-align:center;user-select:none}
+
 /* Customer Panel */
 #customer-panel{width:380px;min-width:380px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:margin-right .3s,opacity .3s}
 #customer-panel.hidden{margin-right:-380px;opacity:0;pointer-events:none}

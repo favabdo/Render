@@ -1,11 +1,18 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip, Mic, Square, Send, Lock, Sparkles, Loader2 } from 'lucide-react';
+import { Paperclip, Mic, Square, Send, Lock, Sparkles, Loader2, X, FileText } from 'lucide-react';
 import useToastStore from '../../../store/toastStore';
 import { conversationsApi } from '../services/chats.service';
 
 const MAX_FILE_SIZE = 30 * 1024 * 1024;
 const ACCEPT_TYPES = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip';
+
+function detectPreviewKind(mimeType) {
+  if (!mimeType) return 'document';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  return 'document';
+}
 
 function autoResize(el) {
   el.style.height = 'auto';
@@ -40,6 +47,20 @@ export default function MessageInput({
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const showToast = useToastStore((s) => s.showToast);
+
+  // معاينة الملف/الصورة قبل الإرسال — الملف بيتحط هنا أول ما يتختار (من input
+  // الملفات أو Paste)، وميتبعتش فعليًا (onSendFile) إلا لما اليوزر يضغط إرسال
+  // أو Enter صراحة، بالظبط زي الرسايل النصية. قبل كده كان بيتبعت فورًا لحظة
+  // الاختيار من غير أي فرصة للمراجعة أو الإلغاء.
+  const [pendingFile, setPendingFile] = useState(null); // { file, previewUrl, kind }
+  const [pendingCaption, setPendingCaption] = useState('');
+  const captionRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    };
+  }, [pendingFile]);
 
   const [generating, setGenerating] = useState(false);
 
@@ -80,6 +101,14 @@ export default function MessageInput({
     if (textareaRef.current) autoResize(textareaRef.current);
   }
 
+  function openFilePreview(file) {
+    const kind = detectPreviewKind(file.type);
+    const previewUrl = kind === 'image' || kind === 'video' ? URL.createObjectURL(file) : null;
+    setPendingFile({ file, previewUrl, kind });
+    setPendingCaption('');
+    setTimeout(() => captionRef.current?.focus(), 0);
+  }
+
   function handleFileChosen(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -88,7 +117,7 @@ export default function MessageInput({
       showToast(t('messageInput.fileTooLarge'), 'error');
       return;
     }
-    onSendFile(file);
+    openFilePreview(file);
   }
 
   function handlePaste(e) {
@@ -103,7 +132,33 @@ export default function MessageInput({
       showToast(t('messageInput.imageTooLarge'), 'error');
       return;
     }
-    onSendFile(file);
+    openFilePreview(file);
+  }
+
+  function cancelPendingFile() {
+    if (pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile(null);
+    setPendingCaption('');
+  }
+
+  function confirmPendingFile() {
+    if (!pendingFile) return;
+    onSendFile(pendingFile.file, pendingCaption.trim());
+    // previewUrl الأصلي مبقاش لازم بعد كده — onSendFile بيبني localUrl بتاعه هو
+    // من الملف مباشرة للـ optimistic bubble (شوف handleSendFile في ChatMainPanel)
+    if (pendingFile.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile(null);
+    setPendingCaption('');
+  }
+
+  function handleCaptionKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (isMobileLayout()) return;
+      e.preventDefault();
+      confirmPendingFile();
+    } else if (e.key === 'Escape') {
+      cancelPendingFile();
+    }
   }
 
   async function generateReply() {
@@ -251,60 +306,97 @@ export default function MessageInput({
         </div>
       )}
       <div className={`chat-input-area${noteMode ? ' note-mode' : ''}${resolved ? ' resolved-locked' : ''}`} id="chat-input-area">
-        <div className="input-actions">
-          <button
-            className="input-action-btn"
-            title={t('messageInput.attach')}
-            aria-label={t('messageInput.attach')}
-            style={{ visibility: recording ? 'hidden' : 'visible' }}
-            onClick={() => fileInputRef.current?.click()}
-            disabled={resolved}
-          >
-            <Paperclip size={20} />
-          </button>
-          <input ref={fileInputRef} type="file" style={{ display: 'none' }} accept={ACCEPT_TYPES} onChange={handleFileChosen} disabled={resolved} />
-        </div>
+        {pendingFile ? (
+          <div className="media-preview-bar">
+            <button className="media-preview-cancel" title={t('messageInput.cancel')} aria-label={t('messageInput.cancel')} onClick={cancelPendingFile}>
+              <X size={18} />
+            </button>
+            <div className="media-preview-thumb">
+              {pendingFile.kind === 'image' && <img src={pendingFile.previewUrl} alt="" />}
+              {pendingFile.kind === 'video' && (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video src={pendingFile.previewUrl} muted />
+              )}
+              {pendingFile.kind === 'document' && (
+                <div className="media-preview-doc-icon">
+                  <FileText size={22} />
+                </div>
+              )}
+            </div>
+            <div className="media-preview-info">
+              {pendingFile.kind === 'document' && <span className="media-preview-filename">{pendingFile.file.name}</span>}
+              <input
+                ref={captionRef}
+                type="text"
+                className="media-preview-caption"
+                placeholder={t('messageInput.captionPlaceholder')}
+                value={pendingCaption}
+                onChange={(e) => setPendingCaption(e.target.value)}
+                onKeyDown={handleCaptionKeyDown}
+              />
+            </div>
+            <button className="send-btn" title={t('messageInput.send')} aria-label={t('messageInput.send')} onClick={confirmPendingFile}>
+              <Send size={18} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="input-actions">
+              <button
+                className="input-action-btn"
+                title={t('messageInput.attach')}
+                aria-label={t('messageInput.attach')}
+                style={{ visibility: recording ? 'hidden' : 'visible' }}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={resolved}
+              >
+                <Paperclip size={20} />
+              </button>
+              <input ref={fileInputRef} type="file" style={{ display: 'none' }} accept={ACCEPT_TYPES} onChange={handleFileChosen} disabled={resolved} />
+            </div>
 
-        {!recording && (
-          <textarea
-            id="msg-input"
-            ref={textareaRef}
-            rows={1}
-            placeholder={resolved ? t('messageInput.closedPlaceholder') : noteMode ? t('messageInput.privateNote') : t('messageInput.typeMessage')}
-            value={text}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            disabled={resolved}
-          />
+            {!recording && (
+              <textarea
+                id="msg-input"
+                ref={textareaRef}
+                rows={1}
+                placeholder={resolved ? t('messageInput.closedPlaceholder') : noteMode ? t('messageInput.privateNote') : t('messageInput.typeMessage')}
+                value={text}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                disabled={resolved}
+              />
+            )}
+
+            <div className={`voice-recording-bar${recording ? ' active' : ''}`}>
+              <span className="voice-recording-dot"></span>
+              <span className="voice-recording-time">{timeLabel}</span>
+              <span className="voice-recording-hint">{t('messageInput.recordingHint')}</span>
+              <button className="voice-cancel-btn" onClick={cancelVoiceRecording}>{t('messageInput.cancel')}</button>
+            </div>
+
+            <button
+              className={`input-action-btn${recording ? ' recording' : ''}`}
+              title={recording ? t('messageInput.stopAndSend') : t('messageInput.voiceNote')}
+              aria-label={recording ? t('messageInput.stopAndSend') : t('messageInput.voiceNote')}
+              onClick={toggleVoice}
+              disabled={resolved}
+            >
+              {recording ? <Square size={16} /> : <Mic size={20} />}
+            </button>
+            <button
+              className="send-btn"
+              title={t('messageInput.send')}
+              aria-label={t('messageInput.send')}
+              style={{ display: recording ? 'none' : 'flex' }}
+              onClick={submit}
+              disabled={resolved}
+            >
+              <Send size={18} />
+            </button>
+          </>
         )}
-
-        <div className={`voice-recording-bar${recording ? ' active' : ''}`}>
-          <span className="voice-recording-dot"></span>
-          <span className="voice-recording-time">{timeLabel}</span>
-          <span className="voice-recording-hint">{t('messageInput.recordingHint')}</span>
-          <button className="voice-cancel-btn" onClick={cancelVoiceRecording}>{t('messageInput.cancel')}</button>
-        </div>
-
-        <button
-          className={`input-action-btn${recording ? ' recording' : ''}`}
-          title={recording ? t('messageInput.stopAndSend') : t('messageInput.voiceNote')}
-          aria-label={recording ? t('messageInput.stopAndSend') : t('messageInput.voiceNote')}
-          onClick={toggleVoice}
-          disabled={resolved}
-        >
-          {recording ? <Square size={16} /> : <Mic size={20} />}
-        </button>
-        <button
-          className="send-btn"
-          title={t('messageInput.send')}
-          aria-label={t('messageInput.send')}
-          style={{ display: recording ? 'none' : 'flex' }}
-          onClick={submit}
-          disabled={resolved}
-        >
-          <Send size={18} />
-        </button>
       </div>
     </>
   );

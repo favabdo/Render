@@ -86,6 +86,16 @@ export default function ChatsPage() {
   // فده بيحقق "leave المحادثة القديمة قبل join الجديدة" بالظبط. لو مفيش محادثة
   // مفتوحة (selectedChatId=null) منضمش لأي غرفة. نفس الـ cleanup بيشتغل عند
   // الخروج من صفحة الشاتس (unmount) عشان نسيب أي غرفة لسه منضمين فيها.
+  // ملاحظة مهمة: بنضيف "connected" في الـ deps هنا بالإضافة لـ socketRef?.current —
+  // القراءة من socketRef?.current لوحدها مش كافية، لأن تغيير ref.current مش
+  // بيسبب re-render (الـ refs مش reactive)، فلو الإيفكت ده اشتغل أول مرة قبل ما
+  // الـ socket يتوصل فعليًا (لسه null) ممكن يفضل كده لحد أي re-render تاني يحصل
+  // بالصدفة. وبعد أي انقطاع/إعادة اتصال (نوم اللابتوب، تبديل شبكة، تطبيق رجع من
+  // الباكجراوند...) عضوية الغرفة القديمة (join_conversation) بتتمسح من السيرفر
+  // مع الانقطاع من غير ما حد يعيد الانضمام تلقائيًا — وده كان بيسبب "لازم أعمل
+  // ريفريش عشان أشوف رسالة العميل الجديدة" حتى لو واقف في نفس المحادثة فعليًا.
+  // ضمان إن الإيفكت ده يعيد التنفيذ مع كل تغيير في "connected" (true بعد أي
+  // reconnect) بيضمن إعادة الانضمام للغرفة فورًا في كل مرة.
   useEffect(() => {
     const socket = socketRef?.current;
     if (!socket || selectedChatId == null) return undefined;
@@ -100,7 +110,7 @@ export default function ChatsPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChatId, socketRef?.current]);
+  }, [selectedChatId, connected, socketRef?.current]);
 
   useEffect(() => {
     const socket = socketRef?.current;
@@ -392,8 +402,11 @@ export default function ChatsPage() {
       socket.off('conversation_teams_updated', onConvTeamsUpdated);
       socket.off('agent_status_changed', onAgentStatusChanged);
     };
+    // نفس سبب إضافة "connected" في إيفكت join_conversation فوق بالظبط — بدونها
+    // ممكن الإيفكت ده ميعيدش تسجيل الليسنرز (زي new_message) على socket الاتصال
+    // الجديد بعد أي reconnect إلا لو حصل re-render تاني بالصدفة لسبب مختلف
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socketRef?.current]);
+  }, [socketRef?.current, connected]);
 
   const selected = conversations.find((c) => c.id === selectedChatId) || null;
 

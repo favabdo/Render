@@ -191,6 +191,7 @@
     "generateReply": "توليد رد",
     "emoji": "الرموز التعبيرية",
     "attach": "إرفاق",
+    "captionPlaceholder": "إضافة تعليق (اختياري)...",
     "closedPlaceholder": "المحادثة مغلقة — أعد فتحها لإرسال رسالة",
     "typeMessage": "اكتب رسالة...",
     "recordingHint": "جارٍ تسجيل رسالة صوتية…",
