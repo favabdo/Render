@@ -158,7 +158,12 @@ const useChatsStore = create((set, get) => ({
     set({ selectedChatId: id, noteMode: false });
     const c = get().conversations.find((x) => x.id === id);
     if (c && c.unread) get().patchConversation(id, { unread: 0 });
-    if (c && !c._messagesLoaded) get().loadMessagesForConversation(id);
+    // force=true دايمًا: كل مرة تفتح فيها محادثة (حتى لو كانت اتحملت قبل
+    // كده) بنجيب أحدث رسايلها من السيرفر، مش بس أول مرة. غير كده، لو فتحت
+    // محادثة، سبتها لمحادثة تانية شوية، ورجعتلها تاني، كانت هتفضل عارضة
+    // نفس الرسايل القديمة اللي كانت محملة قبل كده من غير أي رسايل جديدة
+    // وصلت في الفترة دي (خصوصًا لو مكنتش منضم لغرفة السوكيت بتاعتها وقتها)
+    if (c) get().loadMessagesForConversation(id, { force: true });
     if (c && c.contactId && !c._contactLoaded) get().loadContactDetails(id);
   },
 

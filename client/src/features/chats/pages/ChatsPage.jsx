@@ -45,6 +45,33 @@ export default function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // بيغطي الحالة اللي join_conversation/leave_conversation effect (تحت)
+  // مبيغطيهاش: انت لسه واقف جوه نفس صفحة الشاتس (مفيش unmount خالص)، بس
+  // بدّلت تاب البراوزر، قفلت الشاشة، أو رحت تطبيق تاني شوية. الاتصال بالسوكيت
+  // ممكن يفضل شغال طول الوقت (فمفيش reconnect يحصل يبقى onReconnectResync
+  // ماينفعش)، أو ممكن يتقطع لفترة قصيرة برضو من غير ما تلاحظ. في الحالتين،
+  // مش مضمون إننا استقبلنا كل الرسايل اللي وصلت وانت مش شايف الصفحة. عشان
+  // كده أول ما الصفحة/التاب ترجع تبقى مرئية تاني، بنجبر: (1) تحديث قايمة
+  // المحادثات كلها (بيشيل أي محادثة اتمسحت من الداتابيز في الفترة دي كمان)،
+  // و(2) تحديث رسايل المحادثة المفتوحة تحديدًا من الصفر
+  useEffect(() => {
+    function refreshOnReturn() {
+      if (document.visibilityState !== 'visible') return;
+      useChatsStore.getState().loadConversations().catch(() => {});
+      const openId = useChatsStore.getState().selectedChatId;
+      if (openId) {
+        useChatsStore.getState().loadMessagesForConversation(openId, { force: true });
+      }
+    }
+
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    window.addEventListener('focus', refreshOnReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshOnReturn);
+      window.removeEventListener('focus', refreshOnReturn);
+    };
+  }, []);
+
   // Polling fallback: بيشتغل بس لما الـ socket يبقى مقطوع (شبكة أمان مبسطة —
   // إعادة تحميل القايمة كاملة مع الحفاظ على الرسايل والليبلز/التيمز المحملة فعلاً
   // للمحادثة المفتوحة، بدل ما نعمل merge يدوي حقل حقل زي الأصل)
