@@ -82,9 +82,12 @@ const useChatsStore = create((set, get) => ({
     }
   },
 
-  async loadMessagesForConversation(convId) {
+  // force=true بتتجاهل _messagesLoaded وتجيب الرسايل من السيرفر تاني، حتى لو
+  // كانت اتحملت قبل كده — مستخدمة لما نرجع لمحادثة كانت مفتوحة وممكن تكون
+  // فاتتها رسايل (شوف الشرح في ChatsPage.jsx فوق useEffect الأول)
+  async loadMessagesForConversation(convId, { force = false } = {}) {
     const c = get().conversations.find((x) => x.id === convId);
-    if (!c || c._messagesLoaded) return;
+    if (!c || (c._messagesLoaded && !force)) return;
     try {
       const data = await conversationsApi.messages(convId);
       const messages = data.messages.filter((m) => ['in', 'out', 'note', 'system'].includes(m.direction)).map(mapApiMessage);

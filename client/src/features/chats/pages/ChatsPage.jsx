@@ -27,6 +27,21 @@ export default function ChatsPage() {
   useEffect(() => {
     store.loadConversations().catch(() => showToast(t('toasts.connectionError'), 'error'));
     store.loadStaticData();
+
+    // لو رجعنا لتاب الشاتس وفيه محادثة كانت مفتوحة خلاص (من قبل ما نسيب
+    // التاب)، لازم نعيد تحميل رسايلها فورًا بدل ما نعتمد على الكاش القديم.
+    // السبب: الـ effect بتاع join_conversation تحت بتعمل "leave_conversation"
+    // كـ cleanup أول ما الكومبوننت يتعمله unmount (يعني أول ما تسيب تاب
+    // الشاتس لأي تاب تاني زي Contacts/Analytics)، فأي رسالة جديدة توصل وانت
+    // برة معندهاش حد منضم لغرفتها (new_message room-scoped)، فمتوصلش. اللي
+    // بيوصل بس هو conversation_updated (عالمي) اللي بيحدّث البريفيو في
+    // القايمة الجانبية بس — مش محتوى المحادثة نفسها. وبما إن _messagesLoaded
+    // بيفضل true للأبد أول ما يتحط، مفيش حاجة تانية كانت هتجبر إعادة التحميل
+    // ده غير ريفريش يدوي كامل للصفحة
+    const openId = useChatsStore.getState().selectedChatId;
+    if (openId) {
+      useChatsStore.getState().loadMessagesForConversation(openId, { force: true });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
