@@ -568,7 +568,12 @@ function buildProviderCreds(externalConversation, tokenInfo) {
 // نفس التعيين لشات ووت (POST .../assignments)، عشان يظهر هناك إنه اتعمله
 // اساين برضه. لو الإيجنت المستهدف لسه مالوش ميرج، مفيش حاجة نبعتها (مفيش
 // إيجنت شات ووت نعينه له أصلاً)
-async function assignConversationInChatwoot(nileConversationId, targetNileUserId) {
+// actingNileUserId: مين اللي عمل الـ Assign فعليًا من نايل شات — بنستخدم
+// توكنه الشخصي لو هو نفسه متعمله ميرج (نفس آلية resolveSendingToken الموثوقة
+// المستخدمة في إرسال الردود العادية)، بدل ما نروح على طول لتوكن الاتصال العام
+// بتاع الـ Provider (اللي ممكن يكون باظ/منتهي من غير ما حد ينتبه، لإنه نادرًا
+// ما بيتستخدم لوحده)
+async function assignConversationInChatwoot(nileConversationId, targetNileUserId, actingNileUserId = null) {
   const externalConversation = await getExternalConversationForSync(nileConversationId);
   if (!externalConversation) return;
 
@@ -585,7 +590,7 @@ async function assignConversationInChatwoot(nileConversationId, targetNileUserId
       login_email: externalConversation.provider_login_email,
       login_password: externalConversation.provider_login_password,
     },
-    null // إجراء إداري (Assign) مش رد على العميل، فبنستخدم توكن الاتصال العام
+    actingNileUserId
   );
 
   await sendToChatwoot(
@@ -596,7 +601,7 @@ async function assignConversationInChatwoot(nileConversationId, targetNileUserId
 }
 
 // لو عملنا Resolve من نايل شات، بنقفل نفس المحادثة في شات ووت (toggle_status)
-async function resolveConversationInChatwoot(nileConversationId) {
+async function resolveConversationInChatwoot(nileConversationId, actingNileUserId = null) {
   const externalConversation = await getExternalConversationForSync(nileConversationId);
   if (!externalConversation) return;
 
@@ -610,7 +615,7 @@ async function resolveConversationInChatwoot(nileConversationId) {
       login_email: externalConversation.provider_login_email,
       login_password: externalConversation.provider_login_password,
     },
-    null
+    actingNileUserId
   );
 
   await sendToChatwoot(
@@ -625,7 +630,7 @@ async function resolveConversationInChatwoot(nileConversationId) {
 // { externalConversationRowId, providerId, chatwootMessageId } لو نجحت (عشان
 // الكنترولر يسجلها في External_Messages_byA ويمنع تكرارها لما الـ webhook
 // يرجعلنا نفس الرسالة تاني)، أو null لو المحادثة مش مربوطة بمزود خارجي
-async function sendPrivateNoteToChatwoot(nileConversationId, text, senderName) {
+async function sendPrivateNoteToChatwoot(nileConversationId, text, senderName, actingNileUserId = null) {
   const externalConversation = await getExternalConversationForSync(nileConversationId);
   if (!externalConversation) return null;
 
@@ -639,7 +644,7 @@ async function sendPrivateNoteToChatwoot(nileConversationId, text, senderName) {
       login_email: externalConversation.provider_login_email,
       login_password: externalConversation.provider_login_password,
     },
-    null
+    actingNileUserId
   );
 
   const content = senderName ? `${senderName}: ${text}` : text;

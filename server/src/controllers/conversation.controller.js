@@ -158,7 +158,7 @@ async function assign(req, res) {
   // لو المحادثة دي مربوطة بشات ووت والإيجنت المستهدف متعمله ميرج، بنبعت نفس
   // التعيين لشات ووت برضه (فشلها هنا مش قاتل — بنسجله بس في اللوج)
   chatwootService
-    .assignConversationInChatwoot(req.params.id, targetAgentId)
+    .assignConversationInChatwoot(req.params.id, targetAgentId, req.user.userId)
     .catch((err) => logger.error('❌ فشل مزامنة الأسين لشات ووت:', err.message));
 
   // إشعار "A conversation is assigned to you" — بس لو حد تاني هو اللي عيّنها
@@ -219,7 +219,7 @@ async function resolve(req, res) {
 
   // لو المحادثة دي مربوطة بشات ووت، بنقفلها هناك برضه (Resolve متزامن)
   chatwootService
-    .resolveConversationInChatwoot(req.params.id)
+    .resolveConversationInChatwoot(req.params.id, req.user.userId)
     .catch((err) => logger.error('❌ فشل مزامنة الـ Resolve لشات ووت:', err.message));
 
   // أتمتة "بعد الحل" (رسالة CSAT ثم فلو التقييم ورا بعض) — بس أول مرة تتقفل
@@ -319,7 +319,7 @@ async function addNote(req, res) {
       // رجعلنا نفس الرسالة دي تاني (شات ووت بيبعت message_created لأي رسالة
       // بيستقبلها هو، حتى اللي إحنا بعتناها)، نتجاهلها بدل ما نكرر الملاحظة
       chatwootService
-        .sendPrivateNoteToChatwoot(req.params.id, trimmedText, senderName)
+        .sendPrivateNoteToChatwoot(req.params.id, trimmedText, senderName, req.user.userId)
         .then((linked) => {
           if (!linked?.chatwootMessageId) return;
           return externalMessageRepo.createExternalMessage(linked.providerId, linked.chatwootMessageId, {
