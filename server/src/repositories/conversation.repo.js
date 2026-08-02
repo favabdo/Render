@@ -5,21 +5,23 @@ const { getPool, sql, TABLE_NAME } = require('../database/connection');
 // عشان لو حصل رد نبعته من نفس الرقم اللي العميل كلمنا منه بالظبط
 // contactId: الكونتاكت الحقيقي اللي الرقم ده مرتبط بيه دلوقتي (ممكن يتغيّر لو حصل دمج بعدين،
 // فبنعيد مزامنته في كل رسالة جديدة عشان يفضل متسق مع جدول ContactPhones)
+//
+// ملحوظة مهمة عن الـ race condition (نفس فكرة upsertExternalContact/
+// upsertExternalConversation بالظبط): الدالة دي بتتنادى من 3 أماكن (رسايل
+// واتساب المباشرة، شات ووت، وتذكير انتهاء العقود)، وفحص "existing" فوق مش
+// atomic. لو رسالتين/أحداث وصلوا سوا لنفس contactNumber (زي عميل بعت أكتر من
+// رسالة سريع ورا بعض)، الاتنين ممكن يشوفوا "مفيش محادثة مفتوحة" في نفس
+// اللحظة قبل ما أي INSERT يخلص، فيتعمل صفين محادثة مكررين بنفس المحتوى
+// (وده اللي كان بيحصل فعليًا). عشان كده الحكم النهائي هو UNIQUE constraint
+// حقيقي في الداتابيز (UQ_Conversations_OpenContactNumber — filtered index
+// بيمنع أكتر من صف status != 'closed' لنفس contact_number)، مش فحص SELECT
+// المسبق. لو حصل تعارض، معناه طلب تاني كسب السباق وعمل المحادثة فعلاً؛
+// بنجيبها ونطبّق عليها نفس تحديثات الاسم/الإينبوكس/الكونتاكت بدل ما نرمي
+// إيرور أو نعمل صف تاني مكرر
 async function findOrCreateConversation(contactNumber, contactName, inboxId = null, contactId = null, companyId = null) {
   const pool = await getPool();
 
-  const existing = await pool
-    .request()
-    .input('contactNumber', sql.NVarChar(30), contactNumber)
-    .query(`
-      SELECT TOP 1 * FROM [dbo].[NileChat_Conversations_byA]
-      WHERE contact_number = @contactNumber AND status != 'closed'
-      ORDER BY created_at DESC
-    `);
-
-  if (existing.recordset.length > 0) {
-    const convo = existing.recordset[0];
-    // حدّث اسم العميل لو اتغيّر أو كان فاضي
+  async function applyUpdatesAndReturn(convo) {
     if (contactName && contactName !== convo.contact_name) {
       await pool
         .request()
@@ -27,7 +29,6 @@ async function findOrCreateConversation(contactNumber, contactName, inboxId = nu
         .input('contactName', sql.NVarChar(200), contactName)
         .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET contact_name = @contactName WHERE id = @id`);
     }
-    // لو المحادثة كانت من غير Inbox معروف وجالها inboxId دلوقتي، اربطها بيه
     if (inboxId && !convo.inbox_id) {
       await pool
         .request()
@@ -35,7 +36,6 @@ async function findOrCreateConversation(contactNumber, contactName, inboxId = nu
         .input('inboxId', sql.BigInt, inboxId)
         .query(`UPDATE [dbo].[NileChat_Conversations_byA] SET inbox_id = @inboxId WHERE id = @id`);
     }
-    // زامن contact_id مع الكونتاكت الحالي بتاع الرقم (لو حصل دمج قبل كده، الرقم بقى ملك كونتاكت تاني)
     if (contactId && String(convo.contact_id || '') !== String(contactId)) {
       await pool
         .request()
@@ -46,20 +46,45 @@ async function findOrCreateConversation(contactNumber, contactName, inboxId = nu
     return { id: convo.id, isNew: false };
   }
 
-  const inserted = await pool
-    .request()
-    .input('contactNumber', sql.NVarChar(30), contactNumber)
-    .input('contactName', sql.NVarChar(200), contactName)
-    .input('inboxId', sql.BigInt, inboxId)
-    .input('contactId', sql.BigInt, contactId)
-    .input('companyId', sql.BigInt, companyId)
-    .query(`
-      INSERT INTO [dbo].[NileChat_Conversations_byA] (contact_number, contact_name, status, last_message_at, inbox_id, contact_id, company_id)
-      OUTPUT INSERTED.id
-      VALUES (@contactNumber, @contactName, 'open', SYSUTCDATETIME(), @inboxId, @contactId, @companyId)
-    `);
+  async function findOpenByNumber() {
+    const result = await pool
+      .request()
+      .input('contactNumber', sql.NVarChar(30), contactNumber)
+      .query(`
+        SELECT TOP 1 * FROM [dbo].[NileChat_Conversations_byA]
+        WHERE contact_number = @contactNumber AND status != 'closed'
+        ORDER BY created_at DESC
+      `);
+    return result.recordset[0] || null;
+  }
 
-  return { id: inserted.recordset[0].id, isNew: true };
+  const existing = await findOpenByNumber();
+  if (existing) {
+    return applyUpdatesAndReturn(existing);
+  }
+
+  try {
+    const inserted = await pool
+      .request()
+      .input('contactNumber', sql.NVarChar(30), contactNumber)
+      .input('contactName', sql.NVarChar(200), contactName)
+      .input('inboxId', sql.BigInt, inboxId)
+      .input('contactId', sql.BigInt, contactId)
+      .input('companyId', sql.BigInt, companyId)
+      .query(`
+        INSERT INTO [dbo].[NileChat_Conversations_byA] (contact_number, contact_name, status, last_message_at, inbox_id, contact_id, company_id)
+        OUTPUT INSERTED.id
+        VALUES (@contactNumber, @contactName, 'open', SYSUTCDATETIME(), @inboxId, @contactId, @companyId)
+      `);
+
+    return { id: inserted.recordset[0].id, isNew: true };
+  } catch (err) {
+    if (String(err.message || '').includes('UQ_Conversations_OpenContactNumber')) {
+      const winner = await findOpenByNumber();
+      if (winner) return applyUpdatesAndReturn(winner);
+    }
+    throw err;
+  }
 }
 
 // بتحدّث الكونتاكت المرتبط بمحادثة معينة (تُستخدم لما الإيجنت يدمج رقم مع كونتاكت تاني)
