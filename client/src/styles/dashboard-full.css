@@ -972,3 +972,34 @@ input[type="date"].iw-input,input[type="time"].iw-input{min-width:0;max-width:10
 .crop-modal-actions{display:flex;gap:10px;width:100%;margin-top:20px}
 .crop-modal-actions .resolve-cancel-btn,.crop-modal-actions .resolve-confirm-btn{padding:10px}
 
+
+/* كليك يمين على كارت محادثة في قايمة الشاتس — Assign to Agent / Assign to
+   Team / Add Label / Mark as Read-Unread / Resolve-Reopen / Add Note */
+.chat-ctx-menu{position:fixed;width:260px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 14px 44px rgba(0,0,0,0.22);z-index:9200;overflow:hidden;font-size:13px;animation:chatCtxFadeIn .12s ease-out}
+@keyframes chatCtxFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.chat-ctx-list{padding:6px}
+.chat-ctx-item{width:100%;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;border:none;background:transparent;color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:start;transition:background .12s}
+.chat-ctx-item:hover{background:var(--bg)}
+.chat-ctx-item span:first-of-type{flex:1}
+.chat-ctx-item-arrow{margin-inline-start:auto;color:var(--text-secondary)}
+.chat-ctx-divider{height:1px;background:var(--border);margin:6px 4px}
+.chat-ctx-sub{display:flex;flex-direction:column;max-height:320px}
+.chat-ctx-sub-header{display:flex;align-items:center;gap:8px;padding:10px 10px 8px;font-weight:700;font-size:13px;border-bottom:1px solid var(--border)}
+.chat-ctx-back{border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:2px;border-radius:6px}
+.chat-ctx-back:hover{background:var(--bg);color:var(--primary)}
+.chat-ctx-search-wrap{position:relative;padding:8px}
+.chat-ctx-search{width:100%;box-sizing:border-box;padding:7px 10px 7px 28px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);font-size:12.5px;font-family:inherit;outline:none;color:var(--text);transition:border-color .2s}
+.chat-ctx-search:focus{border-color:var(--primary)}
+.chat-ctx-search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--text-secondary);width:13px;height:13px;pointer-events:none}
+.chat-ctx-sub-list{overflow-y:auto;max-height:220px;padding:0 6px 6px}
+.chat-ctx-option{width:100%;box-sizing:border-box;display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px;border:none;background:transparent;color:var(--text);font-size:12.5px;font-family:inherit;cursor:pointer;text-align:start}
+.chat-ctx-option:hover{background:var(--bg)}
+.chat-ctx-option.selected{background:rgba(108,92,231,0.1);color:var(--primary);font-weight:600}
+.chat-ctx-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.chat-ctx-empty{padding:14px;text-align:center;font-size:12px;color:var(--text-secondary)}
+.chat-ctx-note-body{padding:10px;display:flex;flex-direction:column;gap:8px}
+.chat-ctx-note-textarea{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:12.5px;font-family:inherit;resize:none;outline:none;height:76px;transition:border-color .2s}
+.chat-ctx-note-textarea:focus{border-color:var(--primary)}
+.chat-ctx-note-submit{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;transition:background .15s}
+.chat-ctx-note-submit:hover{background:var(--primary-dark)}
+.chat-ctx-note-submit:disabled{opacity:.5;cursor:default}

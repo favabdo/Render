@@ -17,7 +17,21 @@
     },
     "empty": "No conversations found",
     "unassigned": "Unassigned",
-    "vipCustomer": "VIP Customer"
+    "vipCustomer": "VIP Customer",
+    "contextMenu": {
+      "assignAgent": "Assign to Agent",
+      "assignTeam": "Assign to Team",
+      "addLabel": "Add Label",
+      "markAsRead": "Mark as Read",
+      "markAsUnread": "Mark as Unread",
+      "resolve": "Resolve Conversation",
+      "reopen": "Reopen Conversation",
+      "addNote": "Add Internal Note",
+      "notePlaceholder": "Write an internal note visible only to agents...",
+      "noteSubmit": "Add Note",
+      "noteSaving": "Saving...",
+      "noteAddedToast": "Note added"
+    }
   },
   "header": {
     "typingOne": "{{name}} is typing...",

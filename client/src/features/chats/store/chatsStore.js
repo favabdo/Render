@@ -34,8 +34,22 @@ const useChatsStore = create((set, get) => ({
       set((state) => ({
         conversations: mapped.map((m) => {
           const prev = state.conversations.find((x) => x.id === m.id);
+          // بنحافظ على unread زي ما هو — لو مسحناه (رجّعناه لـ 0 من mapApiConversation)
+          // كل مرة نعمل فيها reload، هيبقى معناه إن أي محادثة عندها رسالة جديدة
+          // لسه الإيجنت مفتحهاش هتتعلّم "مقروءة" غصب عنه لمجرد إن الصفحة عملت
+          // ريفريش أو poll في الخلفية — unread المفروض يتصفّر بس لما الإيجنت
+          // نفسه يفتح المحادثة (شوف selectChat تحت)
           return prev
-            ? { ...m, messages: prev.messages, _messagesLoaded: prev._messagesLoaded, labels: prev.labels, teams: prev.teams, _contactLoaded: prev._contactLoaded, prevConvs: prev.prevConvs }
+            ? {
+                ...m,
+                messages: prev.messages,
+                _messagesLoaded: prev._messagesLoaded,
+                labels: prev.labels,
+                teams: prev.teams,
+                _contactLoaded: prev._contactLoaded,
+                prevConvs: prev.prevConvs,
+                unread: prev.unread,
+              }
             : m;
         }),
         loaded: true,
@@ -153,6 +167,64 @@ const useChatsStore = create((set, get) => ({
 
   setFilter: (f) => set({ filter: f }),
   setSearch: (s) => set({ search: s }),
+
+  // ===== أكشنز عامة لأي محادثة (مستخدمة من قايمة الشاتس - كليك يمين - مش
+  // بس من جوا الشات المفتوح) — نفس منطق AssignSection/TeamsSection/LabelsSection
+  // بالظبط بس شغالة على أي conversation بالـ id من غير ما تكون مفتوحة أصلاً =====
+
+  async assignConversationToAgent(convId, agentId) {
+    const data = await conversationsApi.assign(convId, agentId);
+    get().patchConversation(convId, {
+      assignedTo: data.conversation?.assigned_agent_name || null,
+      rawStatus: data.conversation?.status || 'assigned',
+      status: (data.conversation?.status || 'assigned') === 'closed' ? 'resolved' : 'open',
+    });
+    return data;
+  },
+
+  // فريق واحد بس في المرة الواحدة للمحادثة (نفس منطق TeamsSection)
+  async assignConversationToTeam(convId, teamId) {
+    const c = get().conversations.find((x) => x.id === convId);
+    const previous = c?.teams || [];
+    for (const old of previous) await conversationsApi.removeTeam(convId, old.id);
+    const data = await conversationsApi.addTeam(convId, teamId);
+    get().patchConversation(convId, { teams: data.teams });
+    return data;
+  },
+
+  // ليبل واحد بس في المرة الواحدة للمحادثة (نفس منطق LabelsSection)
+  async addLabelToConversation(convId, labelId) {
+    const c = get().conversations.find((x) => x.id === convId);
+    const previous = c?.labels || [];
+    for (const old of previous) await conversationsApi.removeLabel(convId, old.id);
+    const data = await conversationsApi.addLabel(convId, labelId);
+    get().patchConversation(convId, { labels: data.labels });
+    return data;
+  },
+
+  async addNoteToConversation(convId, text) {
+    return conversationsApi.addNote(convId, text);
+  },
+
+  // بيبدّل حالة unread يدويًا (علّم كمقروءة / كغير مقروءة) — تغيير محلي بحت
+  // (زي unread أصلاً، مش متخزن في الداتابيز) فمالوش أي تأثير على أجنتس تانيين
+  toggleConversationReadState(convId) {
+    const c = get().conversations.find((x) => x.id === convId);
+    if (!c) return;
+    get().patchConversation(convId, { unread: c.unread > 0 ? 0 : 1 });
+  },
+
+  async resolveConversationWithCategory(convId, category, notes) {
+    const data = await conversationsApi.resolve(convId, category, notes);
+    get().patchConversation(convId, { status: 'resolved', rawStatus: 'closed' });
+    return data;
+  },
+
+  async reopenConversation(convId) {
+    const data = await conversationsApi.reopen(convId);
+    get().patchConversation(convId, { status: 'open', rawStatus: data.conversation?.status || 'open' });
+    return data;
+  },
 
   selectChat(id) {
     set({ selectedChatId: id, noteMode: false });

@@ -17,7 +17,21 @@
     },
     "empty": "لا توجد محادثات",
     "unassigned": "غير مُسندة",
-    "vipCustomer": "عميل مميز"
+    "vipCustomer": "عميل مميز",
+    "contextMenu": {
+      "assignAgent": "تعيين لإيجنت",
+      "assignTeam": "تعيين لفريق",
+      "addLabel": "إضافة ليبل",
+      "markAsRead": "علّم كمقروءة",
+      "markAsUnread": "علّم كغير مقروءة",
+      "resolve": "حل المحادثة",
+      "reopen": "إعادة فتح المحادثة",
+      "addNote": "إضافة ملاحظة داخلية",
+      "notePlaceholder": "اكتب ملاحظة داخلية، هتظهر للإيجنتس بس...",
+      "noteSubmit": "إضافة الملاحظة",
+      "noteSaving": "جاري الحفظ...",
+      "noteAddedToast": "تمت إضافة الملاحظة"
+    }
   },
   "header": {
     "typingOne": "{{name}} يكتب الآن...",

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import useChatsStore from '../store/chatsStore';
 import { conversationsApi } from '../services/chats.service';
 import { mapApiConversation, mapApiMessage, mediaKindLabel } from '../utils/mappers';
-import { formatMessageTimestamp } from '../../../utils/dateFormat';
+import { formatMessageTimestamp, formatTime } from '../../../utils/dateFormat';
 import { useSocketContext } from '../../../hooks/useSocketContext';
 import useAuthStore from '../../../store/authStore';
 import useToastStore from '../../../store/toastStore';
@@ -95,6 +95,9 @@ export default function ChatsPage() {
                   teams: prev.teams,
                   phones: prev._contactLoaded ? prev.phones : m.phones,
                   _contactLoaded: prev._contactLoaded,
+                  // زي loadConversations بالظبط: مانمسحش unread عند أي poll خلفي —
+                  // لازم يفضل زي ما هو لحد ما الإيجنت نفسه يفتح المحادثة
+                  unread: prev.unread,
                 }
               : m;
           }),
@@ -344,6 +347,15 @@ export default function ChatsPage() {
           updatedConv.lastMessageText ||
           (updatedConv.lastMessageType && updatedConv.lastMessageType !== 'text' ? mediaKindLabel(updatedConv.lastMessageType) : '');
       }
+      // بيوصل بشكلين: (1) الصف الكامل من الداتابيز فيه last_message_at
+      // (snake_case)، أو (2) الملخص الخفيف بتاع buildConversationSummary فيه
+      // lastMessageAt (camelCase) — لازم نتعامل مع الاتنين عشان قايمة الشاتس
+      // تعرف ترتب نفسها بأحدث محادثة فوق دايمًا (شوف sortConversationsByRecency)
+      const rawLastMessageAt = updatedConv.lastMessageAt ?? updatedConv.last_message_at;
+      if (rawLastMessageAt) {
+        patch._lastMessageAtRaw = rawLastMessageAt;
+        patch.time = formatTime(rawLastMessageAt);
+      }
       if (updatedConv.lastMessageDirection === 'in' && state.selectedChatId !== c.id) {
         patch.unread = (c.unread || 0) + 1;
       }
@@ -390,6 +402,7 @@ export default function ChatsPage() {
                   teams: prev.teams,
                   phones: prev._contactLoaded ? prev.phones : m.phones,
                   _contactLoaded: prev._contactLoaded,
+                  unread: prev.unread,
                 }
               : m;
           }),

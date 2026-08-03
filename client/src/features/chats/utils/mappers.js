@@ -108,6 +108,18 @@ export function docKindLabel(mimeType, fileName) {
   return i18n.t('docKind.file', { ns: 'chats' });
 }
 
+// بترتب المحادثات حسب وقت آخر رسالة (الأحدث الأول) — بتتستخدم في قايمة
+// الشاتس عشان أي محادثة جالها رد جديد (من العميل أو من الإيجنت/الأتمتة)
+// تطلع فورًا أول واحدة في الترتيب، بدل ما تفضل واقفة في مكانها القديم لحد
+// أول ريفريش كامل للصفحة
+export function sortConversationsByRecency(list) {
+  return [...list].sort((a, b) => {
+    const at = a._lastMessageAtRaw ? new Date(a._lastMessageAtRaw).getTime() : 0;
+    const bt = b._lastMessageAtRaw ? new Date(b._lastMessageAtRaw).getTime() : 0;
+    return bt - at;
+  });
+}
+
 export function hexToRgba(hex, alpha) {
   const h = (hex || '#6C5CE7').replace('#', '');
   const bigint = parseInt(

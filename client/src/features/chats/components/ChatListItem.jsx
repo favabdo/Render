@@ -3,10 +3,18 @@ import { UserRound, Crown } from 'lucide-react';
 import Avatar from '../../../components/ui/Avatar';
 import { hexToRgba } from '../utils/mappers';
 
-export default function ChatListItem({ c, active, onClick }) {
+export default function ChatListItem({ c, active, onClick, onContextMenu }) {
   const { t } = useTranslation('chats');
   return (
-    <div className={`chat-item${active ? ' active' : ''}`} onClick={onClick}>
+    <div
+      className={`chat-item${active ? ' active' : ''}`}
+      onClick={onClick}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        onContextMenu(e, c);
+      }}
+    >
       <div className="chat-item-avatar">
         <Avatar name={c.name} seed={c.avatar} size={48} />
         <div className={`status-dot ${c.status}`}></div>
