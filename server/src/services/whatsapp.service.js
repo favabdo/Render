@@ -7,6 +7,7 @@ const conversationRepo = require('../repositories/conversation.repo');
 const inboxRepo = require('../repositories/inbox.repo');
 const { normalizeDigits } = require('../utils/helpers');
 const mediaStorage = require('../utils/mediaStorage');
+const audioTranscode = require('../utils/audioTranscode');
 const logger = require('../utils/logger');
 
 const GRAPH_API_VERSION = 'v20.0';
@@ -457,10 +458,26 @@ async function downloadIncomingMedia(mediaId, inboxId = null, attempt = 1) {
       timeout: 30000,
     });
 
-    const buffer = Buffer.from(fileResponse.data);
-    const { publicUrl } = mediaStorage.saveBuffer(buffer, { folder: 'incoming', mimeType });
+    let buffer = Buffer.from(fileResponse.data);
+    let finalMimeType = mimeType || null;
 
-    return { url: publicUrl, mimeType: mimeType || null, fileSize: fileSize || null };
+    // رسايل الصوت اللي واتساب بيبعتها بتيجي ogg/opus — الصيغة دي مدعومة في
+    // كروم/أندرويد لكن مش شغالة خالص على آيفون (سفاري وأي متصفح تاني في iOS)،
+    // فكانت بتوصل وتتحفظ عادي لكن مبتشتغلش لما العميل/الإيجنت يحاول يسمعها من
+    // موبايل آيفون. بنحولها هنا لـ mp3 (مدعومة في كل مكان) قبل ما نخزنها.
+    if (finalMimeType === 'audio/ogg') {
+      const mp3Buffer = await audioTranscode.transcodeOggToMp3(buffer);
+      if (mp3Buffer) {
+        buffer = mp3Buffer;
+        finalMimeType = 'audio/mpeg';
+      } else {
+        logger.warn('⚠️ فشل تحويل رسالة صوتية واردة لـ mp3 — هتتخزن بصيغتها الأصلية (ogg) وممكن متشتغلش على آيفون');
+      }
+    }
+
+    const { publicUrl } = mediaStorage.saveBuffer(buffer, { folder: 'incoming', mimeType: finalMimeType });
+
+    return { url: publicUrl, mimeType: finalMimeType, fileSize: fileSize || null };
   } catch (err) {
     // معظم الفشل هنا بيكون مؤقت (تايم أوت / انقطاع لحظي مع سيرفرات ميتا)، مش
     // توكن غلط أو ملف اتمسح فعليًا — فبنعيد المحاولة كام مرة قبل ما نستسلم

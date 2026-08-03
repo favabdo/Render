@@ -346,6 +346,86 @@ async function addNote(req, res) {
   );
 }
 
+// ملاحظة خاصة بصورة مرفقة (بديل addNote للصور) — نفس القفل ونفس منطق المنشن،
+// بس بيرفع الملف على الديسك الأول زي replyMedia بالظبط (مش بيتبعت لواتساب خالص)
+async function addNoteMedia(req, res) {
+  if (!req.file) return res.status(400).json({ error: 'لازم تبعت صورة' });
+  if (!req.file.mimetype || !req.file.mimetype.startsWith('image/')) {
+    return res.status(400).json({ error: 'الملاحظات الخاصة بتدعم الصور بس دلوقتي' });
+  }
+
+  const caption = (req.body?.text || '').trim() || null;
+  const clientId = req.body?.clientId || null;
+
+  const [conversation, sender] = await Promise.all([
+    conversationRepo.getConversationById(req.params.id),
+    userRepo.findUserById(req.user.userId),
+  ]);
+  if (!conversation) return res.status(404).json({ error: 'المحادثة مش موجودة' });
+  if (isConversationLocked(conversation)) {
+    return res.status(409).json({ error: LOCKED_ERROR });
+  }
+
+  const senderName = sender ? userRepo.resolveDisplayName(sender) : null;
+  const io = req.app.get('io');
+
+  // بنخزن الصورة محليًا فورًا (زي replyMedia بالظبط) — هنا مفيش خطوة رفع
+  // لواتساب خالص لأن الملاحظات داخلية بين الإيجنتس بس
+  const { publicUrl } = mediaStorage.saveBuffer(req.file.buffer, {
+    folder: 'notes',
+    mimeType: req.file.mimetype,
+    originalName: req.file.originalname,
+  });
+
+  res.json({ ok: true, clientId });
+
+  conversationRepo
+    .addPrivateNote(req.params.id, {
+      text: caption,
+      senderId: req.user.userId,
+      senderName,
+      mediaUrl: publicUrl,
+      mediaMime: req.file.mimetype,
+      mediaFileName: req.file.originalname,
+      messageType: 'image',
+    })
+    .then((note) => {
+      if (io) {
+        socketService.emitToCompany(io, req.companyId, 'new_note', {
+          conversationId: conversation.id,
+          note: { ...note, client_id: clientId },
+        });
+      }
+
+      // لو المحادثة مربوطة بشات ووت، بنبعت إشارة نصية بديلة هناك (شات ووت مش
+      // بيدعم إرفاق صورة كملاحظة خاصة بنفس الطريقة) عشان الفريق يعرف إن فيه
+      // صورة اتضافت حتى لو مش قادرين يشوفوها في شات ووت نفسه
+      chatwootService
+        .sendPrivateNoteToChatwoot(req.params.id, caption ? `📷 ${caption}` : '📷 صورة مرفقة', senderName, req.user.userId)
+        .then((linked) => {
+          if (!linked?.chatwootMessageId) return;
+          return externalMessageRepo.createExternalMessage(linked.providerId, linked.chatwootMessageId, {
+            externalConversationRowId: linked.externalConversationRowId,
+            nileMessageId: note.id,
+            direction: 'note',
+            messageType: 'image',
+            rawJson: null,
+          });
+        })
+        .catch((err) => logger.error('❌ فشل مزامنة صورة الملاحظة الخاصة لشات ووت:', err.message));
+
+      if (caption) {
+        notifyMentionedAgents(req, conversation, caption, senderName).catch((err) =>
+          logger.error('❌ فشل اكتشاف/إشعار المنشن:', err.message)
+        );
+      }
+    })
+    .catch((err) => {
+      logger.error('❌ فشل تسجيل ملاحظة خاصة بصورة:', err.message);
+      if (io) socketService.emitToCompany(io, req.companyId, 'note_failed', { conversationId: conversation.id, text: caption, clientId });
+    });
+}
+
 async function notifyMentionedAgents(req, conversation, text, senderName) {
   const agents = await userRepo.listUsers();
   const mentionedIds = [];
@@ -471,6 +551,13 @@ async function reply(req, res) {
           conversation.id
         );
       }
+
+      // "You are mentioned in a conversation" — نفس منطق الملاحظات الخاصة: لو
+      // الإيجنت كتب @اسم إيجنت تاني في رد عادي كمان، برضه بيوصله إشعار منشن
+      notifyMentionedAgents(req, conversation, text, senderInfo?.name).catch((err) =>
+        logger.error('❌ فشل اكتشاف/إشعار المنشن:', err.message)
+      );
+
       reportTiming(req, 'reply:background_dispatched');
     })
     .catch((err) => {
@@ -642,6 +729,7 @@ module.exports = {
   reply,
   replyMedia,
   addNote,
+  addNoteMedia,
   deleteMessage,
   generateReply,
   verifyWebhook,

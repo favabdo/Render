@@ -158,6 +158,7 @@
     "emptyTitle": "NileChat",
     "emptySubtitle": "Select a conversation to start messaging",
     "addNoteFailed": "Failed to add the note",
+    "noteImageOnly": "Private notes only support images for now",
     "conversationClosed": "This conversation is closed (Resolved) — reopen it first to send a message",
     "sendFailed": "Failed to send the message — check the backend connection",
     "uploadFailed": "Failed to upload the file — check the backend connection",

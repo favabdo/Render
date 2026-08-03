@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip, Mic, Square, Send, Lock, Sparkles, Loader2, X, FileText } from 'lucide-react';
+import { Paperclip, Mic, Square, Send, Lock, Sparkles, Loader2, X, FileText, AtSign } from 'lucide-react';
 import useToastStore from '../../../store/toastStore';
 import { conversationsApi } from '../services/chats.service';
+import Avatar from '../../../components/ui/Avatar';
 
 const MAX_FILE_SIZE = 30 * 1024 * 1024;
 const ACCEPT_TYPES = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip';
@@ -23,6 +24,21 @@ function autoResize(el) {
 function isMobileLayout() {
   return window.matchMedia('(max-width:860px)').matches;
 }
+
+// بيدور من مكان الكيرسور للخلف عن أقرب @ بتبدأ كلمة (أول النص أو بعد مسافة/سطر
+// جديد) — لو لقاها ومفيش مسافة بينها وبين الكيرسور، يبقى اليوزر بيكتب منشن
+// دلوقتي فعلًا، وبيرجع النص اللي بعد الـ @ عشان نفلتر بيه قايمة الإيجنتس
+function detectMentionQuery(value, cursorPos) {
+  const upToCursor = value.slice(0, cursorPos);
+  const atIndex = upToCursor.lastIndexOf('@');
+  if (atIndex === -1) return null;
+  const charBefore = atIndex > 0 ? upToCursor[atIndex - 1] : '';
+  if (charBefore && !/\s/.test(charBefore)) return null;
+  const query = upToCursor.slice(atIndex + 1);
+  if (/\s/.test(query)) return null;
+  return { query, start: atIndex, end: cursorPos };
+}
+
 function pickVoiceMimeType() {
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
   for (const type of candidates) {
@@ -41,6 +57,7 @@ export default function MessageInput({
   onTypingChange,
   cannedResponses,
   typingNames = [],
+  agents = [],
 }) {
   const { t } = useTranslation('chats');
   const [text, setText] = useState('');
@@ -64,6 +81,17 @@ export default function MessageInput({
 
   const [generating, setGenerating] = useState(false);
 
+  // منشن @اسم-إيجنت — mentionState فيها { query, start, end } لو اليوزر بيكتب
+  // منشن دلوقتي، ومفيش (null) لو لأ. mentionIndex بيتتبع العنصر المتظلل حاليًا
+  // في القايمة عشان يقدر يتنقل فيها بالسهام
+  const [mentionState, setMentionState] = useState(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const filteredMentionAgents = mentionState
+    ? agents
+        .filter((a) => (a.display_name || a.email || '').toLowerCase().includes(mentionState.query.toLowerCase()))
+        .slice(0, 6)
+    : [];
+
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const recorderRef = useRef(null);
@@ -74,12 +102,56 @@ export default function MessageInput({
   const startedAtRef = useRef(null);
 
   function handleChange(e) {
-    setText(e.target.value);
+    const value = e.target.value;
+    setText(value);
     autoResize(e.target);
-    onTypingChange(e.target.value.trim().length > 0);
+    onTypingChange(value.trim().length > 0);
+    const mention = detectMentionQuery(value, e.target.selectionStart);
+    setMentionState(mention);
+    setMentionIndex(0);
+  }
+
+  function selectMention(agent) {
+    if (!mentionState) return;
+    const name = agent.display_name || agent.email;
+    const before = text.slice(0, mentionState.start);
+    const after = text.slice(mentionState.end);
+    const newText = `${before}@${name} ${after}`;
+    setText(newText);
+    setMentionState(null);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const pos = before.length + name.length + 2;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+      autoResize(el);
+    });
   }
 
   function handleKeyDown(e) {
+    if (mentionState && filteredMentionAgents.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % filteredMentionAgents.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + filteredMentionAgents.length) % filteredMentionAgents.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        selectMention(filteredMentionAgents[mentionIndex] || filteredMentionAgents[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionState(null);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       if (isMobileLayout()) return;
       e.preventDefault();
@@ -92,6 +164,7 @@ export default function MessageInput({
     if (!trimmed) return;
     onSend(trimmed);
     setText('');
+    setMentionState(null);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   }
 
@@ -306,6 +379,28 @@ export default function MessageInput({
         </div>
       )}
       <div className={`chat-input-area${noteMode ? ' note-mode' : ''}${resolved ? ' resolved-locked' : ''}`} id="chat-input-area">
+        {mentionState && filteredMentionAgents.length > 0 && (
+          <div className="mention-dropdown">
+            {filteredMentionAgents.map((a, i) => (
+              <button
+                key={a.id}
+                type="button"
+                className={`mention-option${i === mentionIndex ? ' active' : ''}`}
+                // onMouseDown مش onClick — لازم يتنفذ قبل ما الـ textarea يعمل blur
+                // (اللي بيحصل تلقائي أول ما تدوس بره الـ input) عشان الاختيار
+                // ينفذ صح قبل ما الدروب داون يتقفل من onBlur
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectMention(a);
+                }}
+                onMouseEnter={() => setMentionIndex(i)}
+              >
+                <Avatar name={a.display_name || a.email} seed={a.id} size={24} imageSrc={a.avatar_url || null} />
+                <span>{a.display_name || a.email}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {pendingFile ? (
           <div className="media-preview-bar">
             <button className="media-preview-cancel" title={t('messageInput.cancel')} aria-label={t('messageInput.cancel')} onClick={cancelPendingFile}>
@@ -352,7 +447,14 @@ export default function MessageInput({
               >
                 <Paperclip size={20} />
               </button>
-              <input ref={fileInputRef} type="file" style={{ display: 'none' }} accept={ACCEPT_TYPES} onChange={handleFileChosen} disabled={resolved} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                style={{ display: 'none' }}
+                accept={noteMode ? 'image/*' : ACCEPT_TYPES}
+                onChange={handleFileChosen}
+                disabled={resolved}
+              />
             </div>
 
             {!recording && (
@@ -365,6 +467,7 @@ export default function MessageInput({
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
+                onBlur={() => setMentionState(null)}
                 disabled={resolved}
               />
             )}

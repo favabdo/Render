@@ -20,19 +20,33 @@ import { hexToRgba } from '../utils/mappers';
 const MENU_WIDTH = 260;
 const MENU_MARGIN = 8;
 
+// بيتأكد إن الجهاز شغال بلمس (موبايل/تابلت) عشان منعملش autoFocus على
+// حقول البحث فيه — الـ autoFocus بيفتح الكيبورد فورًا، والكيبورد بيقلل
+// المساحة الظاهرة فعليًا من غير ما يغيّر window.innerHeight في متصفحات
+// كتير (خصوصًا سفاري)، فقايمة الاختيارات (agent/team/label) كانت بتترسم
+// تحت الكيبورد فعليًا وتبان "مش ظاهرة خالص" حتى إنها موجودة في الـ DOM
+const isTouchDevice =
+  typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
 // بيحسب مكان المنيو بالنسبة للـ viewport عشان تفضل ظاهرة كاملة حتى لو
 // الكليك يمين حصل قريب من حافة الشاشة (نفس فكرة positionPopover في TagPopover)
+// بنستخدم visualViewport لو متاح (مش window.innerWidth/Height العاديين) عشان
+// لو الكيبورد فاتح على الموبايل نحسب المساحة الظاهرة فعليًا مش المساحة الكاملة
+// للصفحة اللي جزء كبير منها بقى تحت الكيبورد
 function clampPosition(x, y, menuEl) {
   if (!menuEl) return { left: x, top: y };
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+  const vw = vv ? vv.width : window.innerWidth;
+  const vh = vv ? vv.height : window.innerHeight;
+  const offsetLeft = vv ? vv.offsetLeft : 0;
+  const offsetTop = vv ? vv.offsetTop : 0;
   const rect = menuEl.getBoundingClientRect();
   let left = x;
   let top = y;
-  if (left + rect.width + MENU_MARGIN > vw) left = vw - rect.width - MENU_MARGIN;
-  if (left < MENU_MARGIN) left = MENU_MARGIN;
-  if (top + rect.height + MENU_MARGIN > vh) top = vh - rect.height - MENU_MARGIN;
-  if (top < MENU_MARGIN) top = MENU_MARGIN;
+  if (left + rect.width + MENU_MARGIN > offsetLeft + vw) left = offsetLeft + vw - rect.width - MENU_MARGIN;
+  if (left < offsetLeft + MENU_MARGIN) left = offsetLeft + MENU_MARGIN;
+  if (top + rect.height + MENU_MARGIN > offsetTop + vh) top = offsetTop + vh - rect.height - MENU_MARGIN;
+  if (top < offsetTop + MENU_MARGIN) top = offsetTop + MENU_MARGIN;
   return { left, top };
 }
 
@@ -63,6 +77,20 @@ export default function ChatItemContextMenu({
 
   useEffect(() => {
     setPos(clampPosition(x, y, menuRef.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, y, view]);
+
+  useEffect(() => {
+    // لما الكيبورد يفتح/يقفل على الموبايل بعد ما تدوس في حقل البحث، المساحة
+    // الظاهرة (visualViewport) بتتغيّر — لازم نعيد حساب مكان المنيو عشان
+    // القايمة تفضل ظاهرة كاملة فوق الكيبورد مش تحته
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return undefined;
+    function onViewportResize() {
+      setPos(clampPosition(x, y, menuRef.current));
+    }
+    vv.addEventListener('resize', onViewportResize);
+    return () => vv.removeEventListener('resize', onViewportResize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [x, y, view]);
 
@@ -179,7 +207,7 @@ export default function ChatItemContextMenu({
           <div className="chat-ctx-search-wrap">
             <Search size={13} className="chat-ctx-search-icon" />
             <input
-              autoFocus
+              autoFocus={!isTouchDevice}
               type="text"
               className="chat-ctx-search"
               placeholder={t('assign.searchPlaceholder')}
@@ -220,7 +248,7 @@ export default function ChatItemContextMenu({
           <div className="chat-ctx-search-wrap">
             <Search size={13} className="chat-ctx-search-icon" />
             <input
-              autoFocus
+              autoFocus={!isTouchDevice}
               type="text"
               className="chat-ctx-search"
               placeholder={t('assign.searchPlaceholder')}
@@ -261,7 +289,7 @@ export default function ChatItemContextMenu({
           <div className="chat-ctx-search-wrap">
             <Search size={13} className="chat-ctx-search-icon" />
             <input
-              autoFocus
+              autoFocus={!isTouchDevice}
               type="text"
               className="chat-ctx-search"
               placeholder={t('assign.searchPlaceholder')}
@@ -302,7 +330,7 @@ export default function ChatItemContextMenu({
           </div>
           <div className="chat-ctx-note-body">
             <textarea
-              autoFocus
+              autoFocus={!isTouchDevice}
               className="chat-ctx-note-textarea"
               placeholder={t('list.contextMenu.notePlaceholder')}
               value={noteText}

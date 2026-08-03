@@ -535,19 +535,32 @@ async function saveStatusUpdate({ waMessageId, status, rawPayload, conversationI
  * ملاحظة خاصة بين الإيجنتس على محادثة معينة — بتتخزن في نفس جدول الرسائل
  * (direction='note') بس متضمنش أي إرسال لواتساب، وبتتفلتر بره في كل الأماكن
  * اللي بتتعامل مع رسايل العميل (in/out) عشان العميل ميشوفهاش أبدًا.
+ * ممكن تتبعت بصورة مرفقة (mediaUrl/mediaMime/mediaFileName) بالإضافة للنص —
+ * أو صورة لوحدها من غير نص خالص (caption اختياري)
  */
-async function addPrivateNote(conversationId, { text, senderId, senderName }) {
+async function addPrivateNote(
+  conversationId,
+  { text, senderId, senderName, mediaUrl = null, mediaMime = null, mediaFileName = null, messageType = null }
+) {
   const pool = await getPool();
   const result = await pool
     .request()
     .input('conversationId', sql.BigInt, conversationId)
-    .input('messageText', sql.NVarChar(sql.MAX), text)
+    .input('messageText', sql.NVarChar(sql.MAX), text || null)
     .input('sentByUserId', sql.BigInt, senderId)
     .input('sentByName', sql.NVarChar(200), senderName)
+    .input('mediaUrl', sql.NVarChar(500), mediaUrl)
+    .input('mediaMime', sql.NVarChar(150), mediaMime)
+    .input('mediaFileName', sql.NVarChar(300), mediaFileName)
+    .input('messageType', sql.NVarChar(30), messageType)
     .query(`
-      INSERT INTO [dbo].[${TABLE_NAME}] (conversation_id, direction, message_text, sent_by_user_id, sent_by_name)
+      INSERT INTO [dbo].[${TABLE_NAME}]
+        (conversation_id, direction, message_text, sent_by_user_id, sent_by_name,
+         media_url, media_mime, media_filename, message_type)
       OUTPUT INSERTED.*
-      VALUES (@conversationId, 'note', @messageText, @sentByUserId, @sentByName)
+      VALUES
+        (@conversationId, 'note', @messageText, @sentByUserId, @sentByName,
+         @mediaUrl, @mediaMime, @mediaFileName, @messageType)
     `);
   return result.recordset[0];
 }

@@ -30,6 +30,7 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
     customerPanelOpen,
     noteMode,
     typingAgents,
+    agents,
     toggleCustomerPanel,
     toggleNoteMode,
     patchConversation,
@@ -153,6 +154,18 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
     }
   }
 
+  // بنبعت صورة النوت فعليًا (مستخدمة من handleSendFile في وضع النوت وكمان من الـ Retry)
+  async function sendNoteMedia(file, clientId, caption = '') {
+    try {
+      const uploadFile = await compressImageIfNeeded(file);
+      await conversationsApi.addNoteMedia(c.id, uploadFile, clientId, caption);
+    } catch (err) {
+      console.error('[API] sendNoteMedia error:', err);
+      showToast(err.response?.data?.error || t('mainPanel.uploadFailed'), 'error');
+      useChatsStore.getState().replaceMessage(c.id, (m) => m._clientId === clientId, (m) => ({ ...m, _pending: false, failed: true }));
+    }
+  }
+
   async function handleSendFile(file, caption = '') {
     if (c.rawStatus === 'closed') {
       showToast(t('mainPanel.conversationClosed'), 'error');
@@ -163,6 +176,33 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
     const kind = detectMediaKind(file.type);
     const localUrl = URL.createObjectURL(file);
     const nowIso = new Date().toISOString();
+
+    // النوت الخاصة بتدعم الصور بس دلوقتي (مش فيديو/صوت/مستندات) — ده نفس التحقق
+    // اللي بيحصل في السيرفر (addNoteMedia)، بنتحقق هنا الأول عشان اليوزر ياخد
+    // رسالة واضحة فورًا من غير ما يستنى رحلة كاملة للسيرفر
+    if (noteMode) {
+      if (kind !== 'image') {
+        showToast(t('mainPanel.noteImageOnly'), 'error');
+        return;
+      }
+      addMessage(c.id, {
+        from: 'note',
+        text: caption || '',
+        time: formatMessageTimestamp(nowIso),
+        rawTime: nowIso,
+        senderName: currentAgentName,
+        isNote: true,
+        _pending: true,
+        _clientId: clientId,
+        _file: file,
+        type: kind,
+        mediaUrl: localUrl,
+        mediaMime: file.type,
+        fileName: file.name,
+      });
+      await sendNoteMedia(file, clientId, caption);
+      return;
+    }
 
     addMessage(c.id, {
       from: 'agent',
@@ -187,7 +227,9 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
   function handleRetry(m) {
     useChatsStore.getState().replaceMessage(c.id, (x) => x === m, (x) => ({ ...x, _pending: true, failed: false }));
     const clientId = m._clientId || generateClientId();
-    if (m.isNote) {
+    if (m.isNote && m._file) {
+      sendNoteMedia(m._file, clientId, m.text || '');
+    } else if (m.isNote) {
       sendNote(m.text, clientId);
     } else if (m._file) {
       sendMediaFile(m._file, clientId, m.text || '');
@@ -270,6 +312,7 @@ export default function ChatMainPanel({ conversation, currentAgentName, socketRe
           onTypingChange={handleTypingChange}
           cannedResponses={cannedResponses}
           typingNames={typingNames}
+          agents={agents}
         />
       </div>
 

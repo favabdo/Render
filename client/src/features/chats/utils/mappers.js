@@ -63,6 +63,10 @@ export function mapApiMessage(m) {
       rawTime: m.created_at,
       senderName: m.sent_by_name || null,
       isNote: true,
+      type: m.message_type && m.message_type !== 'text' ? m.message_type : null,
+      mediaUrl: m.media_url || null,
+      mediaMime: m.media_mime || null,
+      fileName: m.media_filename || null,
     };
   }
   if (m.direction === 'system') {

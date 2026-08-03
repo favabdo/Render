@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Lock, RotateCw, X } from 'lucide-react';
+import { Lock, RotateCw, X, Loader2 } from 'lucide-react';
 import { findPhoneLabel } from '../utils/mappers';
 import MediaBubbleContent from './MediaBubbleContent';
 import MessageTicks from './MessageTicks';
@@ -57,11 +57,19 @@ export default function MessageBubble({ m, c, searchQuery, onOpenLightbox, onRet
   if (m.from === 'note') {
     return (
       <div className="msg-row note-row fade-in">
-        <div className={`note-bubble${m.failed ? ' msg-failed' : ''}`}>
+        <div className={`note-bubble${m.failed ? ' msg-failed' : ''}${m.type === 'image' ? ' note-bubble-media' : ''}`}>
           <div className="note-label">
             <Lock size={11} /> {t('messageBubble.privateNote')}{m.senderName ? ` — ${m.senderName}` : ''}
           </div>
-          <div className="note-text">{m.text}</div>
+          {m.type === 'image' &&
+            (m.mediaUrl ? (
+              <img className="note-media-image" src={m.mediaUrl} alt="" onClick={() => onOpenLightbox(m.mediaUrl)} />
+            ) : (
+              <div className="msg-media-unavailable">
+                <Loader2 size={14} className="msg-media-spinner" /> {t('mediaBubble.loadingMedia')}
+              </div>
+            ))}
+          {m.text && <div className="note-text">{m.text}</div>}
           <div className="note-time">{m.time}</div>
           <MessageStatusRow m={m} t={t} onRetry={onRetry} onCancel={onCancel} />
         </div>
