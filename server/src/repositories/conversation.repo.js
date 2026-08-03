@@ -173,7 +173,18 @@ async function listConversations(hideRatingMessages = false, companyId = null) {
     LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
     LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
     LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
-    LEFT JOIN [dbo].[External_Conversation_byA] ec ON ec.nile_conversation_id = c.id
+    OUTER APPLY (
+      -- بنجيب صف External_Conversation_byA واحد بس (مش LEFT JOIN عادي) —
+      -- ممكن أكتر من صف يأشر على نفس nile_conversation_id لو كان فيه inbox/provider
+      -- قديم اتمسح من شات ووت نفسه من غير ما يتمسح اتصاله من هنا (شوف
+      -- externalProvider.repo.js deleteProvider)، فلو استخدمنا LEFT JOIN عادي هنا
+      -- المحادثة كانت هتتكرر في القايمة مرة لكل صف External_Conversation مرتبط بيها.
+      -- بناخد الأحدث تحديثًا (updated_at DESC) عشان يمثّل آخر اتصال فعلي حصل
+      SELECT TOP 1 ec2.external_assignee_name
+      FROM [dbo].[External_Conversation_byA] ec2
+      WHERE ec2.nile_conversation_id = c.id
+      ORDER BY ec2.updated_at DESC
+    ) ec
     OUTER APPLY (
       -- "العقد الحالي" لكونتاكت المحادثة دي: الساري لو موجود، وإلا آخر عقد انتهى
       -- (نفس منطق CURRENT_CONTRACT_APPLY في contact.repo.js) — بيتعرض كبادچ "عميل
@@ -292,7 +303,16 @@ async function getConversationById(id) {
       LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
       LEFT JOIN [dbo].[NileChat_Inboxes_byA] i ON i.id = c.inbox_id
       LEFT JOIN [dbo].[NileChat_Contacts_byA] ct ON ct.id = c.contact_id
-      LEFT JOIN [dbo].[External_Conversation_byA] ec ON ec.nile_conversation_id = c.id
+      OUTER APPLY (
+        -- نفس الفكرة اللي في listConversations بالظبط: TOP 1 مش LEFT JOIN عادي،
+        -- عشان لو أكتر من صف External_Conversation_byA (من provider قديم اتمسح
+        -- من شات ووت نفسه بس اتصاله فضل موجود عندنا) بيأشروا على نفس المحادثة،
+        -- الاستعلام يفضل بيرجع صف واحد بس مش أكتر
+        SELECT TOP 1 ec2.external_assignee_name
+        FROM [dbo].[External_Conversation_byA] ec2
+        WHERE ec2.nile_conversation_id = c.id
+        ORDER BY ec2.updated_at DESC
+      ) ec
       OUTER APPLY (
         SELECT TOP 1 m.start_date, m.end_date
         FROM [dbo].[NileChat_MaintenanceContracts_byA] m
