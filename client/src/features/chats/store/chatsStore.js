@@ -9,6 +9,27 @@ import {
 } from '../services/chats.service';
 import { mapApiConversation, mapApiMessage, mapPrevConversation } from '../utils/mappers';
 
+// بنفتكر آخر حالة لكارت بيانات العميل (مفتوح/مقفول) في localStorage — بشكل
+// افتراضي بيبقى مفتوح أول ما تفتح أي محادثة، ولو المستخدم قفله بنفسه بيفضل
+// مقفول في المرات الجاية لحد ما يفتحه هو تاني (بدل ما يترجع مقفول دايمًا
+// بعد كل ريفريش)
+const CUSTOMER_PANEL_STORAGE_KEY = 'nilechat_customer_panel_open';
+function readStoredCustomerPanelOpen() {
+  try {
+    const raw = localStorage.getItem(CUSTOMER_PANEL_STORAGE_KEY);
+    return raw === null ? true : raw === '1';
+  } catch {
+    return true;
+  }
+}
+function persistCustomerPanelOpen(open) {
+  try {
+    localStorage.setItem(CUSTOMER_PANEL_STORAGE_KEY, open ? '1' : '0');
+  } catch {
+    // متجاهلينها لو الـ localStorage مش متاح (خصوصية/وضع خاص إلخ)
+  }
+}
+
 const useChatsStore = create((set, get) => ({
   conversations: [],
   selectedChatId: null,
@@ -23,7 +44,7 @@ const useChatsStore = create((set, get) => ({
   resolveCategories: [],
   staticDataLoaded: false,
 
-  customerPanelOpen: false,
+  customerPanelOpen: readStoredCustomerPanelOpen(),
   noteMode: false,
   typingAgents: {}, // { [conversationId]: Set<agentName> }
 
@@ -240,7 +261,12 @@ const useChatsStore = create((set, get) => ({
   },
 
   closeChat: () => set({ selectedChatId: null }),
-  toggleCustomerPanel: () => set((s) => ({ customerPanelOpen: !s.customerPanelOpen })),
+  toggleCustomerPanel: () =>
+    set((s) => {
+      const next = !s.customerPanelOpen;
+      persistCustomerPanelOpen(next);
+      return { customerPanelOpen: next };
+    }),
   toggleNoteMode: () => set((s) => ({ noteMode: !s.noteMode })),
 
   setAgentTyping(conversationId, agentName, isTyping) {

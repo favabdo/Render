@@ -5,6 +5,7 @@
     "newMessageFromCustomer": "New message from customer",
     "sendFailed": "Failed to send the message, please try again",
     "noteSaveFailed": "Failed to save the note, please try again",
+    "assignSyncFailed": "Failed to save the assignment synced from Chatwoot, please try again",
     "accountDisabled": "Your account has been disabled or removed, you will be logged out now"
   },
   "list": {

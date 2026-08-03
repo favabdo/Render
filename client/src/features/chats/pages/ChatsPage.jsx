@@ -376,6 +376,14 @@ export default function ChatsPage() {
       if (!conversationId) return;
       useChatsStore.getState().patchConversation(Number(conversationId), { teams: teams || [] });
     }
+    function onAssignSyncFailed({ conversationId } = {}) {
+      if (!conversationId) return;
+      // conversation_updated الراجع بالحالة القديمة وصل قبل الحدث ده وعمل
+      // revert للواجهة أوتوماتيك (شوف syncAssigneeFromPayload في الباك إند) —
+      // احنا هنا بس بنورّي تنبيه واضح إن الحفظ في قاعدة البيانات فشل
+      showToast(t('toasts.assignSyncFailed'), 'error');
+    }
+
     function onAgentStatusChanged({ userId } = {}) {
       if (!user || String(userId) !== String(user.id)) return;
       showToast(t('toasts.accountDisabled'), 'error');
@@ -438,6 +446,7 @@ export default function ChatsPage() {
     socket.on('conversation_labels_updated', onConvLabelsUpdated);
     socket.on('conversation_teams_updated', onConvTeamsUpdated);
     socket.on('agent_status_changed', onAgentStatusChanged);
+    socket.on('assign_sync_failed', onAssignSyncFailed);
     socket.on('connect', onReconnectResync);
 
     return () => {
@@ -456,6 +465,7 @@ export default function ChatsPage() {
       socket.off('conversation_labels_updated', onConvLabelsUpdated);
       socket.off('conversation_teams_updated', onConvTeamsUpdated);
       socket.off('agent_status_changed', onAgentStatusChanged);
+      socket.off('assign_sync_failed', onAssignSyncFailed);
     };
     // نفس سبب إضافة "connected" في إيفكت join_conversation فوق بالظبط — بدونها
     // ممكن الإيفكت ده ميعيدش تسجيل الليسنرز (زي new_message) على socket الاتصال

@@ -237,23 +237,50 @@ async function syncAssigneeFromPayload(provider, rawConversationOrPayload, nileC
   const conversation = await conversationRepo.getConversationById(nileConversationId);
   if (!conversation || String(conversation.assigned_agent_id) === String(agentRow.nile_user_id)) return;
 
-  await conversationRepo.assignConversation(nileConversationId, agentRow.nile_user_id);
-
   const nileUser = await userRepo.findUserById(agentRow.nile_user_id);
   const agentName = nileUser ? userRepo.resolveDisplayName(nileUser) : agentRow.name || 'إيجنت';
-  const systemMessage = await conversationRepo.addSystemMessage(
-    nileConversationId,
-    `Conversation was assigned to ${agentName} (synced from Chatwoot)`
-  );
-  await conversationRepo.touchConversation(nileConversationId);
 
+  // 1) نحدّث الواجهة فورًا (optimistic) قبل ما ننتظر كتابة قاعدة البيانات —
+  // ده اللي بيلغي اللاج اللي كان حاصل، لأن التعيين من شات ووت لازم يظهر
+  // في الواجهة فورًا من غير ما يستنى كل عمليات الحفظ (تعيين + رسالة نظام +
+  // touch) تخلص الأول
   if (io) {
-    socketService.emitToConversationRoom(io, nileConversationId, 'new_message', {
-      conversationId: nileConversationId,
-      message: systemMessage,
+    socketService.emitToCompany(io, provider.company_id, 'conversation_updated', {
+      ...conversation,
+      assigned_agent_id: agentRow.nile_user_id,
+      assigned_agent_name: agentName,
     });
-    const updated = await conversationRepo.getConversationById(nileConversationId);
-    socketService.emitToCompany(io, provider.company_id, 'conversation_updated', updated);
+  }
+
+  // 2) دلوقتي نحفظ فعليًا في السيكوال. لو حصل أي إيرور، نرجّع الواجهة
+  // لحالتها الأصلية ونبعت حدث واضح إن الحفظ فشل عشان يظهر تنبيه للمستخدم
+  try {
+    await conversationRepo.assignConversation(nileConversationId, agentRow.nile_user_id);
+
+    const systemMessage = await conversationRepo.addSystemMessage(
+      nileConversationId,
+      `Conversation was assigned to ${agentName} (synced from Chatwoot)`
+    );
+    await conversationRepo.touchConversation(nileConversationId);
+
+    if (io) {
+      socketService.emitToConversationRoom(io, nileConversationId, 'new_message', {
+        conversationId: nileConversationId,
+        message: systemMessage,
+      });
+      const updated = await conversationRepo.getConversationById(nileConversationId);
+      socketService.emitToCompany(io, provider.company_id, 'conversation_updated', updated);
+    }
+  } catch (err) {
+    logger.error('❌ فشل حفظ تعيين المحادثة (متزامن من شات ووت) في السيكوال:', err.message);
+    if (io) {
+      // رجّع الواجهة للحالة القديمة (قبل التحديث الفوري) واظهرلها تنبيه واضح
+      socketService.emitToCompany(io, provider.company_id, 'conversation_updated', conversation);
+      socketService.emitToCompany(io, provider.company_id, 'assign_sync_failed', {
+        conversationId: nileConversationId,
+        agentName,
+      });
+    }
   }
 }
 

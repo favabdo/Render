@@ -73,7 +73,14 @@ export default function ChatItemContextMenu({
     function onKeyDown(e) {
       if (e.key === 'Escape') onClose();
     }
-    function onScroll() {
+    function onScroll(e) {
+      // سكرول جوه المنيو نفسها (زي قايمة الإيجنتس/الفرق/الليبلز اللي بتسكرول
+      // جواها) لازم يفضل شغال عادي من غير ما يقفل المنيو — الحدث ده بيوصل هنا
+      // حتى لو حصل جوه عنصر تاني لأننا مستخدمين capture:true (سكرول مش بيعمل
+      // bubble زي الأحداث التانية)، فلازم نتأكد إنه مش طالع من جوه المنيو قبل
+      // ما نقفلها. المفروض يقفلها بس لو السكرول حصل بره المنيو (زي سكرول
+      // قايمة المحادثات نفسها اللي ممكن يخلي المنيو تبقى بعيدة عن مكانها)
+      if (menuRef.current?.contains(e.target)) return;
       onClose();
     }
     document.addEventListener('mousedown', onDocMouseDown);
