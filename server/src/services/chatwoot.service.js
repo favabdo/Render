@@ -11,6 +11,7 @@ const externalMessageRepo = require('../repositories/externalMessage.repo');
 const externalAgentRepo = require('../repositories/externalAgent.repo');
 const externalProviderRepo = require('../repositories/externalProvider.repo');
 const mediaStorage = require('../utils/mediaStorage');
+const audioTranscode = require('../utils/audioTranscode');
 const logger = require('../utils/logger');
 
 // ============================================================================
@@ -429,8 +430,26 @@ async function downloadAttachment(dataUrl) {
       maxContentLength: 50 * 1024 * 1024,
       timeout: 30000,
     });
-    const mimeType = response.headers['content-type'] || null;
-    const buffer = Buffer.from(response.data);
+    let mimeType = response.headers['content-type'] || null;
+    let buffer = Buffer.from(response.data);
+
+    // نفس مشكلة رسايل الصوت اللي بتيجي مباشرة من واتساب: صيغة ogg/opus مش
+    // شغالة خالص على آيفون. المحادثات هنا بتوصل عن طريق شات ووت (مش مباشرة
+    // من واتساب Cloud API)، فده الطريق الفعلي اللي لازم التحويل يحصل فيه —
+    // مش downloadIncomingMedia بتاعة whatsapp.service.js اللي أصلاً مش
+    // بتتنفذ لو التكامل شغال عن طريق شات ووت
+    if (mimeType && mimeType.toLowerCase().startsWith('audio/ogg')) {
+      logger.info(`ℹ️ [chatwoot downloadAttachment] استلمنا رسالة صوتية بصيغة "${mimeType}" — بنحاول نحولها لـ mp3...`);
+      const mp3Buffer = await audioTranscode.transcodeOggToMp3(buffer);
+      if (mp3Buffer) {
+        buffer = mp3Buffer;
+        mimeType = 'audio/mpeg';
+        logger.info(`✅ [chatwoot downloadAttachment] اتحولت لـ mp3 بنجاح (${mp3Buffer.length} بايت)`);
+      } else {
+        logger.warn('⚠️ فشل تحويل رسالة صوتية واردة من شات ووت لـ mp3 — هتتخزن بصيغتها الأصلية (ogg) وممكن متشتغلش على آيفون');
+      }
+    }
+
     const { publicUrl } = mediaStorage.saveBuffer(buffer, { folder: 'incoming', mimeType });
     return { url: publicUrl, mimeType };
   } catch (err) {

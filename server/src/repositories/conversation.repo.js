@@ -763,4 +763,5 @@ module.exports = {
   updateMessageMedia,
   finalizeOutgoingMessage,
   deleteFailedMessage,
+  getParticipantAgentIds,
 };
