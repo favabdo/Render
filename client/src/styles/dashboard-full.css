@@ -280,23 +280,23 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .msg-date-divider{text-align:center;margin:16px 0}
 .msg-date-divider span{background:var(--chat-divider-bg,rgba(255,255,255,0.85));padding:4px 14px;border-radius:8px;font-size:11px;color:var(--text-secondary);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
 .msg-row{display:flex;margin-bottom:4px}
-.msg-row.sent{justify-content:flex-end}
-.msg-row.received{justify-content:flex-start}
+.msg-row.sent{justify-content:flex-start}
+.msg-row.received{justify-content:flex-end}
 .msg-col{display:flex;flex-direction:column;max-width:65%;min-width:0}
 /* رسايل الصوت بالذات بتاخد نص عرض الشات (مش 65% العادية) عشان شريط تقديم/
    تأخير الصوت يبان بمساحة كفاية ويتحكم فيه المستخدم براحته */
 .msg-col.msg-col-audio{width:50%;max-width:50%;min-width:220px}
 .msg-col-audio .msg-bubble.media-bubble{width:100%;box-sizing:border-box}
-.msg-row.sent .msg-col{align-items:flex-end}
-.msg-row.received .msg-col{align-items:flex-start}
+.msg-row.sent .msg-col{align-items:flex-start}
+.msg-row.received .msg-col{align-items:flex-end}
 .msg-sender-name{font-size:11px;font-weight:500;color:var(--text-secondary);margin:0 6px 3px;opacity:.8;letter-spacing:.1px}
 .msg-bubble{max-width:100%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;position:relative;word-wrap:break-word}
 .msg-text{white-space:pre-wrap;word-wrap:break-word}
-.msg-row.sent .msg-bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
-.msg-row.received .msg-bubble{background:var(--chat-bubble-received,#fff);color:var(--text);border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+.msg-row.sent .msg-bubble{background:var(--primary);color:#fff;border-bottom-left-radius:4px}
+.msg-row.received .msg-bubble{background:var(--chat-bubble-received,#fff);color:var(--text);border-bottom-right-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
 .msg-time{font-size:10px;margin-top:4px;opacity:.7;display:flex;align-items:center;gap:3px}
-.msg-row.sent .msg-time{text-align:right;color:rgba(255,255,255,0.85);justify-content:flex-end}
-.msg-row.received .msg-time{text-align:left;color:var(--text-secondary);justify-content:flex-start}
+.msg-row.sent .msg-time{text-align:left;color:rgba(255,255,255,0.85);justify-content:flex-start}
+.msg-row.received .msg-time{text-align:right;color:var(--text-secondary);justify-content:flex-end}
 .msg-ticks{display:inline-flex;align-items:center;line-height:0;color:inherit;opacity:.9}
 .msg-ticks svg{display:block}
 .msg-ticks.msg-ticks-read{color:#53bdeb;opacity:1}
@@ -389,7 +389,10 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .sr-chip:hover{background:var(--primary);color:#fff}
 .sr-label{font-size:12.5px;color:var(--text-secondary);font-weight:700;white-space:nowrap;margin-right:4px}
 
-.chat-input-area{padding:6px 20px 16px;background:var(--surface);display:flex;align-items:flex-end;gap:10px;position:relative}
+/* row-reverse هنا عشان نعكس ترتيب أزرار شريط الكتابة (المشبك، المايك/تسجيل
+   الصوت، وزرار الإرسال) — كلهم يتبادلوا الأماكن مع بعض دفعة واحدة زي ما
+   طلب المستخدم، من غير ما نلمس ترتيبهم في الـ JSX نفسه */
+.chat-input-area{padding:6px 20px 16px;background:var(--surface);display:flex;flex-direction:row-reverse;align-items:flex-end;gap:10px;position:relative}
 
 /* دروب داون منشن الإيجنتس (@) — بتطلع فوق شريط الكتابة مباشرة، نفس فكرة
    chat-ctx-menu بس ملتصقة بمكان الكتابة نفسه مش بمكان الدوسة */
@@ -405,7 +408,7 @@ mark.search-hit.active{background:var(--warning);color:#1a1a2e}
 .send-btn:hover{background:var(--primary-dark);transform:scale(1.05);box-shadow:0 4px 15px rgba(var(--primary-rgb),0.4)}
 
 /* ===== معاينة الملف/الصورة قبل الإرسال (Media preview bar) ===== */
-.media-preview-bar{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.media-preview-bar{display:flex;flex-direction:row-reverse;align-items:center;gap:10px;flex:1;min-width:0}
 .media-preview-cancel{width:34px;height:34px;border-radius:50%;border:none;background:var(--bg);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
 .media-preview-cancel:hover{background:var(--danger);color:#fff}
 .media-preview-thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;flex-shrink:0;background:var(--bg);display:flex;align-items:center;justify-content:center;border:1.5px solid var(--border)}
