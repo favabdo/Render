@@ -204,7 +204,7 @@ function sanitizeBranchesList(branches) {
 // تليفونه، وممكن اختياريًا تاريخ بدء/انتهاء أول عقد صيانة ليه (لو مش عايز يحددها
 // دلوقتي، يقدر يضيفها بعدين من زرار "إضافة عقد صيانة" في صفحة تفاصيل العميل)
 async function createCustomerCard(req, res) {
-  const { name, location, branches, phone, contractDate, maintenanceEndDate, signedContractDate, managerName, managerPhone, modules } = req.body || {};
+  const { name, location, branches, phone, contractDate, maintenanceEndDate, signedContractDate, managerName, managerPhone, responsiblePerson, modules } = req.body || {};
 
   const trimmedName = (name || '').trim();
   const trimmedPhone = (phone || '').trim();
@@ -230,6 +230,7 @@ async function createCustomerCard(req, res) {
     signedContractDate: signedContractDate || null,
     managerName: (managerName || '').trim() || null,
     managerPhone: (managerPhone || '').trim() || null,
+    responsiblePerson: (responsiblePerson || '').trim() || null,
     contractDate: contractDate || null,
     maintenanceEndDate: maintenanceEndDate || null,
     modules: sanitizeModulesList(modules),
@@ -256,7 +257,7 @@ async function createCustomerCard(req, res) {
 // الاسم والمكان بس؛ عقود الصيانة بقت بتتضاف من سجل الصيانة نفسه (شوف
 // maintenanceContract.controller.js)
 async function updateCustomerCard(req, res) {
-  const { name, location, branches, signedContractDate, managerName, managerPhone, modules } = req.body || {};
+  const { name, location, branches, signedContractDate, managerName, managerPhone, responsiblePerson, modules } = req.body || {};
 
   const trimmedName = (name || '').trim();
   if (!trimmedName) return res.status(400).json({ error: 'لازم تكتب اسم الشركة' });
@@ -268,6 +269,7 @@ async function updateCustomerCard(req, res) {
     signedContractDate: signedContractDate || null,
     managerName: (managerName || '').trim() || null,
     managerPhone: (managerPhone || '').trim() || null,
+    responsiblePerson: (responsiblePerson || '').trim() || null,
     modules: sanitizeModulesList(modules),
   });
   if (!contact) return res.status(404).json({ error: 'الكونتاكت مش موجود' });

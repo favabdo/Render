@@ -18,7 +18,8 @@
     "mainBranch": "Main branch",
     "subBranch": "Sub-branch",
     "subBranchNumbered": "Sub-branch {{num}}",
-    "subscribedModules": "Subscribed Modules"
+    "subscribedModules": "Subscribed Modules",
+    "responsiblePerson": "Responsible Person"
   },
   "phoneNumbers": {
     "title": "Phone Numbers",
@@ -119,5 +120,27 @@
     "unlinking": "Unlinking...",
     "confirm": "Confirm Unlink",
     "genericError": "Failed to unlink the number"
+  },
+  "mergeNumber": "Merge Number",
+  "mergeModal": {
+    "title": "Merge a Number Into This Customer",
+    "subtitle": "Search for a customer or unregistered number to merge into this customer",
+    "searchPlaceholder": "Search by name or phone number",
+    "loading": "Loading...",
+    "noResults": "No results found",
+    "noName": "No name",
+    "chooseNumberTitle": "Choose which number to merge",
+    "back": "Back",
+    "noConversation": "This number doesn't have any recorded conversation yet, so it can't be merged right now",
+    "merging": "Merging...",
+    "mergeSuccess": "Number merged into the customer successfully",
+    "mergeFailed": "Failed to merge the number",
+    "cancel": "Cancel",
+    "selfMergeError": "This number already belongs to this customer"
+  },
+  "chooseConversationModal": {
+    "title": "Choose the Customer's Number",
+    "subtitle": "This customer has more than one number — choose which number's conversation to open",
+    "cancel": "Cancel"
   }
 }

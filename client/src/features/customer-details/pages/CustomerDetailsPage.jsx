@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Building2, Phone, User, CalendarClock, Layers, CalendarPlus, FilePlus2, Briefcase, Pencil, Tag, Unlink, Crown, UserX } from 'lucide-react';
+import { ArrowLeft, Building2, Phone, User, CalendarClock, Layers, CalendarPlus, FilePlus2, Briefcase, Pencil, Tag, Unlink, Crown, UserX, Link2, UserCog } from 'lucide-react';
 import { customerDetailsApi } from '../services/customerDetails.service';
 import { contactsApi } from '../../contacts/services/contacts.service';
 import { formatSchedDate, formatDurationDays } from '../../../utils/dateFormat';
@@ -15,6 +15,8 @@ import MaintenanceContractCard from '../components/MaintenanceContractCard';
 import AddVisitModal from '../components/AddVisitModal';
 import AddMaintenanceContractModal from '../components/AddMaintenanceContractModal';
 import UnlinkPhoneModal from '../components/UnlinkPhoneModal';
+import MergeNumberModal from '../components/MergeNumberModal';
+import ChooseConversationModal from '../components/ChooseConversationModal';
 import CustomerCardModal from '../../contacts/components/CustomerCardModal';
 
 const isOwnerOrAdmin = (user) => (user?.role ?? 2) <= 1;
@@ -41,6 +43,8 @@ export default function CustomerDetailsPage() {
   const [addVisitOpen, setAddVisitOpen] = useState(false);
   const [addContractOpen, setAddContractOpen] = useState(false);
   const [unlinkTarget, setUnlinkTarget] = useState(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [chooseConvOpen, setChooseConvOpen] = useState(false);
 
   function loadContact() {
     setLoading(true);
@@ -68,9 +72,22 @@ export default function CustomerDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
+  // العميل ممكن يبقى عنده أكتر من رقم مرتبط بيه (كل رقم = محادثة منفصلة، خصوصًا
+  // بعد أي عملية دمج) — لو عنده رقم واحد بس بنفتح محادثته على طول زي الأول، ولو
+  // عنده أكتر من رقم بنعرضله يختار أنهي رقم عايز يفتح محادثته
   function openConversation() {
-    const conv = conversations.find((c) => String(c.contactId) === String(contactId));
-    if (!conv) return showToast(t('noConversationYet'), 'info');
+    const convs = conversations.filter((c) => String(c.contactId) === String(contactId));
+    if (convs.length === 0) return showToast(t('noConversationYet'), 'info');
+    if (convs.length === 1) {
+      navigate('/dashboard/chats');
+      selectChat(convs[0].id);
+      return;
+    }
+    setChooseConvOpen(true);
+  }
+
+  function chooseConversation(conv) {
+    setChooseConvOpen(false);
     navigate('/dashboard/chats');
     selectChat(conv.id);
   }
@@ -146,10 +163,15 @@ export default function CustomerDetailsPage() {
               {branchAddresses.length > 0 && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>{branchAddressesDisplay}</div>}
             </div>
           </div>
-          <div className="customer-header-actions" style={{ display: 'flex', gap: 8 }}>
+          <div className="customer-header-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {canManage && (
               <button className="page-btn" style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={() => setEditOpen(true)}>
                 <Pencil size={15} /> {t('edit')}
+              </button>
+            )}
+            {canManage && (
+              <button className="page-btn" style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={() => setMergeOpen(true)}>
+                <Link2 size={15} /> {t('mergeNumber')}
               </button>
             )}
             <button className="page-btn" onClick={openConversation}>{t('openConversation')}</button>
@@ -164,6 +186,12 @@ export default function CustomerDetailsPage() {
               {contact.manager_name || '-'}{contact.manager_phone ? ` · ${contact.manager_phone}` : ''}
             </span>
           </div>
+          {contact.responsible_person && (
+            <div className="setting-row">
+              <div><div className="setting-label"><UserCog size={13} style={{ verticalAlign: -2 }} /> {t('customerInfo.responsiblePerson')}</div></div>
+              <span style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>{contact.responsible_person}</span>
+            </div>
+          )}
           <div className="setting-row">
             <div><div className="setting-label"><CalendarClock size={13} style={{ verticalAlign: -2 }} /> {t('customerInfo.contractDate')}</div></div>
             <div style={{ textAlign: 'left' }}>
@@ -384,6 +412,32 @@ export default function CustomerDetailsPage() {
             showToast(t('phoneUnlinkedSuccess'), 'success');
             loadContact();
           }}
+        />
+      )}
+      {mergeOpen && (
+        <MergeNumberModal
+          contactId={contactId}
+          onClose={() => setMergeOpen(false)}
+          onMerged={() => {
+            setMergeOpen(false);
+            loadContact();
+            // لازم نحدّث قايمة المحادثات كمان عشان الرقم اللي اندمج يبقى تابع
+            // للعميل ده فورًا في "فتح المحادثة" من غير ما نحتاج ريفريش يدوي
+            useChatsStore.getState().loadConversations();
+          }}
+        />
+      )}
+      {chooseConvOpen && (
+        <ChooseConversationModal
+          conversations={conversations
+            .filter((c) => String(c.contactId) === String(contactId))
+            .map((c) => ({
+              id: c.id,
+              phone: c.phone,
+              phoneLabel: (contact.phones || []).find((p) => p.phone_number === c.phone)?.label || null,
+            }))}
+          onChoose={chooseConversation}
+          onClose={() => setChooseConvOpen(false)}
         />
       )}
     </div>

@@ -20,6 +20,7 @@ export default function CustomerCardModal({ mode, contact, onClose, onSaved }) {
   const [signedContractDate, setSignedContractDate] = useState(contact?.contract_date ? contact.contract_date.slice(0, 10) : '');
   const [managerName, setManagerName] = useState(contact?.manager_name || '');
   const [managerPhone, setManagerPhone] = useState(contact?.manager_phone || '');
+  const [responsiblePerson, setResponsiblePerson] = useState(contact?.responsible_person || '');
   const [contractStart, setContractStart] = useState('');
   const [contractEnd, setContractEnd] = useState('');
   const [selectedModules, setSelectedModules] = useState(new Set((contact?.modules || []).map((m) => m.name || m)));
@@ -78,6 +79,7 @@ export default function CustomerCardModal({ mode, contact, onClose, onSaved }) {
           signedContractDate: signedContractDate || undefined,
           managerName: managerName.trim() || undefined,
           managerPhone: managerPhone.trim() || undefined,
+          responsiblePerson: responsiblePerson.trim() || undefined,
           modules,
         }
       : {
@@ -87,6 +89,7 @@ export default function CustomerCardModal({ mode, contact, onClose, onSaved }) {
           signedContractDate: signedContractDate || undefined,
           managerName: managerName.trim() || undefined,
           managerPhone: managerPhone.trim() || undefined,
+          responsiblePerson: responsiblePerson.trim() || undefined,
           contractDate: contractStart || undefined,
           maintenanceEndDate: contractEnd || undefined,
           modules,
@@ -117,6 +120,7 @@ export default function CustomerCardModal({ mode, contact, onClose, onSaved }) {
         branches: cleanBranches,
         manager_name: managerName.trim() || null,
         manager_phone: managerPhone.trim() || null,
+        responsible_person: responsiblePerson.trim() || null,
         contract_date: signedContractDate ? new Date(signedContractDate).toISOString() : contact?.contract_date,
         modules: modules.map((m) => ({ name: m })),
         is_vip: isVip ? 1 : 0,
@@ -250,6 +254,19 @@ export default function CustomerCardModal({ mode, contact, onClose, onSaved }) {
       </div>
       <div className="iw-form-hint" style={{ marginTop: -8, marginBottom: 12 }}>
         {t('cardModal.contractDateHint')}
+      </div>
+
+      <div className="resolve-cats-label">{t('cardModal.responsiblePerson')}</div>
+      <input
+        type="text"
+        className="iw-input"
+        style={{ marginBottom: 4 }}
+        placeholder={t('cardModal.responsiblePersonPlaceholder')}
+        value={responsiblePerson}
+        onChange={(e) => setResponsiblePerson(e.target.value)}
+      />
+      <div className="iw-form-hint" style={{ marginBottom: 12 }}>
+        {t('cardModal.responsiblePersonHint')}
       </div>
 
       {!isEdit && (

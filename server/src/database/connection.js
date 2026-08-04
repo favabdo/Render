@@ -640,6 +640,22 @@ async function ensureContactsHaveVipInactiveColumns() {
   `);
 }
 
+// اسم/وصف حر لـ"المسؤول عن العميل" (موظف داخلي عندنا مكلّف بمتابعة العميل ده،
+// مش نفس manager_name/manager_phone اللي هما بيانات صاحب المؤسسة بتاعة العميل
+// نفسه). تيكست بوكس حر، ممكن يتكتب فيه أي حاجة، ومالوش أي علاقة بجدول اليوزرز
+async function ensureContactsHaveResponsiblePersonColumn() {
+  const pool = await getPool();
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT * FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.NileChat_Contacts_byA') AND name = 'responsible_person'
+    )
+    BEGIN
+      ALTER TABLE [dbo].[NileChat_Contacts_byA] ADD responsible_person NVARCHAR(300) NULL;
+    END
+  `);
+}
+
 async function ensureContactPhonesTableExists() {
   const pool = await getPool();
   await pool.request().query(`
@@ -1690,6 +1706,7 @@ async function ensureSchema() {
   await ensureContactsHaveCustomerCardColumns();
   await ensureContactsHaveStatusColumn();
   await ensureContactsHaveVipInactiveColumns();
+  await ensureContactsHaveResponsiblePersonColumn();
   await ensureContactPhonesTableExists();
   await ensureContactPhonesHaveLabelColumn();
   await ensureContactModulesTableExists();
@@ -1753,6 +1770,7 @@ module.exports = {
   ensureContactsHaveCustomerCardColumns,
   ensureContactsHaveStatusColumn,
   ensureContactsHaveVipInactiveColumns,
+  ensureContactsHaveResponsiblePersonColumn,
   ensureContactPhonesTableExists,
   ensureContactPhonesHaveLabelColumn,
   ensureContactBranchesTableExists,

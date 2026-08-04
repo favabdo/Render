@@ -18,7 +18,8 @@
     "mainBranch": "الفرع الرئيسي",
     "subBranch": "الفرع الفرعي",
     "subBranchNumbered": "الفرع الفرعي {{num}}",
-    "subscribedModules": "الوحدات المشترك فيها"
+    "subscribedModules": "الوحدات المشترك فيها",
+    "responsiblePerson": "المسؤول عن العميل"
   },
   "phoneNumbers": {
     "title": "أرقام الهاتف",
@@ -119,5 +120,27 @@
     "unlinking": "جارٍ الفصل...",
     "confirm": "تأكيد الفصل",
     "genericError": "فشل فصل الرقم"
+  },
+  "mergeNumber": "دمج رقم",
+  "mergeModal": {
+    "title": "دمج رقم مع هذا العميل",
+    "subtitle": "ابحث عن عميل أو رقم غير مسجل عايز تدمجه مع العميل ده",
+    "searchPlaceholder": "ابحث بالاسم أو رقم التليفون",
+    "loading": "جارٍ التحميل...",
+    "noResults": "لا توجد نتائج",
+    "noName": "بدون اسم",
+    "chooseNumberTitle": "اختار الرقم اللي عايز تدمجه",
+    "back": "رجوع",
+    "noConversation": "الرقم ده لسه معهوش أي محادثة مسجلة، مينفعش يتدمج دلوقتي",
+    "merging": "جارٍ الدمج...",
+    "mergeSuccess": "تم دمج الرقم مع العميل بنجاح",
+    "mergeFailed": "فشل دمج الرقم",
+    "cancel": "إلغاء",
+    "selfMergeError": "الرقم ده أصلاً تابع لنفس العميل"
+  },
+  "chooseConversationModal": {
+    "title": "اختار رقم العميل",
+    "subtitle": "العميل ده عنده أكتر من رقم — اختار محادثة انهي رقم عايز تفتح",
+    "cancel": "إلغاء"
   }
 }

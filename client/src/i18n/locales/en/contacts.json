@@ -84,6 +84,9 @@
       "contractDatesRequired": "If you're setting a maintenance contract, you must specify both the start and end date together",
       "contractEndBeforeStart": "The contract end date must be after the start date",
       "genericError": "Something went wrong, please try again"
-    }
+    },
+    "responsiblePerson": "Person Responsible for the Customer",
+    "responsiblePersonPlaceholder": "Write the name of the person responsible for this customer",
+    "responsiblePersonHint": "Free text — write any name or note about who is responsible for following up with this customer"
   }
 }

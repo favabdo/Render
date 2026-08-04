@@ -126,6 +126,7 @@ async function getContactByIdWithCurrentContract(id) {
     .input('id', sql.BigInt, id)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
+             c.responsible_person,
              c.created_by, c.is_vip, c.is_inactive, ${CREATED_BY_AGENT_NAME_SELECT},
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
@@ -375,6 +376,7 @@ async function listContacts(companyId = null) {
     .input('companyId', sql.BigInt, companyId)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
+             c.responsible_person,
              c.created_by, c.is_vip, c.is_inactive, ${CREATED_BY_AGENT_NAME_SELECT},
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at
@@ -508,6 +510,7 @@ async function listContactsPage({ page = 1, pageSize = MAX_CONTACTS_PAGE_SIZE, s
     .input('companyId', sql.BigInt, companyId)
     .query(`
       SELECT c.id, c.name, c.location, c.created_at, c.contract_date, c.manager_phone, c.manager_name,
+             c.responsible_person,
              c.created_by, c.is_vip, c.is_inactive, ${CREATED_BY_AGENT_NAME_SELECT},
              mc.start_date AS maintenance_start_date, mc.end_date AS maintenance_end_date,
              mc.stopped_at AS maintenance_stopped_at,
@@ -706,6 +709,7 @@ async function createCustomerContact({
   signedContractDate,
   managerName,
   managerPhone,
+  responsiblePerson,
   contractDate,
   maintenanceEndDate,
   modules,
@@ -721,12 +725,13 @@ async function createCustomerContact({
     .input('contractDate', sql.Date, signedContractDate || null)
     .input('managerName', sql.NVarChar(200), managerName || null)
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
+    .input('responsiblePerson', sql.NVarChar(300), responsiblePerson || null)
     .input('createdBy', sql.BigInt, createdBy || null)
     .input('companyId', sql.BigInt, companyId || null)
     .query(`
-      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone, created_by, company_id)
+      INSERT INTO [dbo].[NileChat_Contacts_byA] (name, location, contract_date, manager_name, manager_phone, responsible_person, created_by, company_id)
       OUTPUT INSERTED.*
-      VALUES (@name, @location, @contractDate, @managerName, @managerPhone, @createdBy, @companyId)
+      VALUES (@name, @location, @contractDate, @managerName, @managerPhone, @responsiblePerson, @createdBy, @companyId)
     `);
   const contact = result.recordset[0];
 
@@ -769,7 +774,7 @@ async function createCustomerContact({
 // زرار "إضافة عقد صيانة" في سجل الصيانة بتاع العميل (سجل كامل بعقود متعددة)،
 // مش من هنا، عشان لو عقد قديم اتعدّل هنا كان بيمسح تاريخ العقد اللي فات بدل ما
 // يحتفظ بيه كسجل منفصل
-async function updateCustomerDetails(id, { name, location, branches, signedContractDate, managerName, managerPhone, modules }) {
+async function updateCustomerDetails(id, { name, location, branches, signedContractDate, managerName, managerPhone, responsiblePerson, modules }) {
   const pool = await getPool();
   const result = await pool
     .request()
@@ -779,6 +784,7 @@ async function updateCustomerDetails(id, { name, location, branches, signedContr
     .input('contractDate', sql.Date, signedContractDate || null)
     .input('managerName', sql.NVarChar(200), managerName || null)
     .input('managerPhone', sql.NVarChar(30), managerPhone || null)
+    .input('responsiblePerson', sql.NVarChar(300), responsiblePerson || null)
     .query(`
       UPDATE [dbo].[NileChat_Contacts_byA]
       SET name = @name, location = @location,
@@ -786,7 +792,8 @@ async function updateCustomerDetails(id, { name, location, branches, signedContr
           -- لو الفورم اللي بعتت التعديل مبعتتش الفيلد ده أصلاً (NULL)، بنسيب القيمة
           -- الموجودة زي ما هي وميتمسحش، بالظبط زي أي عمود تاني مش بيتلمس من هنا
           contract_date = COALESCE(@contractDate, contract_date),
-          manager_name = @managerName, manager_phone = @managerPhone
+          manager_name = @managerName, manager_phone = @managerPhone,
+          responsible_person = @responsiblePerson
       OUTPUT INSERTED.*
       WHERE id = @id
     `);

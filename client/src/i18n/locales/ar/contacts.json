@@ -84,6 +84,9 @@
       "contractDatesRequired": "إذا كنت ستحدد عقد صيانة، يجب تحديد تاريخي البدء والانتهاء معًا",
       "contractEndBeforeStart": "يجب أن يكون تاريخ انتهاء العقد بعد تاريخ البدء",
       "genericError": "حدث خطأ ما، يُرجى المحاولة مرة أخرى"
-    }
+    },
+    "responsiblePerson": "المسؤول عن العميل",
+    "responsiblePersonPlaceholder": "اكتب اسم الشخص المسؤول عن متابعة العميل",
+    "responsiblePersonHint": "حقل حر — اكتب أي اسم أو ملاحظة عن المسؤول عن متابعة العميل ده"
   }
 }
