@@ -465,7 +465,13 @@ async function downloadIncomingMedia(mediaId, inboxId = null, attempt = 1) {
     // كروم/أندرويد لكن مش شغالة خالص على آيفون (سفاري وأي متصفح تاني في iOS)،
     // فكانت بتوصل وتتحفظ عادي لكن مبتشتغلش لما العميل/الإيجنت يحاول يسمعها من
     // موبايل آيفون. بنحولها هنا لـ mp3 (مدعومة في كل مكان) قبل ما نخزنها.
-    if (finalMimeType === 'audio/ogg') {
+    //
+    // مهم: واتساب بيرجع الـ mime_type بصيغة "audio/ogg; codecs=opus" (فيها
+    // باراميتر codecs ملحق)، مش "audio/ogg" لوحدها — فمقارنة === كانت دايمًا
+    // بتفشل ومنطق التحويل مكانش بيتنفذ خالص من غير أي إيرور يبان (كان بيتخطى
+    // بصمت). استخدام startsWith بيتأكد من الصيغة الأساسية بس بغض النظر عن أي
+    // باراميترات إضافية بعدها
+    if (finalMimeType && finalMimeType.toLowerCase().startsWith('audio/ogg')) {
       const mp3Buffer = await audioTranscode.transcodeOggToMp3(buffer);
       if (mp3Buffer) {
         buffer = mp3Buffer;

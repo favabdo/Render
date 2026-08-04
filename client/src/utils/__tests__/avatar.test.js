@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { initialsFromName, avatarColorFor, AVATAR_COLORS } from '../avatar';
+import { initialsFromName, avatarColorFor } from '../avatar';
 
 describe('initialsFromName', () => {
   it('returns first+last initials for a full name', () => {
@@ -26,15 +26,11 @@ describe('initialsFromName', () => {
 });
 
 describe('avatarColorFor', () => {
-  it('is deterministic for the same seed', () => {
+  it('always returns the same single brand color, regardless of seed', () => {
     const a = avatarColorFor('agent-42');
-    const b = avatarColorFor('agent-42');
+    const b = avatarColorFor('some-other-seed');
     expect(a).toBe(b);
-  });
-
-  it('always returns a color from the defined palette', () => {
-    const color = avatarColorFor('some-random-seed-string');
-    expect(AVATAR_COLORS).toContain(color);
+    expect(a).toMatch(/^#[0-9A-Fa-f]{6}$/);
   });
 
   it('handles an empty seed without throwing', () => {

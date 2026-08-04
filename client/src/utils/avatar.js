@@ -1,15 +1,6 @@
-export const AVATAR_COLORS = [
-  '#6C5CE7',
-  '#00B894',
-  '#0984E3',
-  '#E17055',
-  '#E84393',
-  '#00CEC9',
-  '#FDCB6E',
-  '#D63031',
-  '#0891B2',
-  '#7C3AED',
-];
+// كل الأفتارات (الحروف الأولى) بلون واحد ثابت ومناسب (نفس لون البراند) بدل
+// ما كل عميل ياخد لون عشوائي مختلف — ده بيدي شكل أهدأ وأكثر اتساقًا في القايمة
+const AVATAR_FALLBACK_COLOR = '#6C5CE7';
 
 // واتساب Business Cloud API مش بيوفر صورة البروفايل عن طريق الـ API (ميتا بتمنعها لأسباب
 // خصوصية)، فبدل ما نحط صور وهمية بنعرض أول حرف من الاسم الأول والأخير في دايرة ملونة.
@@ -21,9 +12,6 @@ export function initialsFromName(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function avatarColorFor(seed) {
-  const str = String(seed || '');
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+export function avatarColorFor() {
+  return AVATAR_FALLBACK_COLOR;
 }
