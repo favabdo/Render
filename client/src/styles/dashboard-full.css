@@ -19,8 +19,7 @@
     /* درجات بيضا/رمادي فاتح جدًا لفصل كل محادثة عن اللي بعدها بصريًا في قايمة
        المحادثات — أبيض ثم أوف-وايت بالتبادل، وبعدين درجة أوضح شوية للمحادثة
        المفتوحة حاليًا ودرجة للهوفر، كلهم في نفس العيلة (رمادي محايد بدون لون) */
-    --chat-row-odd: #ffffff;
-    --chat-row-even: #f6f6f9;
+    --chat-row-divider: #ececf1;
     --chat-row-hover: #eef0f5;
     --chat-row-active: #e6e8f0;
 }
@@ -50,8 +49,7 @@ html[data-theme="dark"] {
     /* نفس فكرة التبادل بالنسبالوضع الغامق، بس بدرجات غامقة قريبة من --surface
        بدل درجات بيضا (مفيش أبيض في الدارك مود أصلًا) — برضه من غير أي لون،
        فرق طفيف في السطوع بس */
-    --chat-row-odd: #1a1d29;
-    --chat-row-even: #20232f;
+    --chat-row-divider: #2b2f3d;
     --chat-row-hover: #262a38;
     --chat-row-active: #2c303f;
 }
@@ -167,13 +165,12 @@ h1,h2,h3,h4{font-family:'Space Grotesk','DM Sans',sans-serif}
 .cl-filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
 .cl-filter-count{opacity:.8;font-weight:700}
 .cl-list{flex:1;overflow-y:auto;padding:0 8px}
-.chat-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;cursor:pointer;transition:all .15s;position:relative}
-/* أبيض / أوف-وايت بالتبادل (فاتح/غامق حسب الثيم) — عشان فصل بصري واضح بين
-   كل محادثة واللي جنبها من غير ما نستخدم أي لون خارج عيلة الأبيض/الرمادي.
-   لازم نفس مستوى التحديد (.cl-list > .chat-item...) في هوفر/active تحت عشان
-   يقدروا يغلبوا لون الصف العادي (أبيض/أوف-وايت) صح */
-.cl-list > .chat-item:nth-child(odd){background:var(--chat-row-odd)}
-.cl-list > .chat-item:nth-child(even){background:var(--chat-row-even)}
+.chat-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;cursor:pointer;transition:all .15s;position:relative;border-bottom:1px solid var(--chat-row-divider)}
+/* رجّعنا خلفية موحدة لكل صف (مفيش تبادل أبيض/أوف-وايت تاني) وعملنا الفصل
+   البصري بين كل محادثة واللي بعدها بخط رفيع بنفس اللون الباهت بدل ما نلوّن
+   الخلفية نفسها. آخر عنصر في القايمة من غير خط تحته عشان مايبقاش فيه خط
+   زيادة قبل نهاية القايمة */
+.cl-list > .chat-item:last-child{border-bottom:none}
 .cl-list > .chat-item:hover{background:var(--chat-row-hover)}
 .cl-list > .chat-item.active{background:var(--chat-row-active)}
 .chat-item-avatar{width:48px;height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;position:relative}

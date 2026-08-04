@@ -7,7 +7,8 @@
 // كان بيفشل يشغّله من غير أي رسالة خطأ واضحة للمستخدم، فكان حاسس إنه "مش
 // بيتحمل". الحل: نحوّل أي صوت واصل من واتساب لصيغة mp3 (مدعومة في كل مكان
 // تقريبًا) قبل ما نخزنه، فيشتغل عادي في الويب وفي الموبايل (آيفون وأندرويد).
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
+const fs = require('fs');
 const logger = require('./logger');
 
 let ffmpegPath = null;
@@ -20,6 +21,26 @@ try {
 } catch (err) {
   logger.warn('⚠️ ffmpeg-static مش متصطبة — تحويل صوتيات واتساب لـ mp3 هيتعطل. شغّل npm install في مجلد server.');
 }
+
+// تشخيص بيتنفذ مرة واحدة لحظة تشغيل السيرفر (مش لحظة وصول ريكورد) — بيطبع في
+// اللوج فورًا هل ffmpeg شغال فعليًا على البيئة دي (Render مثلًا) ولا لأ، من
+// غير ما نستنى ريكورد تجريبي عشان نعرف. لو حصلت مشكلة، هتلاقيها في الـ Runtime
+// Logs مباشرة بعد أي ديبلوي، مكتوب فيها السبب بالظبط (مسار مش موجود، صلاحية
+// تشغيل ناقصة، أو الباينري نفسه مش متوافق مع نظام التشغيل بتاع Render)
+function runStartupDiagnostic() {
+  if (!ffmpegPath) return;
+  if (!fs.existsSync(ffmpegPath)) {
+    logger.error(`❌ [audioTranscode] مسار ffmpeg-static مش موجود فعليًا على الديسك: ${ffmpegPath} — تحويل الصوتيات هيفشل ويرجع للصيغة الأصلية (ogg) دايمًا`);
+    return;
+  }
+  try {
+    const out = execFileSync(ffmpegPath, ['-version'], { timeout: 5000 }).toString().split('\n')[0];
+    logger.info(`✅ [audioTranscode] ffmpeg شغال تمام على السيرفر ده: ${out}`);
+  } catch (err) {
+    logger.error(`❌ [audioTranscode] ffmpeg-static موجود على المسار (${ffmpegPath}) بس مش قادر يشتغل فعليًا: ${err.message} — غالبًا مشكلة توافق مع نظام تشغيل الاستضافة`);
+  }
+}
+runStartupDiagnostic();
 
 /**
  * بيحول Buffer صوت (أي صيغة يقدر ffmpeg يفهمها، هنا بالذات ogg/opus) لـ mp3،

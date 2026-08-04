@@ -472,10 +472,12 @@ async function downloadIncomingMedia(mediaId, inboxId = null, attempt = 1) {
     // بصمت). استخدام startsWith بيتأكد من الصيغة الأساسية بس بغض النظر عن أي
     // باراميترات إضافية بعدها
     if (finalMimeType && finalMimeType.toLowerCase().startsWith('audio/ogg')) {
+      logger.info(`ℹ️ [downloadWhatsappMedia] استلمنا رسالة صوتية بصيغة "${finalMimeType}" — بنحاول نحولها لـ mp3...`);
       const mp3Buffer = await audioTranscode.transcodeOggToMp3(buffer);
       if (mp3Buffer) {
         buffer = mp3Buffer;
         finalMimeType = 'audio/mpeg';
+        logger.info(`✅ [downloadWhatsappMedia] اتحولت لـ mp3 بنجاح (${mp3Buffer.length} بايت)`);
       } else {
         logger.warn('⚠️ فشل تحويل رسالة صوتية واردة لـ mp3 — هتتخزن بصيغتها الأصلية (ogg) وممكن متشتغلش على آيفون');
       }
