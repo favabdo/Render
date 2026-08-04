@@ -287,6 +287,33 @@ async function updateCustomerCard(req, res) {
   notificationService.notifyTypedActivity(req, notificationService.NOTIFICATION_TYPES.CONTACT_UPDATED, `عدّل معلومات العميل "${contact.name}"`, contact.id);
 }
 
+// دمج كارت العميل الحالي (بكل أرقامه ومحادثاته) جوه كارت عميل تاني — بيتنادى
+// من صفحة تفاصيل العميل نفسها. الاتجاه عكس linkConversationContact بالظبط:
+// هنا الطرف الثابت هو المصدر (req.params.id، صاحب الصفحة اللي فاتحينها)،
+// والهدف (targetContactId) هو اللي بيدور عليه المستخدم من قايمة الكونتاكتس
+async function mergeContact(req, res) {
+  const { targetContactId } = req.body || {};
+  if (!targetContactId) return res.status(400).json({ error: 'لازم تحدد العميل المستهدف بالدمج' });
+
+  const sourceId = req.params.id;
+  const mergedContact = await contactService.mergeContactIntoContact(sourceId, targetContactId);
+
+  const io = req.app.get('io');
+  if (io) {
+    socketService.emitToCompany(io, req.companyId, 'contact_deleted', { id: sourceId });
+    socketService.emitToCompany(io, req.companyId, 'contact_updated', mergedContact);
+  }
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: mergedContact.id,
+    name: mergedContact.name,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
+  res.json({ ok: true, contact: mergedContact });
+
+  notificationService.notifyTypedActivity(req, notificationService.NOTIFICATION_TYPES.CONTACT_UPDATED, `دمج عميل جوه العميل "${mergedContact.name}"`, mergedContact.id);
+}
+
 // بيفصل رقم تليفون من كونتاكت عنده أكتر من رقم، وبينشئ كونتاكت جديد منفصل بيه —
 // عكس linkConversationContact (اللي بيدمج). متاح لكل الصلاحيات زي الدمج بالظبط
 async function unlinkPhone(req, res) {
@@ -367,6 +394,7 @@ module.exports = {
   updateCustomerVip,
   updateCustomerInactive,
   linkConversationContact,
+  mergeContact,
   unlinkPhone,
   createCustomerCard,
   updateCustomerCard,

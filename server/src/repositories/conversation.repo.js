@@ -398,6 +398,11 @@ async function reopenConversation(conversationId) {
 // كل المحادثات السابقة (المفتوحة والمقفولة) الخاصة بنفس الكونتاكت، حتى لو كانت
 // جاية من أرقام مختلفة مرتبطة بيه — عشان الإيجنت يقدر يشوف تاريخ العميل كله
 // من غير ما يفوّت أي محادثة قديمة اتقفلت أو جاية من رقم تاني للعميل نفسه
+// بترجع محادثة واحدة بس لكل رقم تليفون تابع للكونتاكت ده (آخر محادثة حسب
+// last_message_at) — مش كل الصفوف التاريخية. لو رقم معين اتقفلت له محادثة
+// وبعدين اتفتحت له تانية (أو العكس)، إحنا عايزين بس آخر واحدة تتعرض في
+// "Previous Conversations"/قايمة اختيار الرقم، مش كل محادثة قديمة اتعملت
+// على نفس الرقم على مر الوقت
 async function getConversationsForContact(contactId, excludeConversationId = null) {
   const pool = await getPool();
   const result = await pool
@@ -405,26 +410,34 @@ async function getConversationsForContact(contactId, excludeConversationId = nul
     .input('contactId', sql.BigInt, contactId)
     .input('excludeId', sql.BigInt, excludeConversationId)
     .query(`
-      SELECT c.*,
-        COALESCE(u.display_name, u.email) AS assigned_agent_name,
-        COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
-        (
-          SELECT TOP 1 m.message_text
-          FROM [dbo].[${TABLE_NAME}] m
-          WHERE m.conversation_id = c.id AND m.direction != 'note'
-          ORDER BY m.created_at DESC
-        ) AS last_message_text,
-        (
-          SELECT COUNT(*)
-          FROM [dbo].[${TABLE_NAME}] m
-          WHERE m.conversation_id = c.id
-        ) AS message_count
-      FROM [dbo].[NileChat_Conversations_byA] c
-      LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
-      LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
-      WHERE c.contact_id = @contactId
-        AND (@excludeId IS NULL OR c.id != @excludeId)
-      ORDER BY c.last_message_at DESC
+      WITH ranked AS (
+        SELECT c.*,
+          COALESCE(u.display_name, u.email) AS assigned_agent_name,
+          COALESCE(ru.display_name, ru.email) AS resolved_agent_name,
+          (
+            SELECT TOP 1 m.message_text
+            FROM [dbo].[${TABLE_NAME}] m
+            WHERE m.conversation_id = c.id AND m.direction != 'note'
+            ORDER BY m.created_at DESC
+          ) AS last_message_text,
+          (
+            SELECT COUNT(*)
+            FROM [dbo].[${TABLE_NAME}] m
+            WHERE m.conversation_id = c.id
+          ) AS message_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY c.contact_number
+            ORDER BY c.last_message_at DESC
+          ) AS rn
+        FROM [dbo].[NileChat_Conversations_byA] c
+        LEFT JOIN [dbo].[NileChat_Users_byA] u ON u.id = c.assigned_agent_id
+        LEFT JOIN [dbo].[NileChat_Users_byA] ru ON ru.id = c.resolved_by
+        WHERE c.contact_id = @contactId
+          AND (@excludeId IS NULL OR c.id != @excludeId)
+      )
+      SELECT * FROM ranked
+      WHERE rn = 1
+      ORDER BY last_message_at DESC
     `);
   return result.recordset;
 }

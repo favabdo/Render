@@ -21,6 +21,8 @@ router.patch('/api/contacts/:id/phones', asyncHandler(contactController.updatePh
 router.patch('/api/contacts/:id/vip', requireAdmin, asyncHandler(contactController.updateCustomerVip));
 router.patch('/api/contacts/:id/inactive', requireAdmin, asyncHandler(contactController.updateCustomerInactive));
 router.post('/api/contacts/:id/phones/unlink', asyncHandler(contactController.unlinkPhone));
+// دمج كارت العميل ده (كل أرقامه) جوه كارت عميل تاني — body: { targetContactId }
+router.post('/api/contacts/:id/merge', asyncHandler(contactController.mergeContact));
 router.post('/api/conversations/:id/contact', asyncHandler(contactController.linkConversationContact));
 
 // كارت عميل الصيانة (زرار Add Contact في صفحة Contacts + تعديله بعد كده) — أدمن بس

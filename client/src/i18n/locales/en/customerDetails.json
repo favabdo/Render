@@ -7,6 +7,7 @@
   "edit": "Edit",
   "openConversation": "Open Conversation",
   "noConversationYet": "No conversations recorded for this contact yet",
+  "mergedRedirecting": "Merged successfully, redirecting to the new customer card...",
   "customerInfo": {
     "title": "Customer Information",
     "manager": "Account Manager",
@@ -121,22 +122,18 @@
     "confirm": "Confirm Unlink",
     "genericError": "Failed to unlink the number"
   },
-  "mergeNumber": "Merge Number",
+  "mergeNumber": "Merge Into Another Customer",
   "mergeModal": {
-    "title": "Merge a Number Into This Customer",
-    "subtitle": "Search for a customer or unregistered number to merge into this customer",
+    "title": "Merge This Customer Into Another",
+    "subtitle": "Search for the customer you want to merge this customer card into — all their numbers and conversations will move over, and this customer card will be deleted",
     "searchPlaceholder": "Search by name or phone number",
     "loading": "Loading...",
     "noResults": "No results found",
     "noName": "No name",
-    "chooseNumberTitle": "Choose which number to merge",
-    "back": "Back",
-    "noConversation": "This number doesn't have any recorded conversation yet, so it can't be merged right now",
     "merging": "Merging...",
-    "mergeSuccess": "Number merged into the customer successfully",
-    "mergeFailed": "Failed to merge the number",
-    "cancel": "Cancel",
-    "selfMergeError": "This number already belongs to this customer"
+    "mergeSuccess": "Customer merged successfully",
+    "mergeFailed": "Failed to merge the customer",
+    "cancel": "Cancel"
   },
   "chooseConversationModal": {
     "title": "Choose the Customer's Number",

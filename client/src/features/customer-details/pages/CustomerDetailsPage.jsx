@@ -73,10 +73,26 @@ export default function CustomerDetailsPage() {
   }, [contactId]);
 
   // العميل ممكن يبقى عنده أكتر من رقم مرتبط بيه (كل رقم = محادثة منفصلة، خصوصًا
-  // بعد أي عملية دمج) — لو عنده رقم واحد بس بنفتح محادثته على طول زي الأول، ولو
-  // عنده أكتر من رقم بنعرضله يختار أنهي رقم عايز يفتح محادثته
+  // بعد أي عملية دمج)، وممكن كمان يبقى عند نفس الرقم أكتر من محادثة قديمة
+  // (اتقفلت واتفتحت تاني). إحنا عايزين بس آخر محادثة واحدة لكل رقم — الليستة
+  // جاية من الـ store مرتبة أصلاً بـ last_message_at تنازليًا، فبناخد أول ظهور
+  // لكل رقم بس (ده هو الأحدث تلقائيًا) ونتجاهل أي تكرار تاني لنفس الرقم
+  function getLatestConversationsForContact() {
+    const seenPhones = new Set();
+    const latest = [];
+    for (const c of conversations) {
+      if (String(c.contactId) !== String(contactId)) continue;
+      if (seenPhones.has(c.phone)) continue;
+      seenPhones.add(c.phone);
+      latest.push(c);
+    }
+    return latest;
+  }
+
+  // لو عنده رقم واحد بس ليه محادثات، بنفتح محادثته على طول زي الأول، ولو
+  // عنده أكتر من رقم بنعرضله يختار أنهي رقم عايز يفتح آخر محادثة ليه
   function openConversation() {
-    const convs = conversations.filter((c) => String(c.contactId) === String(contactId));
+    const convs = getLatestConversationsForContact();
     if (convs.length === 0) return showToast(t('noConversationYet'), 'info');
     if (convs.length === 1) {
       navigate('/dashboard/chats');
@@ -418,24 +434,24 @@ export default function CustomerDetailsPage() {
         <MergeNumberModal
           contactId={contactId}
           onClose={() => setMergeOpen(false)}
-          onMerged={() => {
+          onMerged={(targetContactId) => {
             setMergeOpen(false);
-            loadContact();
-            // لازم نحدّث قايمة المحادثات كمان عشان الرقم اللي اندمج يبقى تابع
-            // للعميل ده فورًا في "فتح المحادثة" من غير ما نحتاج ريفريش يدوي
+            showToast(t('mergedRedirecting'), 'success');
+            // لازم نحدّث قايمة المحادثات عشان كل الأرقام اللي اندمجت تبقى تابعة
+            // للعميل الجديد فورًا، وبعدين نتنقل لكارته هو (الكارت الحالي
+            // اتمسح لأنه بقى من غير أرقام بعد الدمج)
             useChatsStore.getState().loadConversations();
+            navigate(`/dashboard/contacts/${targetContactId}`, { replace: true });
           }}
         />
       )}
       {chooseConvOpen && (
         <ChooseConversationModal
-          conversations={conversations
-            .filter((c) => String(c.contactId) === String(contactId))
-            .map((c) => ({
-              id: c.id,
-              phone: c.phone,
-              phoneLabel: (contact.phones || []).find((p) => p.phone_number === c.phone)?.label || null,
-            }))}
+          conversations={getLatestConversationsForContact().map((c) => ({
+            id: c.id,
+            phone: c.phone,
+            phoneLabel: (contact.phones || []).find((p) => p.phone_number === c.phone)?.label || null,
+          }))}
           onChoose={chooseConversation}
           onClose={() => setChooseConvOpen(false)}
         />

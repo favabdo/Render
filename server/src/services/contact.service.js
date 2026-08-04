@@ -104,6 +104,66 @@ async function linkContactToConversation(conversation, { mode, contactId, name }
   return targetContact;
 }
 
+// دمج كونتاكت كامل (كل أرقامه ومحادثاته) جوه كونتاكت تاني — عكس بالظبط
+// linkContactToConversation اللي بيدمج رقم واحد بس. هنا بيتنقل كل رقم تابع
+// للـ sourceContactId لحساب targetContactId (نفس منطق linkPhoneToContact بس
+// لكل الأرقام مش رقم واحد)، وكل المحادثات (المفتوحة والمقفولة/التاريخية)
+// المرتبطة بالأرقام دي بتتبع الكونتاكت الجديد كمان، وفي الآخر الكونتاكت
+// القديم (اللي بقى من غير أرقام) بيتمسح. المفروض تُستخدم من كارت العميل نفسه
+// (مش من جوه محادثة)، فمنطقيًا الاتجاه هنا هو "دمج العميل ده في عميل تاني"
+async function mergeContactIntoContact(sourceContactId, targetContactId) {
+  if (String(sourceContactId) === String(targetContactId)) {
+    const err = new Error('مينفعش تدمج العميل في نفسه');
+    err.status = 400;
+    throw err;
+  }
+
+  const [sourceContact, targetContact] = await Promise.all([
+    contactRepo.getContactByIdWithPhones(sourceContactId),
+    contactRepo.getContactByIdWithPhones(targetContactId),
+  ]);
+  if (!sourceContact) {
+    const err = new Error('العميل المطلوب دمجه مش موجود');
+    err.status = 404;
+    throw err;
+  }
+  if (!targetContact) {
+    const err = new Error('العميل المستهدف بالدمج مش موجود');
+    err.status = 404;
+    throw err;
+  }
+
+  const phones = sourceContact.phones || [];
+  if (phones.length === 0) {
+    const err = new Error('العميل ده معندوش أي رقم يتدمج بيه');
+    err.status = 400;
+    throw err;
+  }
+
+  for (const p of phones) {
+    await contactRepo.linkPhoneToContact(p.phone_number, targetContactId);
+    // كل المحادثات (المفتوحة والتاريخية) بتاعة الرقم ده لازم تتبع الكونتاكت
+    // الجديد فورًا، مش بس المحادثة المفتوحة دلوقتي
+    await conversationRepo.reassignConversationsContactByNumber(p.phone_number, targetContactId);
+  }
+
+  // أي صف External_Contacts_byA مرتبط بالكونتاكت القديم (ميرج سابق من شات
+  // ووت مثلًا) لازم يتبع الكونتاكت الجديد بدل القديم
+  await reassignExternalLinksAfterMerge(sourceContactId, targetContactId);
+
+  await contactRepo.deletePhonelessContact(sourceContactId).catch((err) => {
+    logger.error('❌ خطأ أثناء تنظيف الكونتاكت الفاضي بعد دمج العميل:', err.message);
+  });
+
+  webhookDispatchService.dispatchEvent(webhookDispatchService.EVENT_TYPES.CONTACT_UPDATED, {
+    contact_id: targetContactId,
+    name: targetContact.name,
+    merged_from_contact_id: sourceContactId,
+  }).catch((err) => logger.error('❌ فشل إرسال Webhook contact_updated:', err.message));
+
+  return contactRepo.getContactByIdWithPhones(targetContactId);
+}
+
 // بيفصل رقم تليفون من كونتاكت عنده أكتر من رقم، وينشئ كونتاكت جديد منفصل بيه
 // (بنفس الاسم افتراضيًا أو باسم تاني لو اتبعت)، وبينقل كل المحادثات القديمة
 // بتاعة الرقم ده تتبع الكونتاكت الجديد بدل القديم
@@ -139,4 +199,4 @@ async function unlinkContactPhone(contactId, phoneNumber, newName) {
   return newContact;
 }
 
-module.exports = { findOrCreateContactForIncoming, linkContactToConversation, unlinkContactPhone };
+module.exports = { findOrCreateContactForIncoming, linkContactToConversation, mergeContactIntoContact, unlinkContactPhone };

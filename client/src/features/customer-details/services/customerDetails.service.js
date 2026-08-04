@@ -3,13 +3,13 @@ import apiClient from '../../../services/apiClient';
 export const customerDetailsApi = {
   getContact: (id) => apiClient.get(`/api/contacts/${id}`).then((r) => r.data),
   addPhone: (id, phone) => apiClient.post(`/api/contacts/${id}/phones`, { phone }).then((r) => r.data),
-  // كل المحادثات (وبالتالي كل الأرقام) الخاصة بكونتاكت معيّن — بتستخدم في مودال
-  // "دمج رقم" عشان نعرف إيه المحادثة/الرقم اللي هيتدمج مع العميل الحالي
+  // آخر محادثة بس لكل رقم تابع للكونتاكت ده (مش كل الهيستوري) — بتستخدم في
+  // مودال "اختار الرقم" لما العميل عنده أكتر من رقم مرتبط بمحادثات
   getContactConversations: (id) => apiClient.get(`/api/contacts/${id}/conversations`).then((r) => r.data),
-  // نفس بالظبط endpoint الدمج المستخدم من كارت المحادثة (linkConversationContact) —
-  // بتربط رقم/محادثة معينة بكونتاكت مستهدف (هنا: العميل اللي فاتحين صفحته)
-  mergeConversationIntoContact: (conversationId, targetContactId) =>
-    apiClient.post(`/api/conversations/${conversationId}/contact`, { mode: 'link', contactId: targetContactId }).then((r) => r.data),
+  // دمج كارت العميل الحالي (بكل أرقامه ومحادثاته) جوه كارت عميل تاني —
+  // العميل الحالي بيختفي وكل بياناته بتتنقل للعميل المستهدف
+  mergeIntoContact: (sourceContactId, targetContactId) =>
+    apiClient.post(`/api/contacts/${sourceContactId}/merge`, { targetContactId }).then((r) => r.data),
 
   listVisits: (contactId) => apiClient.get(`/api/contacts/${contactId}/visits`).then((r) => r.data),
   addVisit: (contactId, payload) => apiClient.post(`/api/contacts/${contactId}/visits`, payload).then((r) => r.data),
