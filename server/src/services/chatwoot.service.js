@@ -421,8 +421,13 @@ async function deliverOutgoingMessage(savedMessage, { conversationId, text, send
 
 // بتنزّل مرفق وارد من شات ووت (رابطه بييجي جاهز في الـ payload نفسه — data_url
 // — عكس ميتا اللي بتحتاج نداءين منفصلين لجيب الرابط الأول) وتخزنه محليًا زي
-// أي وسائط واردة تانية، وترجع رابط عام (public URL) نحطه في media_url
-async function downloadAttachment(dataUrl) {
+// أي وسائط واردة تانية، وترجع رابط عام (public URL) نحطه في media_url.
+// attachmentFileType (اختياري) هو تصنيف شات ووت نفسه للمرفق (payload.attachments[0].file_type
+// زي 'audio'/'image'/'video') — بنستخدمه كإشارة إضافية عشان الـ header اللي
+// بيرجع من رابط التنزيل نفسه (data_url) مش موثوق فيه دايمًا (بعض إعدادات
+// تخزين شات ووت — S3 أو ActiveStorage محلي — بترجع Content-Type عام زي
+// application/octet-stream بدل الصيغة الحقيقية للملف)
+async function downloadAttachment(dataUrl, attachmentFileType = null) {
   if (!dataUrl) return null;
   try {
     const response = await axios.get(dataUrl, {
@@ -433,13 +438,27 @@ async function downloadAttachment(dataUrl) {
     let mimeType = response.headers['content-type'] || null;
     let buffer = Buffer.from(response.data);
 
+    if (attachmentFileType === 'audio') {
+      // بنطبع دايمًا لو المرفق صوت (بغض النظر هل هيتحول ولا لأ) عشان نقدر
+      // نشوف بالظبط إيه الـ Content-Type اللي رجعلنا من شات ووت — ده مهم
+      // جدًا للتشخيص لو التحويل مستمر يفشل بصمت
+      logger.info(`ℹ️ [chatwoot downloadAttachment] مرفق صوت من شات ووت — Content-Type: "${mimeType}" — الرابط: ${dataUrl}`);
+    }
+
     // نفس مشكلة رسايل الصوت اللي بتيجي مباشرة من واتساب: صيغة ogg/opus مش
     // شغالة خالص على آيفون. المحادثات هنا بتوصل عن طريق شات ووت (مش مباشرة
     // من واتساب Cloud API)، فده الطريق الفعلي اللي لازم التحويل يحصل فيه —
     // مش downloadIncomingMedia بتاعة whatsapp.service.js اللي أصلاً مش
-    // بتتنفذ لو التكامل شغال عن طريق شات ووت
-    if (mimeType && mimeType.toLowerCase().startsWith('audio/ogg')) {
-      logger.info(`ℹ️ [chatwoot downloadAttachment] استلمنا رسالة صوتية بصيغة "${mimeType}" — بنحاول نحولها لـ mp3...`);
+    // بتتنفذ لو التكامل شغال عن طريق شات ووت.
+    //
+    // منعتمدش على الـ Content-Type header بس (ممكن يكون غير دقيق) — بنشيك
+    // كمان على امتداد الملف نفسه في الرابط (.ogg/.oga)، وده هو الشكل اللي
+    // واتساب دايمًا بيبعت بيه رسايل الصوت الأصلية بغض النظر عن هيدر التخزين
+    const looksLikeOgg =
+      (mimeType && mimeType.toLowerCase().startsWith('audio/ogg')) || /\.(ogg|oga)(\?|#|$)/i.test(dataUrl);
+
+    if (looksLikeOgg) {
+      logger.info(`ℹ️ [chatwoot downloadAttachment] هنحاول تحويل الصوت لـ mp3 (Content-Type: "${mimeType}")...`);
       const mp3Buffer = await audioTranscode.transcodeOggToMp3(buffer);
       if (mp3Buffer) {
         buffer = mp3Buffer;

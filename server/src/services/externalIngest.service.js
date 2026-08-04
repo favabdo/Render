@@ -466,7 +466,7 @@ async function handleMessageEvent(provider, payload, io, eventType) {
   // مباشرة من غير ما الإيجنت يعمل ريفريش — بالظبط زي تعامل ميتا
   if (attachment?.data_url) {
     chatwootService
-      .downloadAttachment(attachment.data_url)
+      .downloadAttachment(attachment.data_url, attachment.file_type)
       .then(async (downloaded) => {
         if (!downloaded) {
           logger.error(`⚠️ تعذر تنزيل مرفق وارد من شات ووت (type=${attachment.file_type})`);
