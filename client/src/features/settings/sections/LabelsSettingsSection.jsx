@@ -124,7 +124,7 @@ export default function LabelsSettingsSection() {
               borderRadius: 12,
               padding: 16,
               marginBottom: 16,
-              border: '1.5px solid rgba(108,92,231,0.4)',
+              border: '1.5px solid rgba(var(--primary-rgb),0.4)',
             }}
           >
             <div

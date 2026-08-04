@@ -300,7 +300,7 @@ export default function ChatwootMergeModal({ provider, onClose }) {
   return (
     <Modal onClose={onClose} width={560}>
       <div className="resolve-modal-header">
-        <div className="resolve-modal-icon" style={{ background: 'rgba(108,92,231,0.12)', color: 'var(--primary)' }}>
+        <div className="resolve-modal-icon" style={{ background: 'rgba(var(--primary-rgb),0.12)', color: 'var(--primary)' }}>
           <Link2 size={22} />
         </div>
         <div className="resolve-modal-title">{t('chatwootModal.mergeTitle')}</div>

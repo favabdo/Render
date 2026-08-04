@@ -171,7 +171,7 @@ export default function GeneralSection() {
                 fontSize: 13,
                 color: 'var(--primary)',
                 fontWeight: 600,
-                background: 'rgba(108,92,231,0.08)',
+                background: 'rgba(var(--primary-rgb),0.08)',
                 padding: '4px 10px',
                 borderRadius: 8,
               }}

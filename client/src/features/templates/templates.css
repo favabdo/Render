@@ -66,7 +66,7 @@
   transition: all 0.15s;
 }
 .qr-icon-action:hover {
-  background: rgba(108, 92, 231, 0.1);
+  background: rgba(var(--primary-rgb), 0.1);
   color: var(--primary);
 }
 .qr-icon-action.danger:hover {

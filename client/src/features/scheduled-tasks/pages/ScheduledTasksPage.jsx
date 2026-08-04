@@ -61,7 +61,7 @@ export default function ScheduledTasksPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(108,92,231,0.35)',
+                boxShadow: '0 4px 16px rgba(var(--primary-rgb),0.35)',
                 flexShrink: 0,
               }}
             >

@@ -77,7 +77,7 @@ export default function AutomationSection() {
       title: t('automation.rules.autoAssign.title'),
       icon: Workflow,
       color: 'var(--primary)',
-      bg: 'rgba(108,92,231,0.1)',
+      bg: 'rgba(var(--primary-rgb),0.1)',
       desc: descFns.autoAssignDesc,
       enabledKey: 'auto_assign_enabled',
     },

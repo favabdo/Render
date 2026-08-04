@@ -153,7 +153,7 @@ export default function TemplatesPage() {
                   width: 36,
                   height: 36,
                   borderRadius: 10,
-                  background: 'rgba(108,92,231,0.1)',
+                  background: 'rgba(var(--primary-rgb),0.1)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

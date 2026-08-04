@@ -176,7 +176,7 @@ export default function AutomationModal({ type, settings, onClose, onSaved }) {
   return (
     <Modal onClose={onClose}>
       <div className="resolve-modal-header">
-        <div className="resolve-modal-icon" style={{ background: 'rgba(108,92,231,0.12)', color: 'var(--primary)' }}>
+        <div className="resolve-modal-icon" style={{ background: 'rgba(var(--primary-rgb),0.12)', color: 'var(--primary)' }}>
           <Icon size={22} />
         </div>
         <div className="resolve-modal-title">{meta.title}</div>
@@ -379,7 +379,7 @@ export default function AutomationModal({ type, settings, onClose, onSaved }) {
                     <span
                       key={kwIdx}
                       className="label-chip"
-                      style={{ background: 'rgba(108,92,231,0.1)', color: 'var(--primary)' }}
+                      style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}
                     >
                       {kw}
                       <button

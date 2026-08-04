@@ -64,6 +64,14 @@
     "role": "Role",
     "roleDesc": "Your permission level"
   },
+  "accentColor": {
+    "title": "Accent Color",
+    "desc": "Pick the color that sets the overall look of the app for you — it controls the color of the messages you send, the customer name/avatar background, every button's color, and the highlight color of the active section in the sidebar. This is personal to you and is saved on this device only",
+    "customColor": "Custom color",
+    "reset": "Reset to default",
+    "saved": "Color updated successfully",
+    "resetDone": "Reset to the default color"
+  },
   "password": {
     "title": "Password",
     "current": "Current password",

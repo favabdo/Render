@@ -15,8 +15,8 @@ export default function RouteLoader() {
         style={{
           width: 34,
           height: 34,
-          border: '3px solid rgba(108,92,231,0.15)',
-          borderTopColor: '#6C5CE7',
+          border: '3px solid rgba(var(--primary-rgb),0.15)',
+          borderTopColor: 'var(--primary)',
           borderRadius: '50%',
           animation: 'iw-spin .7s linear infinite',
         }}

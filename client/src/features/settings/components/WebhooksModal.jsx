@@ -111,7 +111,7 @@ export default function WebhooksModal({ onClose, onChanged }) {
   return (
     <Modal onClose={onClose} width={520}>
       <div className="resolve-modal-header">
-        <div className="resolve-modal-icon" style={{ background: 'rgba(108,92,231,0.12)', color: 'var(--primary)' }}>
+        <div className="resolve-modal-icon" style={{ background: 'rgba(var(--primary-rgb),0.12)', color: 'var(--primary)' }}>
           <Webhook size={22} />
         </div>
         <div className="resolve-modal-title">{t('webhooksModal.title')}</div>
@@ -139,7 +139,7 @@ export default function WebhooksModal({ onClose, onChanged }) {
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
                 {wh.events.map((e) => (
-                  <span key={e} className="label-chip" style={{ background: 'rgba(108,92,231,0.1)', color: 'var(--primary)' }}>
+                  <span key={e} className="label-chip" style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
                     {eventLabel(e)}
                   </span>
                 ))}

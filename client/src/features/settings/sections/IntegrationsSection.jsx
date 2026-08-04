@@ -30,7 +30,7 @@ export default function IntegrationsSection() {
         </div>
         <div className="settings-card-grid">
           <div className="settings-card" style={{ cursor: 'pointer' }} onClick={() => setModalOpen(true)}>
-            <div className="settings-card-icon" style={{ background: 'rgba(108,92,231,0.1)', color: 'var(--primary)' }}>
+            <div className="settings-card-icon" style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
               <Webhook size={20} />
             </div>
             <div className="settings-card-title">{t('integrations.webhooksTitle')}</div>

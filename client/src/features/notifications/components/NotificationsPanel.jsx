@@ -96,7 +96,7 @@ export default function NotificationsPanel({ onClose }) {
                   background: isUnread ? 'var(--primary-light)' : undefined,
                 }}
               >
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(108,92,231,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--primary)' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(var(--primary-rgb),0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--primary)' }}>
                   <Icon size={17} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

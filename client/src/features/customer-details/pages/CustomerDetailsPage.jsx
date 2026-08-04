@@ -246,7 +246,7 @@ export default function CustomerDetailsPage() {
               <div className="setting-label" style={{ marginBottom: 8 }}><Layers size={13} style={{ verticalAlign: -2 }} /> {t('customerInfo.subscribedModules')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {contact.modules.map((m) => (
-                  <span key={m.name || m} className="label-chip" style={{ background: 'rgba(108,92,231,0.1)', color: 'var(--primary)' }}>
+                  <span key={m.name || m} className="label-chip" style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
                     {m.name || m}
                   </span>
                 ))}

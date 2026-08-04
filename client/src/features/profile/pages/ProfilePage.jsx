@@ -9,6 +9,7 @@ import { meApi } from '../services/profile.service';
 import EditableFieldRow from '../components/EditableFieldRow';
 import NotifPrefsTable from '../components/NotifPrefsTable';
 import ImageCropModal from '../components/ImageCropModal';
+import AccentColorPicker from '../components/AccentColorPicker';
 
 export default function ProfilePage() {
   const { t } = useTranslation('profile');
@@ -318,6 +319,8 @@ export default function ProfilePage() {
             <span style={{ fontSize: 14, color: 'var(--primary)', fontWeight: 600 }}>{roleLabel(user.role)}</span>
           </div>
         </div>
+
+        <AccentColorPicker />
 
         <div className="settings-section">
           <h3>{t('password.title')}</h3>

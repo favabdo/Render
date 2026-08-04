@@ -165,7 +165,7 @@ export default function CustomerPanel({ conversation, currentAgentName, onClose 
                     <Phone size={16} />
                     <span>{p.number}</span>
                     {p.label && (
-                      <span className="label-chip" style={{ background: 'rgba(108,92,231,0.1)', color: 'var(--primary)', padding: '2px 9px', fontSize: 11 }}>
+                      <span className="label-chip" style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)', padding: '2px 9px', fontSize: 11 }}>
                         {p.label}
                       </span>
                     )}
